@@ -92,7 +92,7 @@ function mapear(p, catNome) {
     if (u && !fotos.includes(u)) fotos.push(u);
     if (fotos.length >= 4) break;
   }
-  const cats = lista(p.categories).map((c) => c.name);
+  const cats = lista(p.categories).map((c) => c.name).filter((n) => !/^(novidades|ofertas|lan[çc]amentos|mais vendidos)$/i.test(String(n).trim()));
   return {
     yampiId: String(p.id), slug: p.slug || "", nome: String(p.name || "").trim(),
     cat: catNome || cats[0] || "", preco: Math.round(preco * 100) / 100, fotos,
