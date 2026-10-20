@@ -231,9 +231,11 @@ const $=id=>document.getElementById(id);
 const app=$("app");
 if(!CFG.apiKey){app.innerHTML=`<div class="center px"><div><h2>Falta configurar o Firebase</h2><p class="hint">Preencha o arquivo config.js com os dados do projeto.</p></div></div>`;throw new Error("sem config")}
 
-const [{initializeApp},A,F,S,FN]=await Promise.all(["firebase-app.js","firebase-auth.js","firebase-firestore.js","firebase-storage.js","firebase-functions.js"].map(f=>import(SDK+f)));
-const fbApp=initializeApp(CFG),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp),st=S.getStorage(fbApp),fns=FN.getFunctions(fbApp,REGIAO);
-const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp}=F;
+const [{initializeApp},A,F,C]=await Promise.all([import(SDK+"firebase-app.js"),import(SDK+"firebase-auth.js"),import(SDK+"firebase-firestore.js"),import("/catalogo.js")]);
+const fbApp=initializeApp(CFG),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
+const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction}=F;
+/* segunda instância só para criar o login da revendedora sem deslogar o ADM */
+const auth2=A.getAuth(initializeApp(CFG,"criar-revendedora"));
 
 const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const int=v=>Math.round(v||0).toLocaleString("pt-BR");
@@ -256,7 +258,7 @@ const I={home:sv('<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>'),users:sv('<circle 
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'};
 const BANHOS=["Ouro 18k","Ródio branco","Ródio negro","Ouro rosé","Prata"];
 
-let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false;
+let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={};
 const ui={tab:location.hash.replace("#","")||"geral",q:"",st:"todas",pq:"",pcat:"Todas",pend:false};
 
 /* ---------- login ---------- */
@@ -300,6 +302,7 @@ async function carregar(){
     getDocs(query(collectionGroup(db,"leads"),where("ts",">=",Timestamp.fromDate(desde)))),
     getDoc(doc(db,"sistema","yampi")).catch(()=>null)]);
   YS=y&&y.exists()?y.data():null;
+  try{const c=await getDocs(collection(db,"contas"));CONTAS={};c.docs.forEach(d=>CONTAS[d.id]=d.data())}catch(e){}
   LOJAS=l.docs.map(x=>({uid:x.id,...x.data()})).sort((a,b)=>String(a.nome).localeCompare(b.nome,"pt"));
   PRODS=p.docs.map(x=>({id:x.id,...x.data()}));
   const base={};PRODS.forEach(x=>base[x.id]=Number(x.preco)||0);
@@ -346,7 +349,8 @@ function tRes(){
     const lj=LOJAS.find(x=>x.uid===(b.dataset.st||b.dataset.cp||b.dataset.lk));
     if(b.dataset.st){const nv=lj.status==="ativa"?"pausada":"ativa";try{await updateDoc(doc(db,"lojas",lj.uid),{status:nv});lj.status=nv;tRes();toast(nv==="ativa"?"Loja reativada":"Loja pausada")}catch(err){toast("Não foi possível mudar o status.")}}
     else if(b.dataset.cp){try{await navigator.clipboard.writeText(`${location.origin}/${lj.slug}`);toast("Link da loja copiado")}catch(err){toast(`${location.origin}/${lj.slug}`)}}
-    else{b.disabled=true;try{const r=await FN.httpsCallable(fns,"linkDeAcesso")({uid:lj.uid});mostrarAcesso(lj,r.data.link)}catch(err){toast(err.message||"Não foi possível gerar o link.")}b.disabled=false}};
+    else{const em=(CONTAS[lj.uid]||{}).email;if(!em){toast("E-mail da revendedora não encontrado.");return}
+      b.disabled=true;try{await A.sendPasswordResetEmail(auth,em);mostrarAcesso(lj,em,false)}catch(err){toast("Não foi possível enviar o e-mail agora.")}b.disabled=false}};
 }
 function resCard(l){const a=ag(l.uid);return `<div class="rescard">
   <div class="h"><span class="logo" style="background:${esc(l.cor||"#9a7a3c")}">${l.logo?`<img alt="" src="${esc(l.logo)}">`:esc(initials(l.nome))}</span>
@@ -378,19 +382,40 @@ function formNova(){
   $("nN").oninput=e=>{if(!slugEdit)$("nS").value=slugify(e.target.value)};
   $("nS").oninput=e=>{slugEdit=true;e.target.value=slugify(e.target.value)};
   $("nf").onsubmit=async e=>{e.preventDefault();$("nErr").textContent="";
-    const d={nome:$("nN").value.trim(),slug:$("nS").value.trim(),resp:$("nR").value.trim(),whats:$("nW").value.trim(),cidade:$("nC").value.trim(),email:$("nE").value.trim()};
-    if(!d.nome||!d.resp||!d.email.includes("@")){$("nErr").textContent="Preencha nome da loja, responsável e e-mail.";return}
+    const d={nome:$("nN").value.trim().slice(0,40),slug:slugify($("nS").value||$("nN").value),resp:$("nR").value.trim().slice(0,60),whats:$("nW").value.trim().slice(0,30),cidade:$("nC").value.trim().slice(0,60),email:$("nE").value.trim().toLowerCase()};
+    if(!d.nome||!d.resp||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)){$("nErr").textContent="Preencha nome da loja, responsável e um e-mail válido.";return}
+    if(d.slug.length<3||RESERVADOS.includes(d.slug)){$("nErr").textContent="Escolha outro endereço para a loja.";return}
     $("nBtn").disabled=true;$("nBtn").textContent="Criando…";
-    try{const r=await FN.httpsCallable(fns,"criarRevendedora")(d);loaded=false;await carregar();
-      const lj=LOJAS.find(x=>x.uid===r.data.uid)||{...d,slug:r.data.slug};mostrarAcesso(lj,r.data.link,true);if(ui.tab==="revendedoras")tRes()}
-    catch(err){$("nErr").textContent=err.message||"Não foi possível criar a loja.";$("nBtn").disabled=false;$("nBtn").textContent="Criar loja"}};
+    try{
+      if((await getDoc(doc(db,"slugs",d.slug))).exists())throw new Error("Esse endereço de loja já está em uso.");
+      let cred;try{cred=await A.createUserWithEmailAndPassword(auth2,d.email,crypto.randomUUID()+"Aa1!")}
+      catch(err){throw new Error(err.code==="auth/email-already-in-use"?"Já existe uma conta com esse e-mail.":err.code==="auth/invalid-email"?"E-mail inválido.":"Não foi possível criar o login.")}
+      const uid=cred.user.uid;await A.signOut(auth2);
+      await runTransaction(db,async t=>{
+        if((await t.get(doc(db,"slugs",d.slug))).exists())throw new Error("Esse endereço de loja já está em uso.");
+        t.set(doc(db,"slugs",d.slug),{uid});
+        t.set(doc(db,"lojas",uid),{...PADRAO_LOJA,nome:d.nome,resp:d.resp,slug:d.slug,cidade:d.cidade,whats:d.whats,status:"ativa",criadoEm:serverTimestamp(),ultimoAcesso:null});
+        t.set(doc(db,"precos",uid),{margem:100,arred:"90",over:{}});
+        t.set(doc(db,"contas",uid),{email:d.email,criadoEm:serverTimestamp()});
+      });
+      $("nBtn").textContent="Publicando o catálogo…";
+      await C.publicarLoja(F,db,uid,{margem:100,arred:"90",over:{}},await C.lerAtacado(F,db));
+      await A.sendPasswordResetEmail(auth,d.email);
+      loaded=false;await carregar();
+      mostrarAcesso(LOJAS.find(x=>x.uid===uid)||{...d,uid},d.email,true);if(ui.tab==="revendedoras")tRes()}
+    catch(err){console.error(err);$("nErr").textContent=err.message||"Não foi possível criar a loja.";$("nBtn").disabled=false;$("nBtn").textContent="Criar loja"}};
 }
-function mostrarAcesso(lj,link,nova){
+const RESERVADOS=["painel","adm","admin","config","api","loja","login","veraneio","catalogo"];
+const PADRAO_LOJA={cor:"#043034",frase:"Semijoias que acompanham você todos os dias",sobre:"Semijoias com banho de ouro 18k e ródio, escolhidas a dedo para você.",
+  aviso:"Frete grátis acima de R$ 199 ✦ GARANTIA DE 1 ANO",frete:199,freteRegra:"acima",parcelas:3,insta:"",logo:null,
+  barra:{modo:"frete",meta:299,premio:"ganhar um brinde",ok:"Parabéns! Você ganhou um brinde 🎁"},
+  rodape:{horario:"Segunda a sábado",info:["Garantia de 1 ano no banho","Trocas em até 7 dias","Pedidos finalizados pelo WhatsApp"],copy:""}};
+function mostrarAcesso(lj,email,nova){
   const url=`${location.origin}/${lj.slug}`,painel=`${location.origin}/painel`,first=String(lj.resp||"").split(" ")[0];
-  const msg=`Oi${first?", "+first:""}! ${nova?"Sua loja Veraneio está pronta 🎉":"Aqui está o seu link de acesso."}\n\n1) Crie sua senha neste link:\n${link}\n\n2) Depois entre no seu painel:\n${painel}\n\nSua loja: ${url}`;
-  abrir(`${head(nova?"Loja criada":"Link de acesso")}<div class="sh-body px">
-    <p class="lead" style="margin:0">Envie esta mensagem para ${esc(lj.resp||"a revendedora")}. O link para criar a senha vale por pouco tempo; se expirar, gere outro no botão “Acesso”.</p>
-    <div class="note" style="white-space:pre-wrap;word-break:break-all" id="msgTxt">${esc(msg)}</div></div>
+  const msg=`Oi${first?", "+first:""}! ${nova?"Sua loja Veraneio está pronta 🎉":"Te enviei um novo link de acesso."}\n\n1) Abra o e-mail que chegou em ${email} (veja também o spam) e crie a sua senha.\n\n2) Depois entre no seu painel:\n${painel}\n\nSua loja: ${url}`;
+  abrir(`${head(nova?"Loja criada":"Link de acesso enviado")}<div class="sh-body px">
+    <p class="lead" style="margin:0">O Firebase mandou um e-mail para <b>${esc(email)}</b> com o link para criar a senha. Avise ${esc(lj.resp||"a revendedora")} com a mensagem abaixo.</p>
+    <div class="note" style="white-space:pre-wrap;word-break:break-word" id="msgTxt">${esc(msg)}</div></div>
     <div class="sh-foot px"><button class="btn btn-ghost" type="button" id="cpMsg">${I.copy}Copiar</button>${lj.whats?`<a class="btn btn-wa" href="https://wa.me/${waNum(lj.whats)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${I.chat}WhatsApp</a>`:""}</div>`);
   $("cpMsg").onclick=async()=>{try{await navigator.clipboard.writeText(msg);toast("Mensagem copiada")}catch(e){const r=document.createRange();r.selectNodeContents($("msgTxt"));getSelection().removeAllRanges();getSelection().addRange(r)}};
 }
@@ -403,41 +428,78 @@ function tProd(){
   const ysTxt=!YS?"Ainda não importado.":YS.erro?`Último erro: ${esc(YS.erro)}`:`Última importação: ${toDate(YS.em)?toDate(YS.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"agora"} · ${YS.total} produtos (${YS.novos} novos${YS.desativados?`, ${YS.desativados} desativados`:""})`;
   $("main").innerHTML=`${ui.pend?`<div class="pubbar"><span>Atualizando o catálogo das lojas…</span></div>`:""}
     <div class="box"><h3>Yampi</h3><div class="row"><span class="hint" style="flex:1;min-width:200px;${YS&&YS.erro?"color:var(--danger)":""}" id="ysTxt">${ysTxt}</span><button class="btn btn-brand btn-sm" type="button" id="yImp">Importar da Yampi agora</button></div>
-      <span class="hint">Sincroniza sozinho a cada 6 horas. Nome, categoria, preço, fotos e descrição vêm da Yampi. “Novo”, ordem, esgotado e banho você ajusta aqui e não são sobrescritos.</span></div>
+      <span class="hint">Clique sempre que mudar preços ou cadastrar peças na Yampi. Nome, categoria, preço, fotos e descrição vêm de lá. “Novo”, ordem, esgotado e banho você ajusta aqui e não são sobrescritos.</span></div>
     <div class="box"><div class="row" style="justify-content:space-between"><h2>Produtos</h2><button class="btn btn-brand btn-sm" type="button" id="np">+ Produto</button></div>
-    <p class="lead">Preço de atacado. Cada loja recebe o preço com a margem da revendedora. Depois que conectarmos a Yampi, esta lista se atualiza sozinha.</p>
+    <p class="lead">Preço de atacado. Cada loja recebe o preço com a margem da revendedora.</p>
     <div class="tools"><label class="sbox"><span class="sr">Buscar</span>${I.search}<input id="pq" type="search" placeholder="Buscar produto" value="${esc(ui.pq)}"></label>
       <select id="pc" aria-label="Categoria">${["Todas",...cats].map(c=>`<option ${ui.pcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
     <div class="hint">${l.length} de ${PRODS.length} produtos · ${PRODS.filter(p=>p.ativo!==false).length} ativos</div>
-    <div id="pl">${l.length?l.map(p=>`<div class="prow" data-ed="${esc(p.id)}" role="button" tabindex="0">
+    <div id="pl">${l.length?l.slice(0,ui.plim||80).map(p=>`<div class="prow" data-ed="${esc(p.id)}" role="button" tabindex="0">
       <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(p.fotos[0])}" alt="" loading="lazy">`:"sem foto"}</div>
       <div class="nm">${esc(p.nome)}<small>${esc([p.cat,p.banho].filter(Boolean).join(" · "))}</small></div><div class="pv num">${brl(p.preco)}</div>
       <div class="tags">${p.ativo===false?'<span class="tg off">Inativo</span>':""}${p.novo?'<span class="tg new">Novo</span>':""}${p.esgotado?'<span class="tg off">Esgotado</span>':""}${p.yampiId?'<span class="tg">Yampi</span>':""}</div></div>`).join("")
-      :`<div class="note">${PRODS.length?"Nenhum produto encontrado.":"Nenhum produto cadastrado ainda. Toque em “+ Produto” para começar."}</div>`}</div></div>
+      :`<div class="note">${PRODS.length?"Nenhum produto encontrado.":"Nenhum produto ainda. Toque em “Importar da Yampi agora”."}</div>`}</div>
+    ${l.length>(ui.plim||80)?`<button class="btn btn-ghost btn-sm" type="button" id="pmore">Mostrar mais (${l.length-(ui.plim||80)})</button>`:""}</div>
     <button class="btn btn-ghost btn-sm" type="button" id="repub">Republicar catálogo em todas as lojas</button>`;
   $("np").onclick=()=>formProd(null);
-  $("pq").oninput=e=>{ui.pq=e.target.value;const p=e.target.selectionStart;tProd();$("pq").focus();$("pq").setSelectionRange(p,p)};
-  $("pc").onchange=e=>{ui.pcat=e.target.value;tProd()};
+  $("pmore")&&($("pmore").onclick=()=>{ui.plim=(ui.plim||80)+120;tProd()});
+  $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=80;const p=e.target.selectionStart;tProd();$("pq").focus();$("pq").setSelectionRange(p,p)};
+  $("pc").onchange=e=>{ui.pcat=e.target.value;ui.plim=80;tProd()};
   $("pl").onclick=e=>{const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)};
   $("pl").onkeydown=e=>{if(e.key==="Enter"){const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)}};
   $("repub").onclick=()=>publicar(true);
-  $("yImp").onclick=async()=>{const b=$("yImp");b.disabled=true;b.textContent="Importando…";$("ysTxt").textContent="Buscando os produtos na Yampi. Pode levar alguns minutos, não feche esta tela.";
-    try{const r=await FN.httpsCallable(fns,"importarYampi",{timeout:540000})();const d=r.data||{};
-      toast(`${d.total} produtos importados (${d.novos} novos). As lojas atualizam em instantes.`);loaded=false;await carregar();tProd()}
-    catch(err){$("ysTxt").textContent=err.message||"Não foi possível importar.";$("ysTxt").style.color="var(--danger)";b.disabled=false;b.textContent="Tentar de novo"}};
+  $("yImp").onclick=()=>importarYampi();
+}
+/* ---------- Yampi → produtos → atacado → lojas ---------- */
+async function importarYampi(){
+  const b=$("yImp"),tx=$("ysTxt");b.disabled=true;b.textContent="Importando…";tx.style.color="";
+  const prog=m=>{if($("ysTxt"))$("ysTxt").textContent=m+" — não feche esta tela."};
+  try{
+    const {produtos:Y,novidades}=await C.buscarYampi(C.YAMPI_CATEGORIAS,prog);
+    if(!Y.size)throw new Error("A Yampi não devolveu nenhum produto.");
+    prog("Salvando produtos");
+    const porYampi={};PRODS.forEach(p=>{if(p.yampiId)porYampi[p.yampiId]=p});
+    let novos=0,atual=0,desat=0,ops=0,batch=writeBatch(db);
+    const flush=async()=>{if(ops){await batch.commit();batch=writeBatch(db);ops=0}};
+    for(const [yid,m] of Y){
+      const ex=porYampi[yid],id=ex?ex.id:"y"+yid,{banhoSugerido,bloqueado,...dados}=m;
+      const docData={...dados,ativo:!bloqueado&&m.preco>0,origem:"yampi",sincronizadoEm:serverTimestamp()};
+      if(!ex){Object.assign(docData,{banho:banhoSugerido,novo:novidades.has(yid),esgotado:false,ordem:999});novos++}
+      else{if(!ex.banho)docData.banho=banhoSugerido;atual++}
+      batch.set(doc(db,"produtos",id),docData,{merge:true});if(++ops>=400)await flush();
+    }
+    for(const p of PRODS)if(p.yampiId&&!Y.has(p.yampiId)&&p.ativo!==false){batch.update(doc(db,"produtos",p.id),{ativo:false});desat++;if(++ops>=400)await flush()}
+    await flush();
+    const resumo={total:Y.size,novos,atualizados:atual,desativados:desat,em:serverTimestamp(),erro:null};
+    await setDoc(doc(db,"sistema","yampi"),resumo);
+    loaded=false;await carregar();
+    await publicarTodas(prog);
+    toast(`${Y.size} produtos importados (${novos} novos). Lojas atualizadas.`);tProd();
+  }catch(err){console.error(err);await setDoc(doc(db,"sistema","yampi"),{erro:String(err.message||err),em:serverTimestamp()},{merge:true}).catch(()=>{});
+    if($("ysTxt")){$("ysTxt").textContent="Não foi possível importar: "+(err.message||err);$("ysTxt").style.color="var(--danger)"}
+    if($("yImp")){$("yImp").disabled=false;$("yImp").textContent="Tentar de novo"}}
+}
+/* monta o catálogo de atacado a partir dos produtos e publica em todas as lojas */
+async function publicarTodas(prog=()=>{}){
+  const at=PRODS.filter(C.ativoNaLoja).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt")).map(C.paraAtacado);
+  prog("Gravando catálogo de atacado");await C.gravarAtacado(F,db,at);
+  const pr=await getDocs(collection(db,"precos"));let n=0;
+  for(const d of pr.docs){prog(`Atualizando lojas ${++n}/${pr.size}`);await C.publicarLoja(F,db,d.id,d.data(),at)}
 }
 let pubT=null;
 function publicar(agora){clearTimeout(pubT);ui.pend=true;
-  pubT=setTimeout(async()=>{try{await setDoc(doc(db,"sistema","catalogo"),{versao:increment(1),em:serverTimestamp()},{merge:true});toast("Catálogo enviado para as lojas")}catch(e){toast("Não foi possível atualizar as lojas.")}
-    ui.pend=false;if(ui.tab==="produtos")tProd()},agora?0:4000)}
+  pubT=setTimeout(async()=>{try{await publicarTodas();toast("Catálogo atualizado em todas as lojas")}catch(e){console.error(e);toast("Não foi possível atualizar as lojas.")}
+    ui.pend=false;if(ui.tab==="produtos")tProd()},agora?0:3000)}
 function formProd(id){
   const p=id?{...PRODS.find(x=>x.id===id)}:{id:doc(collection(db,"produtos")).id,nome:"",cat:"",banho:"Ouro 18k",preco:"",desc:"",novo:true,ativo:true,ordem:"",fotos:[],fotosPath:[],_novo:true};
-  p.fotos=[...(p.fotos||[])];p.fotosPath=[...(p.fotosPath||[])];
+  p.fotos=[...(p.fotos||[])];
   const cats=[...new Set(PRODS.map(x=>x.cat).filter(Boolean))];
   const fotosHTML=()=>p.fotos.map((f,i)=>`<figure><img src="${esc(f)}" alt=""><button type="button" data-rm="${i}" aria-label="Remover foto">×</button>${i===0?'<span class="first">Principal</span>':`<button type="button" data-first="${i}" style="left:4px;right:auto;font-size:11px;width:auto;padding:0 8px;border-radius:999px">★</button>`}</figure>`).join("")+
-    (p.fotos.length<6?`<label>+ Fotos<input type="file" accept="image/*" multiple id="fIn" aria-label="Adicionar fotos"></label>`:"");
+    "";
   abrir(`${head(p._novo?"Novo produto":"Editar produto")}<form class="sh-body px" id="pf" novalidate>
-    <div class="field"><span class="flabel">Fotos (quadradas, até 6)</span><div class="fotos" id="fotos">${fotosHTML()}</div><span class="hint" id="fMsg"></span></div>
+    <div class="field"><span class="flabel">Fotos</span><div class="fotos" id="fotos">${fotosHTML()}</div>
+      <div class="row"><input id="fUrl" type="url" inputmode="url" placeholder="Colar link da foto (https://…)" style="flex:1;min-width:180px;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px"><button class="btn btn-ghost btn-sm" type="button" id="fAdd">Adicionar</button></div>
+      <span class="hint" id="fMsg">${p.yampiId?"As fotos vêm da Yampi e são atualizadas na importação.":"Use o link de uma foto já publicada (ex.: da Yampi ou do Instagram)."}</span></div>
     <div class="field"><label for="pN">Nome</label><input id="pN" value="${esc(p.nome)}" maxlength="80"></div>
     <div class="two"><div class="field"><label for="pC">Categoria</label><input id="pC" list="catList" value="${esc(p.cat)}" placeholder="Brincos"><datalist id="catList">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
       <div class="field"><label for="pB">Banho</label><input id="pB" list="banList" value="${esc(p.banho)}"><datalist id="banList">${BANHOS.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div></div>
@@ -452,27 +514,21 @@ function formProd(id){
   const fotosEl=$("fotos");
   const reFotos=()=>{fotosEl.innerHTML=fotosHTML()};
   fotosEl.onclick=e=>{const b=e.target.closest("[data-rm],[data-first]");if(!b)return;
-    if(b.dataset.rm!==undefined){const i=Number(b.dataset.rm);p.fotos.splice(i,1);const [path]=p.fotosPath.splice(i,1);p._rm=[...(p._rm||[]),path].filter(Boolean)}
-    else{const i=Number(b.dataset.first);[p.fotos[0],p.fotos[i]]=[p.fotos[i],p.fotos[0]];[p.fotosPath[0],p.fotosPath[i]]=[p.fotosPath[i],p.fotosPath[0]]}reFotos()};
-  fotosEl.onchange=async e=>{if(e.target.id!=="fIn")return;const files=[...e.target.files].slice(0,6-p.fotos.length);$("fMsg").textContent="Enviando fotos…";$("pBtn").disabled=true;
-    try{for(const f of files){const blob=await quadrada(f,1200),path=`produtos/${p.id}/${Date.now()}-${Math.random().toString(36).slice(2,6)}.jpg`,r=S.ref(st,path);
-      await S.uploadBytes(r,blob,{contentType:"image/jpeg",cacheControl:"public,max-age=31536000"});p.fotos.push(await S.getDownloadURL(r));p.fotosPath.push(path);reFotos()}$("fMsg").textContent=""}
-    catch(err){console.error(err);$("fMsg").textContent="Não foi possível enviar uma das fotos."}$("pBtn").disabled=false};
+    if(b.dataset.rm!==undefined)p.fotos.splice(Number(b.dataset.rm),1);
+    else{const i=Number(b.dataset.first);[p.fotos[0],p.fotos[i]]=[p.fotos[i],p.fotos[0]]}reFotos()};
+  $("fAdd").onclick=()=>{const u=$("fUrl").value.trim();if(!/^https:\/\/\S+$/.test(u)){$("fMsg").textContent="Cole um link que comece com https://";return}if(p.fotos.length>=4){$("fMsg").textContent="Máximo de 4 fotos.";return}p.fotos.push(u);$("fUrl").value="";reFotos()};
   $("pf").onsubmit=async e=>{e.preventDefault();
     const preco=Math.round(Number($("pP").value)*100)/100;
     if(!$("pN").value.trim()||!(preco>0)){$("pErr").textContent="Preencha o nome e o preço de atacado.";return}
     const ord=$("pO").value===""?999:Number($("pO").value);
     const data={nome:$("pN").value.trim(),cat:$("pC").value.trim(),banho:$("pB").value.trim(),preco,desc:$("pD").value.trim(),ordem:ord,
-      ativo:$("pA").checked,novo:$("pNv").checked,esgotado:$("pE").checked,fotos:p.fotos,fotosPath:p.fotosPath,atualizadoEm:serverTimestamp()};
+      ativo:$("pA").checked,novo:$("pNv").checked,esgotado:$("pE").checked,fotos:p.fotos,atualizadoEm:serverTimestamp()};
     $("pBtn").disabled=true;
-    try{await setDoc(doc(db,"produtos",p.id),data,{merge:true});(p._rm||[]).forEach(path=>S.deleteObject(S.ref(st,path)).catch(()=>{}));
+    try{await setDoc(doc(db,"produtos",p.id),data,{merge:true});
       const i=PRODS.findIndex(x=>x.id===p.id),novo={id:p.id,...data};if(i>=0)PRODS[i]={...PRODS[i],...novo};else PRODS.push(novo);
       fechar();publicar();tProd();toast("Produto salvo")}
     catch(err){$("pErr").textContent="Não foi possível salvar.";$("pBtn").disabled=false}};
 }
-function quadrada(file,s){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=c.height=s;const x=c.getContext("2d");
-  x.fillStyle="#fff";x.fillRect(0,0,s,s);const k=Math.max(s/img.width,s/img.height);x.drawImage(img,(s-img.width*k)/2,(s-img.height*k)/2,img.width*k,img.height*k);URL.revokeObjectURL(img.src);
-  c.toBlob(b=>b?res(b):rej(new Error("imagem")),"image/jpeg",.86)};img.onerror=rej;img.src=URL.createObjectURL(file)})}
 </script>
 </body>
 </html>

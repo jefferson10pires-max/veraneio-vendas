@@ -6,8 +6,11 @@ rules_version = '2';
 //   produtos/{id}           → catálogo com PREÇO DE ATACADO (só usuários logados leem)
 //   sistema/catalogo        → "versão" do catálogo; mudar dispara a republicação das lojas
 //   precos/{uid}            → margem da revendedora (privado: dona + ADM)
-//   catalogos/{uid}         → catálogo PÚBLICO da loja, já com o preço final (só o servidor escreve)
-//   slugs/{slug}            → endereço único de cada loja (só o servidor escreve)
+//   atacado/{parte}         → catálogo com preço de atacado montado pelo ADM (só usuários logados leem)
+//   catalogos/{uid}/partes/{parte} → catálogo PÚBLICO da loja, já com o preço final (dona ou ADM escrevem)
+//   banners/{uid}           → banners da loja (imagens comprimidas)
+//   contas/{uid}            → e-mail de login da revendedora (só ADM)
+//   slugs/{slug}            → endereço único de cada loja (só ADM cria)
 //   lojas/{uid}             → aparência e dados públicos da loja
 //   lojas/{uid}/dias/{data} → acessos e visualizações por dia
 //   lojas/{uid}/leads/{id}  → carrinhos e pedidos das clientes finais
@@ -36,14 +39,29 @@ service cloud.firestore {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
-    match /catalogos/{uid} {
+    match /atacado/{parte} {
+      allow read: if signed();
+      allow write: if isAdmin();
+    }
+
+    match /catalogos/{uid}/partes/{parte} {
       allow read: if true;
-      allow write: if false;
+      allow write: if isOwner(uid) || isAdmin();
+    }
+
+    match /banners/{uid} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && request.resource.data.keys().hasOnly(['itens', 'em'])
+        && request.resource.data.itens is list && request.resource.data.itens.size() <= 4;
+    }
+
+    match /contas/{uid} {
+      allow read, write: if isAdmin();
     }
 
     match /slugs/{slug} {
       allow read: if true;
-      allow write: if false;
+      allow create, delete: if isAdmin();
     }
 
     match /lojas/{uid} {

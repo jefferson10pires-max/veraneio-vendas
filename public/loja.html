@@ -389,8 +389,9 @@ async function carregar(){
   if(s.empty)return "semloja";
   UID=s.docs[0].id;L=s.docs[0].data();
   if(L.status!=="ativa")return "pausada";
-  const c=await getDoc(doc(db,"catalogos",UID));
-  ITENS=(c.exists()?c.data().itens:[])||[];
+  const [c,b]=await Promise.all([getDocs(collection(db,"catalogos",UID,"partes")),getDoc(doc(db,"banners",UID)).catch(()=>null)]);
+  ITENS=c.docs.sort((x,y)=>x.id.localeCompare(y.id,undefined,{numeric:true})).flatMap(d=>d.data().itens||[]);
+  L.banners=(b&&b.exists()&&b.data().itens)||[];
   return "ok";
 }
 function registrarVisita(){

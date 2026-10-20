@@ -183,8 +183,8 @@ const $=id=>document.getElementById(id);
 const app=$("app");
 if(!CFG.apiKey){app.innerHTML=`<div class="center px"><div><h2>Falta configurar o Firebase</h2><p class="hint">Preencha o arquivo config.js com os dados do projeto.</p></div></div>`;throw new Error("sem config")}
 
-const [{initializeApp},A,F,S]=await Promise.all(["firebase-app.js","firebase-auth.js","firebase-firestore.js","firebase-storage.js"].map(f=>import(SDK+f)));
-const fbApp=initializeApp(CFG),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp),st=S.getStorage(fbApp);
+const [{initializeApp},A,F,C]=await Promise.all([import(SDK+"firebase-app.js"),import(SDK+"firebase-auth.js"),import(SDK+"firebase-firestore.js"),import("/catalogo.js")]);
+const fbApp=initializeApp(CFG),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
 const {doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,query,where,orderBy,limit,serverTimestamp,Timestamp}=F;
 
 /* ---------- utilidades ---------- */
@@ -212,13 +212,7 @@ const I={
 };
 const COLORS=["#043034","#9b4d5f","#b0763c","#2f5d50","#3d4f7a","#211d1a","#c56b84","#7a5c3e","#5b4a8a"];
 
-/* mesma regra de preço usada no servidor (functions/preco.js) */
-function precoFinal(base,pr,id){
-  const o=pr.over&&pr.over[id];const m=Math.max(0,(o===undefined||o===null||o==="")?Number(pr.margem||0):Number(o));
-  let v=Number(base)*(1+m/100);
-  if(pr.arred==="90"){let r=Math.floor(v)+0.9;if(r<v-0.005)r+=1;v=r}else if(pr.arred==="int")v=Math.ceil(v-0.005);else v=Math.round(v*100)/100;
-  return Math.max(Math.round(v*100)/100,Number(base));
-}
+const precoFinal=C.precoFinal;
 
 /* ---------- estado ---------- */
 let U=null,L=null,PR={margem:100,arred:"90",over:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
@@ -286,8 +280,9 @@ function flash(){const el=$("saved");if(!el)return;el.textContent="Salvo ✓";cl
 /* ---------- dados ---------- */
 async function carregarLeads(){if(LEADS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"leads"),orderBy("ts","desc"),limit(300)));LEADS=s.docs.map(d=>({id:d.id,...d.data()}))}
 async function carregarDias(){if(DIAS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"dias"),where("data",">=",dkey(daysAgo(29)))));DIAS={};s.docs.forEach(d=>DIAS[d.id]=d.data())}
-async function carregarCat(){if(CAT)return;const s=await getDoc(doc(db,"catalogos",U.uid));CAT={};(s.exists()?s.data().itens||[]:[]).forEach(p=>CAT[p.id]=p)}
-async function carregarProds(){if(PRODS)return;const s=await getDocs(collection(db,"produtos"));PRODS=s.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.ativo!==false).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt"))}
+async function carregarProds(){if(PRODS)return;PRODS=(await C.lerAtacado(F,db)).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt"))}
+async function carregarCat(){if(CAT)return;await carregarProds();CAT={};PRODS.forEach(p=>CAT[p.id]=p)}
+let BAN=null;async function carregarBanners(){if(BAN)return;const s=await getDoc(doc(db,"banners",U.uid));BAN=(s.exists()&&s.data().itens)||[]}
 
 /* ---------- INÍCIO ---------- */
 async function tInicio(){
@@ -353,8 +348,9 @@ function leadCard(l){
 }
 
 /* ---------- APARÊNCIA ---------- */
-function tAparencia(){
-  const b=L.banners||[];
+async function tAparencia(){
+  loading();try{await carregarBanners()}catch(e){BAN=[]}
+  const b=BAN;
   $("main").innerHTML=`<div class="box"><h2>Identidade</h2>
     <div class="logo-row"><span class="logo" id="pLogo">${logoHTML()}</span>
       <span class="btn btn-ghost btn-sm file">${I.upload}${L.logo?"Trocar logo":"Enviar logo"}<input type="file" id="logoFile" accept="image/*" aria-label="Enviar logo"></span>
@@ -365,12 +361,12 @@ function tAparencia(){
     <div class="field"><span class="flabel">Cor da marca</span><div class="swatches" id="sws">${COLORS.map(c=>`<button class="sw" type="button" style="background:${c}" data-col="${c}" aria-label="Cor ${c}" aria-pressed="${c===L.cor}"></button>`).join("")}<input class="sw-custom" type="color" id="colPick" value="${esc(L.cor||"#9b4d5f")}" aria-label="Outra cor"></div></div>
     <span class="saved" id="saved" aria-live="polite"></span></div>
 
-  <div class="box"><h2>Banners</h2><p class="lead">Passam sozinhos no topo da loja. Envie a imagem do celular (quadrada, 1080 × 1080). A versão para computador (1920 × 720) é opcional.</p>
+  <div class="box"><h2>Banners</h2><p class="lead">Passam sozinhos no topo da loja. Envie a imagem do celular (quadrada, 1080 × 1080). A versão para computador (1920 × 720) é opcional. Até 4 banners.</p>
     <div style="display:flex;flex-direction:column;gap:10px">${b.map((x,i)=>`<div class="bitem">
       <div class="bimgs"><figure class="m"><img src="${esc(x.m)}" alt="Banner ${i+1} celular"><figcaption>Celular</figcaption></figure>
         <figure class="d">${x.d?`<img src="${esc(x.d)}" alt="Banner ${i+1} computador">`:`<label class="ph">+ Versão computador<input type="file" accept="image/*" data-desk="${i}" aria-label="Enviar versão computador"></label>`}<figcaption>Computador ${x.d?"":"(opcional)"}</figcaption></figure></div>
       <div class="row"><button class="btn btn-ghost btn-sm" type="button" data-mv="${i}" data-d="-1" ${i===0?"disabled":""}>Subir</button><button class="btn btn-ghost btn-sm" type="button" data-mv="${i}" data-d="1" ${i===b.length-1?"disabled":""}>Descer</button><button class="btn btn-ghost btn-sm" type="button" data-bdel="${i}">Remover</button></div></div>`).join("")}</div>
-    ${b.length<6?`<label class="drop">${I.upload}<b>Adicionar banner</b><span class="hint">Imagem para celular · JPG ou PNG</span><input type="file" accept="image/*" id="bNew" aria-label="Adicionar banner"></label>`:`<span class="hint">Máximo de 6 banners.</span>`}
+    ${b.length<4?`<label class="drop">${I.upload}<b>Adicionar banner</b><span class="hint">Imagem para celular · JPG ou PNG</span><input type="file" accept="image/*" id="bNew" aria-label="Adicionar banner"></label>`:`<span class="hint">Máximo de 4 banners.</span>`}
     <div class="field"><label for="fFrase">Frase do banner automático (quando não há banners)</label><input id="fFrase" value="${esc(L.frase)}" maxlength="70"></div>
     <span class="hint" id="bMsg"></span></div>`;
   const reLogo=()=>{$("tLogo").innerHTML=logoHTML();$("pLogo").innerHTML=logoHTML()};
@@ -381,37 +377,43 @@ function tAparencia(){
   $("sws").onclick=e=>{const c=e.target.dataset.col;if(c){$("colPick").value=c;setCor(c)}};
   $("colPick").onchange=e=>setCor(e.target.value);
   $("logoFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;toast("Enviando logo…");
-    try{const blob=await redimensionar(f,400,400,"square");const path=`lojas/${U.uid}/logo-${Date.now()}.png`;const url=await enviar(path,blob);
-      if(L.logoPath)apagar(L.logoPath);await updateDoc(doc(db,"lojas",U.uid),{logo:url,logoPath:path});L.logo=url;L.logoPath=path;tAparencia();reLogo();toast("Logo atualizada")}
-    catch(err){console.error(err);toast("Não foi possível enviar a logo.")}};
-  $("logoDel")&&($("logoDel").onclick=async()=>{if(L.logoPath)apagar(L.logoPath);await updateDoc(doc(db,"lojas",U.uid),{logo:null,logoPath:null});L.logo=null;L.logoPath=null;tAparencia();reLogo()});
-  const salvarBanners=async()=>{await updateDoc(doc(db,"lojas",U.uid),{banners:L.banners});tAparencia()};
+    try{const url=await paraDataURL(f,360,360,"contain",.9,90000);await updateDoc(doc(db,"lojas",U.uid),{logo:url});L.logo=url;tAparencia();reLogo();toast("Logo atualizada")}
+    catch(err){console.error(err);toast("Não foi possível usar essa imagem.")}};
+  $("logoDel")&&($("logoDel").onclick=async()=>{await updateDoc(doc(db,"lojas",U.uid),{logo:null});L.logo=null;tAparencia();reLogo()});
+  const salvarBanners=async()=>{const tam=JSON.stringify(BAN).length;if(tam>950000)throw new Error("grande");await setDoc(doc(db,"banners",U.uid),{itens:BAN,em:serverTimestamp()});tAparencia()};
   $("bNew")&&($("bNew").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("bMsg").textContent="Enviando banner…";
-    try{const blob=await redimensionar(f,1080,1080,"square"),mp=`lojas/${U.uid}/banners/${Date.now()}-m.jpg`;const m=await enviar(mp,blob);
-      L.banners=[...(L.banners||[]),{m,mp,d:null,dp:null}];await salvarBanners();toast("Banner adicionado")}catch(err){console.error(err);$("bMsg").textContent="Não foi possível enviar. Tente uma imagem menor."}});
+    try{const m=await paraDataURL(f,1080,1080,"cover",.8,150000);BAN=[...BAN,{m,d:null}];await salvarBanners();toast("Banner adicionado")}
+    catch(err){console.error(err);BAN=BAN.filter(x=>x.m);$("bMsg").textContent="Não coube mais esse banner. Remova um ou use uma imagem mais simples."}});
   $("main").onchange=async e=>{const i=e.target.dataset.desk;if(i===undefined)return;const f=e.target.files[0];if(!f)return;toast("Enviando…");
-    try{const blob=await redimensionar(f,1920,720,"cover"),dp=`lojas/${U.uid}/banners/${Date.now()}-d.jpg`;const d=await enviar(dp,blob);L.banners[i]={...L.banners[i],d,dp};await salvarBanners()}catch(err){toast("Não foi possível enviar.")}};
-  $("main").onclick=async e=>{const t=e.target.closest("[data-mv],[data-bdel]");if(!t)return;const arr=[...L.banners];
-    if(t.dataset.bdel!==undefined){const [x]=arr.splice(Number(t.dataset.bdel),1);if(x){x.mp&&apagar(x.mp);x.dp&&apagar(x.dp)}}
+    const antes=BAN[i].d;try{const d=await paraDataURL(f,1600,600,"cover",.78,130000);BAN[i]={...BAN[i],d};await salvarBanners()}catch(err){BAN[i].d=antes;toast("Não coube essa imagem. Tente remover um banner.")}};
+  $("main").onclick=async e=>{const t=e.target.closest("[data-mv],[data-bdel]");if(!t)return;const arr=[...BAN];
+    if(t.dataset.bdel!==undefined)arr.splice(Number(t.dataset.bdel),1);
     else{const i=Number(t.dataset.mv),j=i+Number(t.dataset.d);[arr[i],arr[j]]=[arr[j],arr[i]]}
-    L.banners=arr;try{await salvarBanners()}catch(err){toast("Não foi possível salvar.")}};
+    BAN=arr;try{await salvarBanners()}catch(err){toast("Não foi possível salvar.")}};
 }
-async function enviar(path,blob){const r=S.ref(st,path);await S.uploadBytes(r,blob,{contentType:blob.type,cacheControl:"public,max-age=31536000"});return S.getDownloadURL(r)}
-function apagar(path){S.deleteObject(S.ref(st,path)).catch(()=>{})}
-function redimensionar(file,w,h,modo){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{
-  const c=document.createElement("canvas"),x=c.getContext("2d");c.width=w;c.height=h;
-  const k=Math.max(w/img.width,h/img.height),dw=img.width*k,dh=img.height*k;
-  if(modo!=="square"||!file.type.includes("png")){x.fillStyle="#fff";x.fillRect(0,0,w,h)}
-  x.drawImage(img,(w-dw)/2,(h-dh)/2,dw,dh);URL.revokeObjectURL(img.src);
-  const png=modo==="square"&&w<=400;c.toBlob(b=>b?res(b):rej(new Error("imagem")),png?"image/png":"image/jpeg",.85)};
-  img.onerror=rej;img.src=URL.createObjectURL(file)})}
+/* imagem → JPEG/PNG comprimido em texto (fica no banco, sem Storage) */
+async function paraDataURL(file,w,h,modo,q,max){
+  const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
+  const c=document.createElement("canvas"),x=c.getContext("2d");
+  let k=modo==="contain"?Math.min(w/img.width,h/img.height,1):Math.max(w/img.width,h/img.height);
+  if(modo==="contain"){c.width=Math.round(img.width*k);c.height=Math.round(img.height*k)}else{c.width=w;c.height=h}
+  const png=modo==="contain"&&/png|webp/.test(file.type);
+  if(!png){x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height)}
+  const dw=img.width*k,dh=img.height*k;x.drawImage(img,(c.width-dw)/2,(c.height-dh)/2,dw,dh);URL.revokeObjectURL(img.src);
+  let url=png?c.toDataURL("image/png"):c.toDataURL("image/jpeg",q);
+  if(png&&url.length>max)url=c.toDataURL("image/webp",.9);
+  while(url.length>max&&q>.4){q-=.08;url=c.toDataURL("image/jpeg",q)}
+  if(url.length>max*1.4)throw new Error("grande");
+  return url;
+}
+
 
 /* ---------- PREÇOS ---------- */
 async function tPrecos(){
   loading();
   try{await carregarProds()}catch(e){$("main").innerHTML=`<div class="note">Não foi possível carregar os produtos.</div>`;return}
   const cats=[...new Set(PRODS.map(p=>p.cat).filter(Boolean))];
-  $("main").innerHTML=`<div class="box"><h2>Margem e preços</h2><p class="lead">A sua margem entra sempre em cima do preço de atacado Veraneio. As clientes veem o preço novo em poucos segundos.</p>
+  $("main").innerHTML=`<div class="box"><h2>Margem e preços</h2><p class="lead">A sua margem entra sempre em cima do preço de atacado Veraneio. As clientes veem o preço novo assim que aparecer “Salvo”.</p>
     <div class="stats"><div class="stat"><span>Margem</span><b class="num" id="sM"></b></div><div class="stat"><span>Preço médio</span><b class="num" id="sP"></b></div><div class="stat"><span>Lucro/peça</span><b class="num profit" id="sL"></b></div></div>
     <div class="field"><label for="fM">Margem padrão (todas as peças)</label><div class="slider-row"><input type="range" id="fM" min="0" max="300" step="5" value="${PR.margem}"><output class="num" id="oM"></output></div></div>
     <div class="field"><span class="flabel">Arredondar preço</span><div class="seg" id="seg">${[["none","Exato"],["90","Final ,90"],["int","Inteiro"]].map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${PR.arred===v}">${l}</button>`).join("")}</div></div>
@@ -423,21 +425,23 @@ async function tPrecos(){
     <div class="row"><span class="hint" style="flex:1">Deixe em branco para usar a margem padrão.</span><button class="btn btn-ghost btn-sm" type="button" id="clr">Usar padrão em todas</button></div></div>`;
   $("fM").oninput=e=>{PR.margem=Number(e.target.value);salvarPrecos();atualizar()};
   $("seg").onclick=e=>{const v=e.target.closest("[data-v]")?.dataset.v;if(!v)return;PR.arred=v;$("seg").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v));salvarPrecos();atualizar()};
-  $("mq").oninput=e=>{ui.mq=e.target.value;linhas()};
-  $("mcat").onchange=e=>{ui.mcat=e.target.value;linhas()};
+  $("mq").oninput=e=>{ui.mq=e.target.value;ui.lim=40;linhas()};
+  $("mcat").onchange=e=>{ui.mcat=e.target.value;ui.lim=40;linhas()};
   $("clr").onclick=()=>{PR.over={};salvarPrecos();linhas()};
   $("plist").oninput=e=>{const id=e.target.dataset.id;if(!id)return;const v=e.target.value;PR.over=PR.over||{};
     if(v==="")delete PR.over[id];else PR.over[id]=Math.max(0,Math.min(500,Number(v)));salvarPrecos();atualizar()};
   linhas();
 }
 function linhas(){
-  const q=norm(ui.mq),l=PRODS.filter(p=>(ui.mcat==="Todas"||p.cat===ui.mcat)&&(!q||norm(p.nome).includes(q)));
-  $("plist").innerHTML=l.length?l.map(p=>{const o=(PR.over||{})[p.id];return `<div class="pr">
+  const q=norm(ui.mq),todos=PRODS.filter(p=>(ui.mcat==="Todas"||p.cat===ui.mcat)&&(!q||norm(p.nome).includes(q)));
+  ui.lim=ui.lim||40;const l=todos.slice(0,ui.lim);
+  $("plist").innerHTML=(l.length?l.map(p=>{const o=(PR.over||{})[p.id];return `<div class="pr">
     <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(p.fotos[0])}" alt="" loading="lazy">`:""}</div>
     <div class="nm">${esc(p.nome)}<small>${esc(p.cat||"")}</small></div>
     <label class="mgw"><input class="mg num" type="number" inputmode="numeric" min="0" max="500" step="5" data-id="${esc(p.id)}" id="mg-${esc(p.id)}" value="${o??""}" aria-label="Margem ${esc(p.nome)}">%</label>
     <div class="vals"><span>Atacado <b class="num">${brl(p.preco)}</b></span><span>Loja <b class="num" id="pv-${esc(p.id)}"></b></span><span class="profit">Lucro <b class="num" id="lv-${esc(p.id)}"></b></span></div></div>`}).join("")
-    :`<p class="hint">Nenhuma peça encontrada.</p>`;
+    :`<p class="hint">Nenhuma peça encontrada.</p>`)+(todos.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${todos.length-l.length})</button>`:"");
+  const m=$("mais");if(m)m.onclick=()=>{ui.lim+=60;linhas()};
   atualizar();
 }
 function atualizar(){
@@ -447,7 +451,9 @@ function atualizar(){
   if(PRODS.length){$("sP").textContent=brl(PRODS.reduce((s,p)=>s+precoFinal(p.preco,PR,p.id),0)/PRODS.length);$("sL").textContent=brl(PRODS.reduce((s,p)=>s+precoFinal(p.preco,PR,p.id)-p.preco,0)/PRODS.length)}
 }
 function salvarPrecos(){clearTimeout(saveT.p);saveT.p=setTimeout(async()=>{
-  try{await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},atualizadoEm:serverTimestamp()});flash()}catch(e){toast("Não foi possível salvar os preços.")}},800)}
+  try{await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},atualizadoEm:serverTimestamp()});
+    const el=$("saved");if(el)el.textContent="Atualizando a loja…";
+    await carregarProds();await C.publicarLoja(F,db,U.uid,PR,PRODS);flash()}catch(e){console.error(e);toast("Não foi possível salvar os preços.")}},1200)}
 
 /* ---------- LOJA (configurações) ---------- */
 const INFO_PADRAO=["Garantia de 1 ano no banho","Trocas em até 7 dias","Pedidos finalizados pelo WhatsApp"];
