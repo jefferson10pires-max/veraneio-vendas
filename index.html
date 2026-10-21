@@ -682,6 +682,12 @@ tr.row-cancelado td .fw7{text-decoration:line-through}
         <button class="btn btn-white btn-sm expedicao-tab" onclick="setExpedicaoTab('aprovado',this)">✓ Aprovados</button>
         <button class="btn btn-white btn-sm expedicao-tab" onclick="setExpedicaoTab('all',this)">Todos</button>
       </div>
+      <div class="sf-box" id="brcom-bar" style="border-color:rgba(34,197,94,.35);display:flex;flex-wrap:wrap;gap:.5rem;align-items:center">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--green)">BRCom</span>
+        <button class="btn btn-white btn-sm" onclick="exportBrcom()">📤 Gerar planilha de envios</button>
+        <label class="btn btn-white btn-sm" style="cursor:pointer;margin:0">📥 Importar rastreios<input type="file" accept=".csv,text/csv" style="display:none" onchange="importBrcomTracking(this)"></label>
+        <span id="brcom-sel-info" style="font-size:12px;color:var(--text3)">Marque os pedidos (☐) ou gera de todos os prontos desta aba.</span>
+      </div>
       <div id="expedicao-content"></div>
     </div>
 
@@ -2998,7 +3004,9 @@ function renderExpedicao(){
         <!-- Coluna 1: Identificação -->
         <div style="flex:2;min-width:200px">
           <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
+            ${s.shipping_method!=='retirada'?`<input type="checkbox" class="brcom-chk" value="${s.id}" ${brcomSel.has(s.id)?'checked':''} onchange="toggleBrcomSel('${s.id}',this.checked)" title="Selecionar para a planilha BRCom" style="width:16px;height:16px;cursor:pointer">`:''}
             ${statusBadge(s.status||'aprovado')}
+            ${s.brcom_exported_at?`<span class="badge" style="background:rgba(34,197,94,.12);color:var(--green);font-size:10px" title="Planilha gerada em ${fmtDateTime(s.brcom_exported_at)}">BRCom</span>`:''}
             ${channelBadge(s.channel)}
             ${isMgr?`<span style="font-size:11px;color:var(--text3)">${attName(s.attendant_id)}</span>`:''}
           </div>
@@ -4075,6 +4083,100 @@ async function sfCheckout(id){
     alert("Etiqueta emitida ✅");
   }catch(e){alert("Não foi possível emitir: "+(e.message||e));}
 }
+// ============================================================
+// BRCOM — planilha de importação de envios + importação de rastreios
+// ============================================================
+const BRCOM_TIPO_BY_METHOD={correios_mini:"mini",correios_pac:"pac",correios_sedex:"sedex"};
+const BRCOM_TIPO_LABEL={mini:"Super Econômico (Mini)",pac:"Econômico (PAC)",sedex:"Expresso (SEDEX)",super:"Super Expresso"};
+const BRCOM_DECLARED_VALUE=20; // mesma regra da SuperFrete: declaração sempre R$ 20,00
+const brcomSel=new Set();
+function toggleBrcomSel(id,on){if(on)brcomSel.add(id);else brcomSel.delete(id);brcomSelInfo();}
+function brcomSelInfo(){const el=document.getElementById("brcom-sel-info");if(el)el.textContent=brcomSel.size?`${brcomSel.size} pedido(s) marcado(s) para a planilha.`:"Marque os pedidos (☐) ou gera de todos os prontos desta aba.";}
+function csvCell(v){v=v===undefined||v===null?"":String(v);return /^[\d.]+$/.test(v)&&!/^0\d/.test(v)?v:'"'+v.replace(/"/g,'""').replace(/[\r\n]+/g," ")+'"';}
+function brcomRow(s){
+  const d=sfDest(s);const rem=getRemetente();
+  const pk=s.package||pkgFromPreset("pequena");
+  const tipo=BRCOM_TIPO_BY_METHOD[s.shipping_method]||"mini";
+  const id=shipBarcodeNumber(s)||orderLabel(s).replace("#","");
+  return [
+    id, pk.length, pk.width, pk.height, 0, (pk.weight/1000).toFixed(3).replace(/0+$/,"").replace(/\.$/,""), BRCOM_DECLARED_VALUE.toFixed(2), "nao", tipo,
+    sfCut(rem.nome,50), onlyDigits(rem.cnpj), onlyDigits(rem.tel), onlyDigits(rem.cep), sfCut(rem.rua,50), sfCut(rem.numero,10), sfCut(rem.comp,20), sfCut(rem.bairro,50), sfCut(rem.cidade_nome,50), rem.uf,
+    sfCut(d.name,50), d.cpf, d.tel, d.cep, sfCut(d.rua,50), sfCut(d.num,10), sfCut(d.comp,20), sfCut(d.bairro,50), sfCut(d.city,50), d.uf,
+    "", "", "Semijoias", BRCOM_DECLARED_VALUE.toFixed(2), "1"
+  ];
+}
+async function exportBrcom(){
+  let list;
+  if(brcomSel.size) list=[...brcomSel].map(id=>Store.findSale(id)).filter(Boolean);
+  else{
+    list=Store.getSales().filter(s=>(s.status||"aprovado")!=="cancelado"&&!s.tracking_code&&s.shipping_method!=="retirada"&&!s.superfrete_id);
+    if(currentUser.type==="attendant")list=list.filter(s=>s.attendant_id===currentUser.id);
+    if(expedicaoTab!=="all")list=list.filter(s=>(s.status||"aprovado")===expedicaoTab);
+    list=list.filter(s=>!s.brcom_exported_at);
+  }
+  if(!list.length){alert("Nenhum pedido para a planilha. Marque os pedidos (☐) ou use uma aba com pedidos sem rastreio.");return;}
+  const ok=[],skip=[];
+  for(const s of list){
+    const d=sfDest(s);let miss=sfMissing(d);
+    if(d.cep.length===8&&miss.some(x=>["bairro","cidade","UF"].includes(x))){
+      try{const j=await (await fetch(`https://viacep.com.br/ws/${d.cep}/json/`)).json();
+        if(!j.erro){const sd=Object.assign({},s.shipping_data||{});if(!sfCityUF(sd.cidade).uf&&j.uf)sd.cidade=`${sfCityUF(sd.cidade).city||j.localidade} / ${j.uf}`;if(!sd.bairro&&j.bairro)sd.bairro=j.bairro;
+          await Store.updateSale(s.id,{shipping_data:sd},"Cidade/UF/bairro completados pelo CEP");miss=sfMissing(sfDest(Store.findSale(s.id)));}}catch(e){}
+    }
+    if(s.shipping_method&&!BRCOM_TIPO_BY_METHOD[s.shipping_method]){skip.push(`${orderLabel(s)} ${s.client}: envio ${shipMethodLabel(s)} não é Correios`);continue;}
+    if(miss.length){skip.push(`${orderLabel(s)} ${s.client}: falta ${miss.join(", ")}`);continue;}
+    ok.push(Store.findSale(s.id));
+  }
+  if(!ok.length){alert("Nenhum pedido pôde ir para a planilha:\n• "+skip.join("\n• "));return;}
+  if(!confirm(`Gerar planilha BRCom com ${ok.length} pedido(s)?`+(skip.length?`\n\nFicaram de fora:\n• ${skip.join("\n• ")}`:"")))return;
+  const header="Nome,Comprimento,Largura,Altura,Diametro,Peso,Valor,Seguro,TipoEnvio,NomeRemetente,DocumentoRemetente,CelularRemetente,CepRemetente,LogradouroRemetente,NumeroRemetente,ComplementoRemetente,BairroRemetente,CidadeRemetente,EstadoRemetente,NomeDestinatario,DocumentoDestinatario,CelularDestinatario,CepDestinatario,LogradouroDestinatario,NumeroDestinatario,ComplementoDestinatario,BairroDestinatario,CidadeDestinatario,EstadoDestinatario,NumeroNF,ChaveNF,DeclaracaoItem,DeclaracaoPreco,DeclaracaoQtd";
+  const csv=header+"\r\n"+ok.map(s=>brcomRow(s).map(csvCell).join(",")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`brcom-envios-${today()}.csv`;document.body.appendChild(a);a.click();a.remove();
+  const now=new Date().toISOString();
+  for(const s of ok) await Store.updateSale(s.id,{brcom_exported_at:now},`Planilha BRCom gerada (${BRCOM_TIPO_LABEL[BRCOM_TIPO_BY_METHOD[s.shipping_method]||"mini"]}, ${pkgLabel(s.package||pkgFromPreset("pequena"))})`);
+  brcomSel.clear();brcomSelInfo();refreshPage();
+  alert(`Planilha gerada ✅ (${ok.length} pedido(s)).\n\nNa BRCom: Novo Envio › Importar › Enviar arquivo.`);
+}
+function parseCsv(text){
+  const rows=[];let row=[],cell="",q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cell+='"';i++;}else q=false;}else cell+=c;}
+    else if(c==='"')q=true;
+    else if(c===","||c===";"){row.push(cell);cell="";}
+    else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(cell);rows.push(row);row=[];cell="";}
+    else cell+=c;}
+  if(cell||row.length){row.push(cell);rows.push(row);}
+  return rows.filter(r=>r.some(x=>x.trim()));
+}
+// Importa a planilha exportada em BRCom › Dashboard › Rastreamento › Exportar
+async function importBrcomTracking(input){
+  const f=input.files&&input.files[0];input.value="";if(!f)return;
+  const rows=parseCsv(await f.text());
+  if(rows.length<2){alert("Planilha vazia.");return;}
+  const H=rows[0].map(h=>normName(h));
+  const col=n=>H.indexOf(normName(n));
+  const cS=col("SRO"),cP=col("Pedido"),cSt=col("Status do objeto"),cD=col("Destinatário");
+  if(cS<0||cD<0){alert("Essa não parece a planilha de rastreamento da BRCom (faltam as colunas SRO/Destinatário).");return;}
+  const sales=Store.getSales().filter(s=>s.status!=="cancelado");
+  const res={upd:0,same:0,none:[]};
+  for(const r of rows.slice(1)){
+    const sro=(r[cS]||"").trim().toUpperCase();if(!sro)continue;
+    const ped=onlyDigits(r[cP]||""),dest=normName(r[cD]||""),st=(r[cSt]||"").trim();
+    if(sales.some(s=>s.tracking_code===sro)){res.same++;continue;}
+    let s=null;
+    if(ped){s=sales.find(x=>shipBarcodeNumber(x)===ped||(x.yampi_order&&onlyDigits(x.yampi_order)===ped)||(x.num&&String(x.num)===ped.replace(/^0+/,"")&&ped.length<=6));}
+    if(!s&&dest){const c=sales.filter(x=>!x.tracking_code&&(normName((x.shipping_data||{}).nome)===dest||normName(x.client)===dest));if(c.length===1)s=c[0];}
+    if(!s){res.none.push(`${sro} — ${r[cD]||"?"}${ped?" (pedido "+ped+")":""}`);continue;}
+    const upd={tracking_code:sro,tracking_carrier:"Correios",brcom_status:st};
+    if(!/cancel/i.test(st)&&!["enviado","cancelado"].includes(s.status||"aprovado"))upd.status="enviado";
+    await Store.updateSale(s.id,upd,`Rastreio BRCom importado: ${sro}${st?" ("+st+")":""}${upd.status?" — status → Enviado":""}`);
+    s.tracking_code=sro;res.upd++;
+  }
+  refreshPage();
+  alert(`Rastreios BRCom:\n✅ ${res.upd} pedido(s) atualizado(s)\n• ${res.same} já estavam com rastreio`+(res.none.length?`\n\n⚠ Sem pedido correspondente no sistema (${res.none.length}):\n• ${res.none.slice(0,15).join("\n• ")}${res.none.length>15?"\n…":""}`:""));
+}
+
 // Checagem automática enquanto a Expedição está aberta (a cada 10 min)
 let _sfAutoTimer=null,_sfAutoOff=false;
 async function sfAutoCheck(){
