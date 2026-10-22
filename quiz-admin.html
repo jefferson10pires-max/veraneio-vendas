@@ -291,7 +291,7 @@ table.tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:
 .drawer h2{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0}
 .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 10px;font-size:13px;margin:8px 0}
 .kv dt{color:var(--text-muted)}.kv dd{margin:0}
-.sec{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700;margin:20px 0 8px}
+.sec:not(.btn){font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700;margin:20px 0 8px}
 .thumbs{display:flex;gap:6px;flex-wrap:wrap}.thumbs img{width:60px;height:74px;object-fit:cover;border-radius:8px}
 .tema-grid{display:grid;grid-template-columns:1fr 410px;gap:20px;align-items:start}
 .tema-grid .phone{position:sticky;top:76px}
@@ -2095,6 +2095,7 @@ function nodeMedia(n) {
     if (b.type === "galeria") (p.itens || []).filter(i => i.url).slice(0, 3).forEach(i => out.push({ img: i.url }));
     if (b.type === "carrossel") (p.itens || []).filter(i => i.url).slice(0, 2).forEach(i => out.push({ img: i.url }));
     if (b.type === "comparar" && p.antes) out.push({ img: p.antes });
+    if (b.type === "quiz") (p.opcoes || []).filter(o => o.imagem && ["imgEsq", "imgCima", "imagem"].includes(p.modelo)).slice(0, 4).forEach(o => out.push({ img: o.imagem }));
     if (b.type === "video") out.push(p.capa ? { img: p.capa, ic: "play" } : { ic: "video" });
     if (b.type === "audioZap" || b.type === "audio") out.push({ ic: "mic" });
   });
