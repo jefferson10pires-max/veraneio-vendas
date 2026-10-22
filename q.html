@@ -70,10 +70,55 @@ body{min-height:100dvh}
 .q-frame .b-car-dots{display:flex;gap:6px;justify-content:center;margin-top:8px}
 .q-frame .b-car-dots i{width:7px;height:7px;border-radius:50%;background:var(--border)}
 .q-frame .b-car-dots i.on{background:var(--accent)}
-.q-frame .b-vid{margin:0 auto}
-.q-frame .b-vid .ratio{position:relative;padding-top:56.25%;border-radius:var(--q-radius);overflow:hidden;background:#000}
-.q-frame .b-vid iframe,.q-frame .b-vid video{position:absolute;inset:0;width:100%;height:100%;border:0}
-.q-frame .b-vid video{position:static;height:auto;border-radius:var(--q-radius)}
+.q-frame .b-vid{display:flex;justify-content:center}
+.q-frame .b-vid .frame{position:relative;overflow:hidden;background:#000;margin:0 auto;max-width:100%}
+.q-frame .b-vid .frame video,.q-frame .b-vid .frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover}
+.q-frame .b-vid-som{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:10px 16px;background:rgba(0,0,0,.62);color:#fff;font:600 14px/1 var(--q-font);cursor:pointer;backdrop-filter:blur(6px);animation:qPulse 1.8s ease-in-out infinite}
+.q-frame .b-vid-som[hidden]{display:none}
+.q-frame .b-delay-tag{display:inline-flex;align-items:center;gap:4px;font:600 11px/1 var(--q-font);color:var(--text-muted);background:var(--surface-2);border-radius:999px;padding:4px 8px;margin-bottom:6px}
+/* áudio estilo WhatsApp */
+.q-frame .b-zap{display:flex;align-items:flex-end;gap:8px}
+.q-frame .b-zap.dir{justify-content:flex-end}
+.q-frame .b-zap .av{position:relative;width:46px;height:46px;flex:none}
+.q-frame .b-zap .av img,.q-frame .b-zap .av span{width:46px;height:46px;border-radius:50%;object-fit:cover;display:flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--accent);font-weight:600}
+.q-frame .b-zap .av i{position:absolute;right:-2px;bottom:-2px;width:20px;height:20px;border-radius:50%;background:#1FAF5A;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
+.q-frame .b-zap .bubble{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:16px 16px 16px 4px;padding:8px 12px 6px;min-width:250px;max-width:340px;flex:1;box-shadow:0 1px 1px rgba(0,0,0,.06)}
+.q-frame .b-zap.dir .bubble{border-radius:16px 16px 4px 16px;background:#DCF8C6;color:#1D2B1D;flex:0 1 320px}
+.q-frame .b-zap .who{display:block;font-size:13px;color:var(--accent);margin-bottom:2px}
+.q-frame .b-zap .pl{display:flex;align-items:center;gap:8px}
+.q-frame .b-zap .pp{width:38px;height:38px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.q-frame .b-zap .pp .ic{fill:currentColor}
+.q-frame .b-zap .wave{flex:1;height:30px;display:flex;align-items:center;gap:2px;cursor:pointer}
+.q-frame .b-zap .wave i{flex:1;min-width:2px;border-radius:2px;background:color-mix(in srgb,var(--text-muted) 45%,transparent)}
+.q-frame .b-zap .wave i.on{background:#1FAF5A}
+.q-frame .b-zap .spd{border:0;border-radius:999px;background:var(--surface-2);color:var(--text-muted);font:600 11px/1 var(--q-font);padding:5px 7px;cursor:pointer;min-width:34px}
+.q-frame .b-zap .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);padding-left:46px;margin-top:-2px}
+.q-frame .b-zap.ouvido .pp{color:#34B7F1}
+/* galeria */
+.q-frame .b-gal{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.q-frame .b-gal.c3{grid-template-columns:repeat(3,1fr)}
+.q-frame .b-gal figure{margin:0;position:relative;cursor:zoom-in;border-radius:calc(var(--q-radius) - 2px);overflow:hidden;background:var(--surface-2)}
+.q-frame .b-gal figure:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.q-frame .b-gal img{width:100%;display:block;object-fit:cover;transition:transform .3s}
+.q-frame .b-gal figure:hover img{transform:scale(1.03)}
+.q-frame .b-gal figcaption{position:absolute;left:0;right:0;bottom:0;padding:18px 8px 6px;font-size:12px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.55))}
+.q-lightbox{position:fixed;inset:0;z-index:50;background:rgba(10,8,6,.94);display:flex;align-items:center;justify-content:center;padding:16px;animation:qFade .2s ease}
+.q-frame .q-lightbox{position:fixed}
+.q-lightbox figure{margin:0;max-width:min(92vw,560px);text-align:center;color:#fff;font-family:var(--q-font,system-ui)}
+.q-lightbox img{max-width:100%;max-height:78vh;border-radius:12px;display:block;margin:0 auto}
+.q-lightbox figcaption{margin-top:10px;font-size:15px}
+.q-lightbox small{display:block;margin-top:4px;opacity:.6;font-size:12px}
+.q-lightbox button{position:absolute;border:0;background:rgba(255,255,255,.12);color:#fff;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.q-lightbox .x{top:16px;right:16px}.q-lightbox .p{left:12px;top:50%;transform:translateY(-50%)}.q-lightbox .n{right:12px;top:50%;transform:translateY(-50%)}
+/* antes e depois */
+.q-frame .b-cmp{position:relative;overflow:hidden;border-radius:var(--q-radius);background:var(--surface-2);user-select:none;max-width:100%}
+.q-frame .b-cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.q-frame .b-cmp .top{position:absolute;inset:0;clip-path:inset(0 calc(100% - var(--pos)) 0 0)}
+.q-frame .b-cmp .hnd{position:absolute;top:0;bottom:0;left:var(--pos);width:3px;margin-left:-1.5px;background:#fff;pointer-events:none;box-shadow:0 0 6px rgba(0,0,0,.3)}
+.q-frame .b-cmp .hnd i{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:38px;height:38px;border-radius:50%;background:#fff;color:#2F261D;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.q-frame .b-cmp .lb{position:absolute;top:10px;font:600 12px/1 var(--q-font);color:#fff;background:rgba(0,0,0,.5);padding:5px 9px;border-radius:999px;pointer-events:none}
+.q-frame .b-cmp .lb.l{left:10px}.q-frame .b-cmp .lb.r{right:10px}
+.q-frame .b-cmp input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize;margin:0}
 .q-frame .b-aud{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:10px}
 .q-frame .b-aud img{width:56px;height:56px;border-radius:50%;object-fit:cover}
 .q-frame .b-aud-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
@@ -328,6 +373,12 @@ const ICON_PATHS = {
   depoimento: '<path d="M7 7h4v6H5V9a2 2 0 0 1 2-2zm8 0h4v6h-6V9a2 2 0 0 1 2-2zM5 13l2 4M13 13l2 4"/>',
   preco: '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
   troca: '<path d="M4 7h13l-3-3M20 17H7l3 3"/>',
+  sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  lua: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  galeria: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  etiqueta: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  divide: '<path d="M4 12h6M10 12l7-7M10 12l7 7M10 12h11"/>',
 };
 const icon = (name, size = 20, cls = "") => `<svg class="ic ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ICON_PATHS.info}</svg>`;
 const ICON_CHOICES = ["check", "escudo", "estrela", "coracao", "presente", "caminhao", "diamante", "sacola", "relogio", "info", "alerta", "dica", "zap", "usuario", "chat", "seta"];
@@ -414,15 +465,32 @@ const BLOCKS = {
   },
   video: {
     label: "Vídeo", cat: "mid", icon: "video",
-    def: () => ({ fonte: "youtube", url: "", embed: "", largura: 100 }),
-    schema: [{ key: "fonte", label: "Origem", type: "select", options: [["youtube", "Link do YouTube"], ["mp4", "Arquivo de vídeo (.mp4)"], ["embed", "Código embed (VTurb, Panda…)"]] }, { key: "url", label: "Link", type: "text", show: p => p.fonte !== "embed" }, { key: "embed", label: "Código embed", type: "code", show: p => p.fonte === "embed" }, { key: "largura", label: "Largura (%)", type: "number", min: 30, max: 100 }],
-    render: (p, ctx) => {
-      const w = `style="width:${+p.largura || 100}%"`;
-      if (p.fonte === "embed") return p.embed ? `<div class="b-vid" ${w} data-embed>${ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Vídeo incorporado (aparece no quiz publicado)</span></div>` : p.embed}</div>` : "";
-      if (p.fonte === "mp4") return p.url ? `<div class="b-vid" ${w}><video src="${U.esc(p.url)}" controls playsinline preload="metadata"></video></div>` : "";
-      const m = String(p.url || "").match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
-      if (!m) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o link do vídeo</span></div>` : "";
-      return `<div class="b-vid" ${w}><div class="ratio"><iframe src="https://www.youtube-nocookie.com/embed/${m[1]}?rel=0&playsinline=1" title="Vídeo" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></div></div>`;
+    def: () => ({ fonte: "arquivo", url: "", embed: "", formato: "9:16", capa: "", autoMudo: true, repetir: false, controles: true, largura: 100, raio: 16, avancarAoFim: false }),
+    schema: [
+      { key: "fonte", label: "Origem", type: "select", options: [["arquivo", "Enviar vídeo (mp4)"], ["youtube", "Link do YouTube"], ["embed", "Código embed (VTurb, Panda…)"]] },
+      { key: "url", label: "Vídeo", type: "image", accept: "video/mp4,video/webm,video/quicktime", show: p => p.fonte === "arquivo" },
+      { key: "url", label: "Link do YouTube", type: "text", show: p => p.fonte === "youtube" },
+      { key: "embed", label: "Código embed", type: "code", show: p => p.fonte === "embed" },
+      { key: "formato", label: "Formato", type: "select", options: [["9:16", "Vertical (Reels/Stories)"], ["16:9", "Horizontal"], ["1:1", "Quadrado"], ["4:5", "Retrato (feed)"]], show: p => p.fonte !== "embed" },
+      { key: "capa", label: "Capa (imagem antes de tocar)", type: "image", show: p => p.fonte === "arquivo" },
+      { key: "autoMudo", label: "Começar tocando sem som (toque para ouvir)", type: "toggle", show: p => p.fonte === "arquivo" },
+      { key: "repetir", label: "Repetir sem parar", type: "toggle", show: p => p.fonte === "arquivo" },
+      { key: "controles", label: "Mostrar barra de controle", type: "toggle", show: p => p.fonte === "arquivo" },
+      { key: "avancarAoFim", label: "Avançar sozinho quando o vídeo terminar (vira saída)", type: "toggle", show: p => p.fonte === "arquivo" },
+      { key: "largura", label: "Largura (%)", type: "number", min: 30, max: 100 }, { key: "raio", label: "Cantos (px)", type: "number", min: 0, max: 40 }],
+    outputs: (p, b) => p.fonte === "arquivo" && p.avancarAoFim ? [{ id: b.id, label: "Vídeo terminou" }] : [],
+    render: (p, ctx, b) => {
+      const ar = { "9:16": "9/16", "16:9": "16/9", "1:1": "1/1", "4:5": "4/5" }[p.formato] || "16/9";
+      const box = `style="width:${+p.largura || 100}%;max-width:${p.formato === "9:16" ? "340px" : "100%"};border-radius:${+p.raio || 0}px;aspect-ratio:${ar}"`;
+      if (p.fonte === "embed") return p.embed ? `<div class="b-vid" data-embed>${ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Vídeo incorporado (aparece no quiz publicado)</span></div>` : p.embed}</div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o código do player</span></div>` : "");
+      if (p.fonte === "youtube") {
+        const m = String(p.url || "").match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
+        if (!m) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o link do YouTube</span></div>` : "";
+        return `<div class="b-vid"><div class="frame" ${box}><iframe src="https://www.youtube-nocookie.com/embed/${m[1]}?rel=0&playsinline=1" title="Vídeo" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></div></div>`;
+      }
+      if (!p.url) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Envie um vídeo (até 50 MB)</span></div>` : "";
+      const mudo = p.autoMudo && ctx.mode !== "edit";
+      return `<div class="b-vid"><div class="frame" ${box} data-vid='${U.esc(JSON.stringify({ mudo: !!p.autoMudo, out: p.avancarAoFim ? b.id : "" }))}'><video src="${U.esc(p.url)}"${p.capa ? ` poster="${U.esc(p.capa)}"` : ""} playsinline preload="metadata"${mudo ? " muted autoplay" : ""}${p.repetir ? " loop" : ""}${p.controles && !mudo ? " controls" : ""}></video>${p.autoMudo ? `<button class="b-vid-som" type="button" aria-label="Ativar som">${icon("audio", 18)}<span>Toque para ouvir</span></button>` : ""}</div></div>`;
     },
   },
   audio: {
@@ -431,12 +499,43 @@ const BLOCKS = {
     schema: [{ key: "url", label: "Arquivo de áudio", type: "image", accept: "audio/*" }, { key: "nome", label: "Nome", type: "text" }, { key: "mostrarNome", label: "Mostrar nome", type: "toggle" }, { key: "imagem", label: "Foto ao lado (opcional)", type: "image" }, { key: "autoplay", label: "Tocar sozinho (o celular pode bloquear)", type: "toggle" }, ANIM],
     render: (p, ctx) => p.url ? `<div class="b-aud${anim(p)}">${p.imagem ? `<img src="${U.esc(p.imagem)}" alt="">` : ""}<div class="b-aud-main">${p.mostrarNome && p.nome ? `<b>${U.esc(p.nome)}</b>` : ""}<audio src="${U.esc(p.url)}" controls preload="metadata"${p.autoplay && ctx.mode !== "edit" ? " autoplay" : ""}></audio></div></div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("audio", 28)}<span>Escolha um áudio</span></div>` : ""),
   },
+  audioZap: {
+    label: "Áudio estilo WhatsApp", cat: "mid", icon: "mic", novo: true,
+    def: () => ({ url: "", foto: "", nome: "Consultora Veraneio", hora: "agora", lado: "esq", fundo: "", avancarAoFim: false, animacao: "sobe" }),
+    schema: [{ key: "url", label: "Áudio (mp3, m4a, ogg)", type: "image", accept: "audio/*" }, { key: "foto", label: "Foto de quem fala", type: "image" }, { key: "nome", label: "Nome", type: "text" }, { key: "hora", label: "Horário mostrado", type: "text" }, { key: "lado", label: "Balão", type: "select", options: [["esq", "Recebido (esquerda)"], ["dir", "Enviado (direita)"]] }, COR("fundo", "Cor do balão"), { key: "avancarAoFim", label: "Avançar sozinho quando o áudio terminar (vira saída)", type: "toggle" }, ANIM],
+    outputs: (p, b) => p.avancarAoFim ? [{ id: b.id, label: "Áudio terminou" }] : [],
+    render: (p, ctx, b) => {
+      const bars = Array.from({ length: 38 }, (_, i) => 22 + Math.round(70 * Math.abs(Math.sin(i * 1.7 + (b.id.charCodeAt(1) || 3)) * Math.cos(i * 0.45))));
+      return `<div class="b-zap ${p.lado === "dir" ? "dir" : ""}${anim(p)}">${p.lado === "dir" ? "" : `<div class="av">${p.foto ? `<img src="${U.esc(p.foto)}" alt="">` : `<span>${U.esc(U.first(p.nome).slice(0, 1) || "V")}</span>`}<i>${icon("audio", 11)}</i></div>`}
+        <div class="bubble" style="${U.css({ background: p.fundo })}" data-zap='${U.esc(JSON.stringify({ out: p.avancarAoFim ? b.id : "" }))}'>${p.nome && p.lado !== "dir" ? `<b class="who">${U.esc(p.nome)}</b>` : ""}
+          <div class="pl"><button type="button" class="pp" aria-label="Tocar áudio">${icon("play", 20)}</button><div class="wave" aria-hidden="true">${bars.map(h => `<i style="height:${h}%"></i>`).join("")}</div><button type="button" class="spd" aria-label="Velocidade">1×</button></div>
+          <div class="meta"><span class="t">${ctx.mode === "edit" && !p.url ? "sem áudio" : "0:00"}</span><span>${U.esc(p.hora)}</span></div>
+          ${p.url ? `<audio src="${U.esc(p.url)}" preload="metadata"></audio>` : ""}</div></div>`;
+    },
+  },
+  galeria: {
+    label: "Galeria de fotos", cat: "mid", icon: "galeria", novo: true,
+    def: () => ({ itens: [{ url: "", legenda: "" }, { url: "", legenda: "" }, { url: "", legenda: "" }, { url: "", legenda: "" }], colunas: 2, formato: "4/5", zoom: true, animacao: "fade" }),
+    schema: [{ key: "itens", label: "Fotos", type: "items", itemLabel: "legenda", newItem: () => ({ url: "", legenda: "" }), fields: [{ key: "url", label: "Foto", type: "image" }, { key: "legenda", label: "Legenda", type: "text" }] }, { key: "colunas", label: "Colunas", type: "select", options: [[2, "2"], [3, "3"]] }, { key: "formato", label: "Formato das fotos", type: "select", options: [["4/5", "Retrato"], ["1/1", "Quadrado"], ["3/4", "Alto"]] }, { key: "zoom", label: "Abrir em tela cheia ao tocar", type: "toggle" }, ANIM],
+    render: (p, ctx) => {
+      const it = (p.itens || []).filter(i => i.url);
+      if (!it.length) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("imagem", 28)}<span>Adicione fotos à galeria</span></div>` : "";
+      return `<div class="b-gal c${p.colunas || 2}${anim(p)}"${p.zoom ? ` data-gal='${U.esc(JSON.stringify(it))}'` : ""}>${it.map((i, k) => `<figure${p.zoom ? ` data-k="${k}" role="button" tabindex="0" aria-label="Ampliar foto ${k + 1}"` : ""}><img src="${U.esc(i.url)}" alt="${U.esc(i.legenda)}" style="aspect-ratio:${p.formato || "4/5"}" loading="lazy">${i.legenda ? `<figcaption>${U.esc(i.legenda)}</figcaption>` : ""}</figure>`).join("")}</div>`;
+    },
+  },
+  comparar: {
+    label: "Antes e depois (arrastar)", cat: "mid", icon: "troca", novo: true,
+    def: () => ({ antes: "", depois: "", rotuloAntes: "Antes", rotuloDepois: "Depois", inicio: 50, formato: "4/5" }),
+    schema: [{ key: "antes", label: "Foto de antes", type: "image" }, { key: "depois", label: "Foto de depois", type: "image" }, { key: "rotuloAntes", label: "Rótulo da esquerda", type: "text" }, { key: "rotuloDepois", label: "Rótulo da direita", type: "text" }, { key: "inicio", label: "Posição inicial (%)", type: "number", min: 5, max: 95 }, { key: "formato", label: "Formato", type: "select", options: [["4/5", "Retrato"], ["1/1", "Quadrado"], ["16/9", "Horizontal"]] }],
+    render: (p, ctx) => (!p.antes || !p.depois) ? (ctx.mode === "edit" ? `<div class="b-vazio">${icon("troca", 28)}<span>Escolha a foto de antes e a de depois</span></div>` : "") :
+      `<div class="b-cmp" style="aspect-ratio:${p.formato || "4/5"};--pos:${+p.inicio || 50}%" data-cmp><img src="${U.esc(p.depois)}" alt="${U.esc(p.rotuloDepois)}"><div class="top"><img src="${U.esc(p.antes)}" alt="${U.esc(p.rotuloAntes)}"></div><span class="lb l">${U.esc(p.rotuloAntes)}</span><span class="lb r">${U.esc(p.rotuloDepois)}</span><div class="hnd"><i>${icon("troca", 16)}</i></div><input type="range" min="0" max="100" value="${+p.inicio || 50}" aria-label="Comparar antes e depois"></div>`,
+  },
   botao: {
     label: "Botão", cat: "acao", icon: "botao",
-    def: () => ({ texto: "Continuar", estilo: "cheio", destaque: false, animacao: "fade", fundo: "", cor: "", borda: "", ancora: "" }),
-    schema: [{ key: "texto", label: "Texto do botão", type: "text" }, { key: "estilo", label: "Estilo", type: "select", options: [["cheio", "Cheio"], ["contorno", "Contorno"], ["whats", "Verde WhatsApp"]] }, { key: "destaque", label: "Fixo na parte de baixo da tela", type: "toggle" }, { key: "ancora", label: "Rolar até um elemento desta página (em vez de avançar)", type: "blockref" }, COR("fundo", "Cor de fundo"), COR("cor", "Cor do texto"), COR("borda", "Cor da borda"), ANIM],
+    def: () => ({ texto: "Continuar", estilo: "cheio", destaque: false, atraso: 0, animacao: "fade", fundo: "", cor: "", borda: "", ancora: "" }),
+    schema: [{ key: "texto", label: "Texto do botão", type: "text" }, { key: "atraso", label: "Aparecer só depois de (segundos) — bom com vídeo/áudio", type: "number", min: 0, max: 900 }, { key: "estilo", label: "Estilo", type: "select", options: [["cheio", "Cheio"], ["contorno", "Contorno"], ["whats", "Verde WhatsApp"]] }, { key: "destaque", label: "Fixo na parte de baixo da tela", type: "toggle" }, { key: "ancora", label: "Rolar até um elemento desta página (em vez de avançar)", type: "blockref" }, COR("fundo", "Cor de fundo"), COR("cor", "Cor do texto"), COR("borda", "Cor da borda"), ANIM],
     outputs: (p, b) => p.ancora ? [] : [{ id: b.id, label: p.texto || "Botão" }],
-    render: (p, ctx, b) => `<div class="b-btn-wrap${p.destaque ? " fixo" : ""}"><button class="b-btn ${p.estilo || "cheio"}${anim(p)}" ${p.ancora ? `data-anchor="${U.esc(p.ancora)}"` : outAttr(b.id)} style="${U.css({ background: p.fundo, color: p.cor, "border-color": p.borda })}">${U.esc(U.interp(p.texto, ctx.vars))}</button></div>`,
+    render: (p, ctx, b) => `<div class="b-btn-wrap${p.destaque ? " fixo" : ""}"${+p.atraso > 0 && ctx.mode !== "edit" ? ` data-delay="${+p.atraso}" hidden` : ""}>${+p.atraso > 0 && ctx.mode === "edit" ? `<span class="b-delay-tag">${icon("relogio", 12)} aparece após ${+p.atraso}s</span>` : ""}<button class="b-btn ${p.estilo || "cheio"}${anim(p)}" ${p.ancora ? `data-anchor="${U.esc(p.ancora)}"` : outAttr(b.id)} style="${U.css({ background: p.fundo, color: p.cor, "border-color": p.borda })}">${U.esc(U.interp(p.texto, ctx.vars))}</button></div>`,
   },
   quiz: {
     label: "Pergunta (quiz)", cat: "acao", icon: "lista",
@@ -641,53 +740,74 @@ function testRule(r, vars) {
 
 const FUNCS = {
   link: {
-    label: "Link", icon: "link", desc: "Leva a cliente para um endereço (site, carrinho Yampi…)",
+    cat: "nav", label: "Link", icon: "link", desc: "Leva a cliente para um endereço (site, carrinho Yampi…)",
     def: () => ({ destino: "url", url: "https://", novaAba: false, finaliza: true }),
     schema: [{ key: "destino", label: "Destino", type: "select", options: [["url", "Endereço (URL)"], ["carrinho", "Carrinho Yampi com as peças escolhidas"], ["loja", "Site da loja (Configurações)"]] }, { key: "url", label: "URL (pode usar {{variavel}})", type: "text", show: p => p.destino === "url" }, { key: "novaAba", label: "Abrir em nova aba", type: "toggle" }, { key: "finaliza", label: "Conta como 'finalizou' no CRM", type: "toggle" }],
     outputs: () => [],
     summary: p => p.destino === "carrinho" ? "Carrinho Yampi" : p.destino === "loja" ? "Site da loja" : (p.url || "").replace(/^https?:\/\//, "").slice(0, 34),
   },
   whatsapp: {
-    label: "WhatsApp", icon: "whatsapp", desc: "Abre conversa no WhatsApp com mensagem pronta",
+    cat: "nav", label: "WhatsApp", icon: "whatsapp", desc: "Abre conversa no WhatsApp com mensagem pronta",
     def: () => ({ numero: "revenda", outro: "", mensagem: "Oi! Sou {{primeiroNome}}. Vim pelo quiz 💛", finaliza: true }),
     schema: [{ key: "numero", label: "Número", type: "select", options: [["revenda", "WhatsApp revenda (Configurações)"], ["varejo", "WhatsApp varejo (Configurações)"], ["outro", "Outro número"]] }, { key: "outro", label: "Número com DDD", type: "text", show: p => p.numero === "outro" }, { key: "mensagem", label: "Mensagem ({{nome}}, {{kit}}, {{escolhas}}, {{carrinhoLink}}…)", type: "textarea" }, { key: "finaliza", label: "Conta como 'finalizou' no CRM", type: "toggle" }],
     outputs: () => [],
     summary: p => p.numero === "outro" ? p.outro : "Nº " + p.numero,
   },
   carrinho: {
-    label: "Carrinho", icon: "carrinho", desc: "Adiciona peças (SKUs da Yampi) e cupom ao carrinho da cliente",
+    cat: "venda", label: "Carrinho", icon: "carrinho", desc: "Adiciona peças (SKUs da Yampi) e cupom ao carrinho da cliente",
     def: () => ({ acao: "add", skus: "", qtd: 1, cupom: "", rotulo: "" }),
     schema: [{ key: "acao", label: "Ação", type: "select", options: [["add", "Adicionar peças"], ["set", "Substituir o carrinho"], ["limpar", "Esvaziar carrinho"], ["cupom", "Só definir o cupom"]] }, { key: "skus", label: "SKUs da Yampi (separados por vírgula)", type: "textarea", show: p => p.acao === "add" || p.acao === "set" }, { key: "qtd", label: "Quantidade de cada", type: "number", min: 1, max: 50, show: p => p.acao === "add" || p.acao === "set" }, { key: "rotulo", label: "Nome desta escolha (aparece no CRM e em {{escolhas}})", type: "text", show: p => p.acao === "add" || p.acao === "set" }, { key: "cupom", label: "Cupom (opcional)", type: "text" }],
     outputs: () => [{ id: "next", label: "Depois" }],
     summary: p => p.acao === "limpar" ? "Esvaziar" : p.acao === "cupom" ? "Cupom " + p.cupom : `${String(p.skus || "").split(",").filter(s => s.trim()).length} peça(s)${p.cupom ? " · " + p.cupom : ""}`,
   },
   variavel: {
-    label: "Variável", icon: "variavel", desc: "Cria ou altera uma variável (contas + − × ÷)",
+    cat: "logica", label: "Variável", icon: "variavel", desc: "Cria ou altera uma variável (contas + − × ÷)",
     def: () => ({ nome: "", op: "set", valor: "" }),
     schema: [{ key: "nome", label: "Variável", type: "var" }, { key: "op", label: "Operação", type: "select", options: [["set", "Definir como"], ["+", "Somar"], ["-", "Subtrair"], ["*", "Multiplicar"], ["/", "Dividir"], ["append", "Acrescentar à lista"]] }, { key: "valor", label: "Valor (pode usar {{outra}})", type: "text" }],
     outputs: () => [{ id: "next", label: "Depois" }],
     summary: p => `${p.nome || "?"} ${{ set: "=", "+": "+=", "-": "−=", "*": "×=", "/": "÷=", append: "+ lista" }[p.op] || "="} ${p.valor}`,
   },
   condicao: {
-    label: "Condição", icon: "condicao", desc: "Escolhe o caminho conforme as respostas",
+    cat: "logica", label: "Condição", icon: "condicao", desc: "Escolhe o caminho conforme as respostas",
     def: () => ({ grupos: [{ id: U.uid("g"), nome: "Se…", logica: "e", regras: [{ var: "", op: "igual", valor: "" }] }] }),
     schema: [{ key: "grupos", label: "Caminhos (o primeiro que bater é usado)", type: "conditions" }],
     outputs: p => (p.grupos || []).map(g => ({ id: g.id, label: g.nome || "Se…" })).concat([{ id: "senao", label: "Senão" }]),
     summary: p => (p.grupos || []).length + " caminho(s) + senão",
   },
   ab: {
-    label: "Teste A/B", icon: "ab", desc: "Divide o tráfego entre dois caminhos",
+    cat: "logica", label: "Teste A/B", icon: "ab", desc: "Divide o tráfego entre dois caminhos",
     def: () => ({ pctA: 50, nomeA: "Versão A", nomeB: "Versão B" }),
     schema: [{ key: "pctA", label: "% para A (B recebe o resto)", type: "number", min: 0, max: 100 }, { key: "nomeA", label: "Nome de A", type: "text" }, { key: "nomeB", label: "Nome de B", type: "text" }],
     outputs: p => [{ id: "A", label: `${p.nomeA || "A"} · ${+p.pctA}%` }, { id: "B", label: `${p.nomeB || "B"} · ${100 - +p.pctA}%` }],
     summary: p => `${+p.pctA}% / ${100 - +p.pctA}%`,
   },
   webhook: {
-    label: "Webhook", icon: "webhook", desc: "Envia os dados da cliente para outro sistema (POST)",
+    cat: "integ", label: "Webhook", icon: "webhook", desc: "Envia os dados da cliente para outro sistema (POST)",
     def: () => ({ nome: "", url: "", token: "", enviar: "tudo", vars: "" }),
     schema: [{ key: "nome", label: "Nome", type: "text" }, { key: "url", label: "URL", type: "text" }, { key: "token", label: "Token (vai no corpo como 'token')", type: "text" }, { key: "enviar", label: "Enviar", type: "select", options: [["tudo", "Todas as variáveis e respostas"], ["lista", "Só estas variáveis"]] }, { key: "vars", label: "Variáveis (vírgula)", type: "text", show: p => p.enviar === "lista" }],
     outputs: () => [{ id: "next", label: "Depois" }],
     summary: p => p.nome || (p.url || "").replace(/^https?:\/\//, "").slice(0, 30),
+  },
+  divisao: {
+    cat: "logica", label: "Divisão de tráfego", icon: "divide", novo: true, desc: "Divide as clientes entre vários caminhos (3 ou mais versões)",
+    def: () => ({ caminhos: [{ id: U.uid("d"), nome: "Versão 1", peso: 34 }, { id: U.uid("d"), nome: "Versão 2", peso: 33 }, { id: U.uid("d"), nome: "Versão 3", peso: 33 }] }),
+    schema: [{ key: "caminhos", label: "Caminhos (peso = parte do tráfego)", type: "items", itemLabel: "nome", newItem: () => ({ id: U.uid("d"), nome: "Nova versão", peso: 10 }), fields: [{ key: "nome", label: "Nome", type: "text" }, { key: "peso", label: "Peso", type: "number", min: 0, max: 100 }] }],
+    outputs: p => { const t = (p.caminhos || []).reduce((a, c) => a + (+c.peso || 0), 0) || 1; return (p.caminhos || []).map(c => ({ id: c.id, label: `${c.nome} · ${Math.round((+c.peso || 0) / t * 100)}%` })); },
+    summary: p => (p.caminhos || []).length + " caminhos",
+  },
+  etiqueta: {
+    cat: "crm", label: "Etiqueta no CRM", icon: "etiqueta", novo: true, desc: "Marca a cliente com etiquetas (ex.: Quente, Revendedora) para filtrar no CRM",
+    def: () => ({ etiquetas: "Quente" }),
+    schema: [{ key: "etiquetas", label: "Etiquetas (separadas por vírgula; pode usar {{variavel}})", type: "text" }],
+    outputs: () => [{ id: "next", label: "Depois" }],
+    summary: p => String(p.etiquetas || "").split(",").map(x => x.trim()).filter(Boolean).map(x => "#" + x).join(" "),
+  },
+  evento: {
+    cat: "integ", label: "Evento do Pixel", icon: "pixel", novo: true, desc: "Dispara um evento do Pixel/GTM quando a cliente passa por aqui",
+    def: () => ({ evento: "Lead", nomeCustom: "", valor: "" }),
+    schema: [{ key: "evento", label: "Evento", type: "select", options: ["Lead", "Contact", "CompleteRegistration", "ViewContent", "AddToCart", "InitiateCheckout", "Purchase", "Schedule", "SubmitApplication", "Subscribe", "Custom"].map(x => [x, x === "Custom" ? "Personalizado" : x]) }, { key: "nomeCustom", label: "Nome do evento", type: "text", show: p => p.evento === "Custom" }, { key: "valor", label: "Valor em R$ (opcional, pode usar {{variavel}})", type: "text" }],
+    outputs: () => [{ id: "next", label: "Depois" }],
+    summary: p => p.evento === "Custom" ? p.nomeCustom || "Personalizado" : p.evento,
   },
 };
 
@@ -722,7 +842,7 @@ function createRunner(opts) {
   const clearTimers = () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; };
 
   function fresh() {
-    return { id: null, vars: {}, respostas: {}, escolhas: [], vistas: [], carrinho: [], cupom: "", ab: {}, hist: [], atual: null, finalizado: false, criado: U.now() };
+    return { id: null, vars: {}, respostas: {}, escolhas: [], vistas: [], carrinho: [], cupom: "", ab: {}, tags: [], hist: [], atual: null, finalizado: false, criado: U.now() };
   }
   function derived() {
     const v = Object.assign({}, S.vars);
@@ -826,6 +946,27 @@ function createRunner(opts) {
       if (!S.ab[n.id]) { S.ab[n.id] = Math.random() * 100 < (+p.pctA || 0) ? "A" : "B"; save({ ab: S.ab }); persist(); }
       return follow(n.id, S.ab[n.id]);
     }
+    if (k === "divisao") {
+      const cs = p.caminhos || []; if (!cs.length) return;
+      if (!S.ab[n.id] || !cs.some(c => c.id === S.ab[n.id])) {
+        const w = cs.map(c => Math.max(0, +c.peso || 0)), allZero = w.every(x => !x), ws = allZero ? cs.map(() => 1) : w;
+        let r = Math.random() * ws.reduce((a, x) => a + x, 0), pick = cs[cs.length - 1].id;
+        for (let i = 0; i < cs.length; i++) { r -= ws[i]; if (r < 0) { pick = cs[i].id; break; } }
+        S.ab[n.id] = pick; save({ ab: S.ab }); persist();
+      }
+      return follow(n.id, S.ab[n.id]);
+    }
+    if (k === "etiqueta") {
+      const novas = U.interp(p.etiquetas, v).split(",").map(x => x.trim()).filter(Boolean).slice(0, 10);
+      S.tags = [...new Set([...(S.tags || []), ...novas])].slice(0, 20);
+      save({ tags: S.tags }); persist(); return follow(n.id, "next");
+    }
+    if (k === "evento") {
+      const val = parseFloat(String(U.interp(p.valor, v)).replace(/[^\d,.-]/g, "").replace(",", "."));
+      emit("pixel", { ev: p.evento === "Custom" ? (p.nomeCustom || "Evento") : p.evento, custom: p.evento === "Custom", data: isNaN(val) ? {} : { value: val, currency: "BRL" } });
+      if (mode === "preview") toastIn(root, "Evento do Pixel: " + (p.evento === "Custom" ? p.nomeCustom : p.evento));
+      return follow(n.id, "next");
+    }
     if (k === "webhook") {
       if (mode === "live" && p.url) {
         const all = derived();
@@ -842,6 +983,8 @@ function createRunner(opts) {
   // ---- página ----
   function renderPage(n) {
     clearTimers();
+    root.querySelectorAll("audio,video").forEach(m => { try { m.pause(); } catch (e) { } });
+    document.querySelectorAll(".q-lightbox").forEach(x => x.remove());
     const ctx = { vars: derived(), mode: "live", tema: project.tema || {}, nome: project.nome, canBack: S.hist.length > 0, prevProgress: lastPageProgress, k: n.id.slice(-4) };
     const blocos = n.data.blocos || [];
     const html = blocos.map(b => { const B = BLOCKS[b.type]; if (!B) return ""; try { return `<section class="blk" data-bid="${b.id}" id="b-${b.id}">${B.render(b.props || {}, ctx, b)}</section>`; } catch (e) { console.warn(e); return ""; } }).join("");
@@ -982,6 +1125,50 @@ function createRunner(opts) {
       const tick = () => { const left = Math.max(0, Math.floor((end - Date.now()) / 1000)); const h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60), s = left % 60; t.textContent = (h ? String(h).padStart(2, "0") + ":" : "") + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0"); if (!left) { msg.textContent = c.fim; t.textContent = ""; return false; } return true; };
       if (tick()) timers.push(setInterval(() => { if (!tick()) { } }, 1000));
     });
+
+    // botão que aparece depois de N segundos
+    $$("[data-delay]").forEach(w => timers.push(setTimeout(() => { w.hidden = false; w.classList.add("an-sobe"); }, +w.dataset.delay * 1000)));
+    // vídeo enviado: toque para ouvir, avançar ao fim
+    $$("[data-vid]").forEach(fr => {
+      const c = JSON.parse(fr.dataset.vid), v = fr.querySelector("video"), btn = fr.querySelector(".b-vid-som");
+      if (!v) return;
+      if (btn) { if (!v.muted) btn.hidden = true; btn.onclick = () => { v.muted = false; v.currentTime = 0; v.controls = true; v.play().catch(() => { }); btn.hidden = true; }; }
+      if (c.out) v.addEventListener("ended", () => follow(n.id, c.out));
+      if (v.autoplay) v.play().catch(() => { });
+    });
+    // áudio estilo WhatsApp
+    $$("[data-zap]").forEach(bu => {
+      const c = JSON.parse(bu.dataset.zap), a = bu.querySelector("audio"), pp = bu.querySelector(".pp"), sp = bu.querySelector(".spd"), t = bu.querySelector(".t"), bars = [...bu.querySelectorAll(".wave i")];
+      if (!a) return;
+      const fmt = s => isFinite(s) ? Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0") : "0:00";
+      const paint = () => { const k = a.duration ? a.currentTime / a.duration : 0; bars.forEach((b, i) => b.classList.toggle("on", i / bars.length < k)); t.textContent = fmt(a.paused && !a.currentTime ? a.duration : a.currentTime); };
+      a.addEventListener("loadedmetadata", paint); a.addEventListener("timeupdate", paint);
+      a.addEventListener("play", () => { pp.innerHTML = icon("pausa", 20); pp.setAttribute("aria-label", "Pausar"); bu.classList.add("tocando"); root.querySelectorAll("[data-zap] audio,video").forEach(o => { if (o !== a) o.pause(); }); });
+      a.addEventListener("pause", () => { pp.innerHTML = icon("play", 20); pp.setAttribute("aria-label", "Tocar áudio"); bu.classList.remove("tocando"); });
+      a.addEventListener("ended", () => { a.currentTime = 0; paint(); bu.classList.add("ouvido"); if (c.out) follow(n.id, c.out); });
+      pp.onclick = () => a.paused ? a.play().catch(() => { }) : a.pause();
+      const speeds = [1, 1.5, 2]; sp.onclick = () => { const i = (speeds.indexOf(a.playbackRate) + 1) % speeds.length; a.playbackRate = speeds[i]; sp.textContent = String(speeds[i]).replace(".", ",") + "×"; };
+      bu.querySelector(".wave").onclick = e => { if (!a.duration) return; const r = e.currentTarget.getBoundingClientRect(); a.currentTime = (e.clientX - r.left) / r.width * a.duration; paint(); };
+    });
+    // galeria com tela cheia
+    $$("[data-gal]").forEach(g => {
+      const it = JSON.parse(g.dataset.gal);
+      const open = k => {
+        const lb = document.createElement("div"); lb.className = "q-lightbox"; lb.setAttribute("role", "dialog"); lb.setAttribute("aria-label", "Foto ampliada");
+        const draw = () => { lb.innerHTML = `<button class="x" aria-label="Fechar">${icon("x", 22)}</button>${it.length > 1 ? `<button class="nv p" aria-label="Anterior">${icon("voltar", 26)}</button><button class="nv n" aria-label="Próxima">${icon("seta", 26)}</button>` : ""}<figure><img src="${U.esc(it[k].url)}" alt="${U.esc(it[k].legenda)}">${it[k].legenda ? `<figcaption>${U.esc(it[k].legenda)}</figcaption>` : ""}<small>${k + 1} / ${it.length}</small></figure>`; bind(); };
+        const go2 = d => { k = (k + d + it.length) % it.length; draw(); };
+        const close = () => { lb.remove(); document.removeEventListener("keydown", key); };
+        const key = e => { if (e.key === "Escape") close(); if (e.key === "ArrowRight") go2(1); if (e.key === "ArrowLeft") go2(-1); };
+        const bind = () => { lb.querySelector(".x").onclick = close; const p2 = lb.querySelector(".p"), n2 = lb.querySelector(".n"); if (p2) { p2.onclick = e => { e.stopPropagation(); go2(-1); }; n2.onclick = e => { e.stopPropagation(); go2(1); }; } lb.querySelector(".x").focus(); };
+        let sx = null; lb.addEventListener("touchstart", e => sx = e.touches[0].clientX, { passive: true }); lb.addEventListener("touchend", e => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 40) go2(dx < 0 ? 1 : -1); sx = null; });
+        lb.addEventListener("click", e => { if (e.target === lb) close(); });
+        document.addEventListener("keydown", key);
+        (root.closest(".q-frame") || document.body).appendChild(lb); draw();
+      };
+      g.querySelectorAll("[data-k]").forEach(f => { f.onclick = () => open(+f.dataset.k); f.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(+f.dataset.k); } }; });
+    });
+    // antes e depois
+    $$("[data-cmp]").forEach(c => { const r = c.querySelector("input"); r.oninput = () => c.style.setProperty("--pos", r.value + "%"); });
     // scripts (só no publicado)
     if (mode === "live") $$("[data-script]").forEach(s => { s.querySelectorAll("script").forEach(old => { const n2 = document.createElement("script"); [...old.attributes].forEach(a => n2.setAttribute(a.name, a.value)); n2.textContent = old.textContent; old.replaceWith(n2); }); });
     if (mode === "live") $$("[data-embed]").forEach(s => { s.querySelectorAll("script").forEach(old => { const n2 = document.createElement("script"); [...old.attributes].forEach(a => n2.setAttribute(a.name, a.value)); n2.textContent = old.textContent; old.replaceWith(n2); }); });
