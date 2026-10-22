@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carregando…</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#FAF6EE">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<style>
+html,body{margin:0;min-height:100%;background:#FAF6EE}
+body{min-height:100dvh}
+.q-frame{min-height:100dvh}
+.boot{display:flex;align-items:center;justify-content:center;min-height:100dvh}
+.boot i{width:28px;height:28px;border:3px solid #E9DCC4;border-top-color:#8A6A3B;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+.off{max-width:420px;margin:0 auto;padding:80px 24px;text-align:center;font-family:system-ui,sans-serif;color:#6B5D4E}
+.off b{display:block;font-size:20px;color:#2F261D;margin-bottom:6px}
+/* ===== Quiz (compartilhado: publicado + prévia do editor). Tudo escopado em .q-frame ===== */
+.q-frame{background:var(--bg);color:var(--text);font-family:var(--q-font);font-size:16px;line-height:1.5;position:relative;-webkit-font-smoothing:antialiased}
+.q-frame *{box-sizing:border-box}
+.q-frame .pg{max-width:480px;margin:0 auto;padding:12px 16px 32px;display:flex;flex-direction:column;gap:var(--q-gap)}
+.q-frame .blk{min-width:0}
+.q-frame h2,.q-frame .b-tit h2{font-family:var(--q-font-t);font-weight:600;line-height:1.15;margin:0;color:var(--text)}
+.q-frame p{margin:0}
+.q-frame .ic{flex:none}
+.q-frame b,.q-frame strong{font-weight:600}
+/* animações */
+@keyframes qFade{from{opacity:0}to{opacity:1}}
+@keyframes qUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes qPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
+.q-frame .an-fade{animation:qFade .45s ease both}
+.q-frame .an-sobe{animation:qUp .45s ease both}
+.q-frame .an-pulsar{animation:qUp .45s ease both,qPulse 1.8s ease-in-out .6s infinite}
+@media (prefers-reduced-motion:reduce){.q-frame [class*=" an-"]{animation:none!important}}
+/* cabeçalho */
+.q-frame .b-cab{display:flex;align-items:center;justify-content:center;position:relative;min-height:44px}
+.q-frame .b-cab img{max-width:70%;object-fit:contain}
+.q-frame .b-cab-back{position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:0;background:transparent;color:var(--text-muted);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.q-frame .b-cab-back:hover{background:var(--surface-2)}
+.q-frame .b-cab-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* progresso */
+.q-frame .b-prog{height:6px;border-radius:6px;background:var(--surface-2);overflow:hidden}
+.q-frame .b-prog i{display:block;height:100%;background:var(--accent-deco);border-radius:6px}
+/* textos */
+.q-frame .b-tit h2{font-size:28px}
+.q-frame .b-tit p{color:var(--text-muted);margin-top:6px}
+.q-frame .b-txt{color:var(--text)}
+.q-frame .b-nota{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--q-radius);padding:14px 16px;font-size:15px;color:var(--text)}
+.q-frame .b-nota .ic{color:var(--accent)}
+.q-frame .b-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.q-frame .b-lista li{display:flex;gap:10px;align-items:flex-start}
+.q-frame .b-lista li>span:first-child{color:var(--accent);display:flex;margin-top:2px}
+.q-frame .b-lista.dir li{flex-direction:row-reverse;text-align:right}
+.q-frame .b-num{font-family:var(--q-font-t);font-weight:600;font-variant-numeric:tabular-nums}
+/* mídia */
+.q-frame .b-img{display:flex;justify-content:center}
+.q-frame .b-img img{display:block;max-width:100%;height:auto;background:var(--surface-2)}
+.q-frame .b-img img.clk{cursor:pointer;transition:transform .15s}
+.q-frame .b-img img.clk:active{transform:scale(.98)}
+.q-frame .b-img img.clk:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.q-frame .b-car{position:relative}
+.q-frame .b-car-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:var(--q-radius);scrollbar-width:none}
+.q-frame .b-car-track::-webkit-scrollbar{display:none}
+.q-frame .b-car figure{flex:0 0 100%;margin:0;scroll-snap-align:center;position:relative}
+.q-frame .b-car img{width:100%;display:block;aspect-ratio:4/5;object-fit:cover}
+.q-frame .b-car figcaption{position:absolute;left:0;right:0;bottom:0;padding:24px 14px 10px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.55));font-size:14px}
+.q-frame .b-car-dots{display:flex;gap:6px;justify-content:center;margin-top:8px}
+.q-frame .b-car-dots i{width:7px;height:7px;border-radius:50%;background:var(--border)}
+.q-frame .b-car-dots i.on{background:var(--accent)}
+.q-frame .b-vid{margin:0 auto}
+.q-frame .b-vid .ratio{position:relative;padding-top:56.25%;border-radius:var(--q-radius);overflow:hidden;background:#000}
+.q-frame .b-vid iframe,.q-frame .b-vid video{position:absolute;inset:0;width:100%;height:100%;border:0}
+.q-frame .b-vid video{position:static;height:auto;border-radius:var(--q-radius)}
+.q-frame .b-aud{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:10px}
+.q-frame .b-aud img{width:56px;height:56px;border-radius:50%;object-fit:cover}
+.q-frame .b-aud-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.q-frame .b-aud audio{width:100%}
+/* botão */
+.q-frame .b-btn-wrap.fixo{position:sticky;bottom:12px;z-index:3}
+.q-frame .b-btn{display:block;width:100%;min-height:52px;border-radius:var(--q-radius);border:1.5px solid transparent;padding:14px 18px;font:inherit;font-weight:600;font-size:16px;cursor:pointer;text-align:center;transition:transform .1s,filter .15s}
+.q-frame .b-btn.cheio{background:var(--accent);color:var(--on-accent);box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 35%,transparent)}
+.q-frame .b-btn.contorno{background:transparent;color:var(--accent);border-color:var(--accent)}
+.q-frame .b-btn.whats{background:#147A3F;color:#fff}
+.q-frame .b-btn:hover{filter:brightness(1.06)}
+.q-frame .b-btn:active{transform:scale(.985)}
+.q-frame .b-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.q-frame .b-btn[disabled]{opacity:.45;cursor:not-allowed;box-shadow:none}
+/* quiz */
+.q-frame .b-quiz{display:flex;flex-direction:column;gap:12px}
+.q-frame .b-quiz-grid{display:grid;gap:10px}
+.q-frame .b-quiz-grid.c2{grid-template-columns:1fr 1fr}
+.q-frame .b-quiz-grid.c3{grid-template-columns:1fr 1fr 1fr}
+.q-frame .b-opt{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;text-align:left;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--q-radius);padding:12px 14px;font:inherit;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s,transform .1s}
+.q-frame .b-opt:hover{border-color:var(--accent-deco)}
+.q-frame .b-opt:active{transform:scale(.985)}
+.q-frame .b-opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.q-frame .b-opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.q-frame .b-opt .t{flex:1;display:flex;flex-direction:column}
+.q-frame .b-opt .t small{color:var(--text-muted);font-size:13px}
+.q-frame .b-opt .emo{font-size:24px;line-height:1}
+.q-frame .b-opt img{border-radius:calc(var(--q-radius) - 4px);object-fit:cover;background:var(--surface-2)}
+.q-frame .b-opt.m-imgEsq img{width:64px;height:64px}
+.q-frame .b-opt.m-imgCima,.q-frame .b-opt.m-imagem{flex-direction:column;align-items:stretch;text-align:center;padding:8px}
+.q-frame .b-opt.m-imgCima img,.q-frame .b-opt.m-imagem img{width:100%;aspect-ratio:4/5}
+.q-frame .b-opt.m-imgCima .t{align-items:center;padding:2px 4px 4px;font-weight:500}
+.q-frame .b-opt .mk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);flex:none}
+.q-frame .b-opt .mk.sq{border-radius:6px}
+.q-frame .b-opt.m-imgCima .mk,.q-frame .b-opt.m-imagem .mk{position:absolute;margin:8px}
+.q-frame .b-opt{position:relative}
+.q-frame .b-opt.sel .mk{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 3px var(--surface)}
+/* formulário */
+.q-frame .b-form{display:flex;flex-direction:column;gap:12px}
+.q-frame .b-form .fld{display:flex;flex-direction:column;gap:6px}
+.q-frame .b-form .fld>span{font-size:14px;color:var(--text-muted);padding-left:2px}
+.q-frame .b-form .fld em{font-style:normal;font-size:12px}
+.q-frame .b-form input{width:100%;min-height:52px;border:1.5px solid var(--border);background:var(--surface);border-radius:var(--q-radius);padding:12px 14px;font:inherit;font-size:16px;color:var(--text);outline:none}
+.q-frame .b-form input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent)}
+.q-frame .b-form .err{color:#B3261E;font-size:13px;min-height:0}
+.q-frame .b-form .fld.bad input{border-color:#B3261E}
+.q-frame .b-form-aviso{font-size:12px;color:var(--text-muted);text-align:center}
+/* slider */
+.q-frame .b-sld{display:flex;flex-direction:column;gap:12px;align-items:stretch;text-align:center}
+.q-frame .b-sld .val{font-size:18px;color:var(--text-muted)}
+.q-frame .b-sld .val b{font-family:var(--q-font-t);font-size:44px;color:var(--text)}
+.q-frame .b-sld input{accent-color:var(--accent);width:100%;height:32px}
+.q-frame .b-sld small{color:var(--text-muted)}
+/* carregamento */
+.q-frame .b-load{display:flex;flex-direction:column;gap:10px;text-align:center;padding:24px 0}
+.q-frame .b-load b{font-family:var(--q-font-t);font-size:24px}
+.q-frame .b-load p{color:var(--text-muted)}
+.q-frame .b-load-bar{position:relative;height:28px;background:var(--surface-2);border-radius:999px;overflow:hidden;margin-top:6px}
+.q-frame .b-load-bar i{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent)}
+.q-frame .b-load-bar span{position:relative;line-height:28px;font-size:13px;font-weight:600;color:var(--text)}
+.q-frame .b-redir{text-align:center;color:var(--text-muted);font-size:14px}
+/* venda */
+.q-frame .b-gar{display:flex;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:14px 16px;font-size:15px}
+.q-frame .b-gar .ic{color:var(--accent)}
+.q-frame .b-gar.al-center{flex-direction:column;text-align:center}
+.q-frame .b-gar b{display:block}
+.q-frame .b-dep{margin:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:16px}
+.q-frame .b-dep.al-center{text-align:center}.q-frame .b-dep.al-center .b-dep-top,.q-frame .b-dep.al-center .stars{justify-content:center}
+.q-frame .b-dep-top{display:flex;gap:10px;align-items:center}
+.q-frame .b-dep-top img,.q-frame .b-dep-top .av{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--accent)}
+.q-frame .b-dep-top small{display:block;color:var(--text-muted);font-size:13px}
+.q-frame .stars{display:flex;gap:2px;margin:8px 0 4px;color:#C9962C}
+.q-frame .stars span{display:flex;opacity:.25}.q-frame .stars span.on{opacity:1}
+.q-frame .stars .ic{fill:currentColor}
+.q-frame .b-dep blockquote{margin:0;font-size:15px}
+.q-frame .b-preco{position:relative;background:var(--surface);border:1.5px solid var(--accent-deco);border-radius:var(--q-radius);overflow:hidden}
+.q-frame .b-preco .selo{position:absolute;top:10px;right:10px;background:var(--accent);color:var(--on-accent);font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px}
+.q-frame .b-preco-h{display:flex;gap:12px;align-items:center;padding:16px}
+.q-frame .b-preco-h>span{color:var(--accent-deco);display:flex}
+.q-frame .b-preco-h small{display:block;color:var(--text-muted);font-size:13px}
+.q-frame .b-preco-v{background:var(--surface-2);padding:14px 16px;display:flex;flex-direction:column;align-items:center}
+.q-frame .b-preco-v s{color:var(--text-muted);font-size:14px}
+.q-frame .b-preco-v strong{font-family:var(--q-font-t);font-size:36px;line-height:1.1;color:var(--text)}
+.q-frame .b-preco-v small{color:var(--text-muted)}
+.q-frame .b-ben{background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:16px}
+.q-frame .b-ben .h{display:block;margin-bottom:8px;font-family:var(--q-font-t);font-size:20px}
+.q-frame .b-ben ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.q-frame .b-ben li{display:flex;gap:10px;align-items:flex-start}
+.q-frame .b-ben li .ic{color:var(--accent);margin-top:2px}
+.q-frame .b-tr{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center}
+.q-frame .b-tr-ar{color:var(--accent)}
+.q-frame .b-tr-s{background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:10px;text-align:center;display:flex;flex-direction:column;gap:4px}
+.q-frame .b-tr-s img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:calc(var(--q-radius) - 4px)}
+.q-frame .b-tr-s small{color:var(--text-muted);font-size:13px}
+.q-frame .b-tr-s .lvl{font-size:11px;color:var(--text-muted);text-align:left;margin-top:4px}
+.q-frame .b-tr-s .bar{height:8px;background:var(--surface-2);border-radius:8px;overflow:hidden;margin-top:3px}
+.q-frame .b-tr-s .bar i{display:block;height:100%;background:var(--text-muted)}
+.q-frame .b-tr-s.b .bar i{background:var(--accent)}
+.q-frame .b-tr-aviso{font-size:12px;color:var(--text-muted);text-align:center;margin-top:6px}
+.q-frame .b-cron{display:flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:var(--on-accent);border-radius:var(--q-radius);padding:10px 14px;font-size:15px}
+.q-frame .b-cron.fixo{position:sticky;top:8px;z-index:4}
+.q-frame .b-cron .t{font-variant-numeric:tabular-nums;font-size:18px}
+.q-frame .b-acc{display:flex;flex-direction:column}
+.q-frame .b-acc details{border-bottom:1px solid var(--border)}
+.q-frame .b-acc summary{list-style:none;cursor:pointer;padding:14px 2px;display:flex;justify-content:space-between;gap:10px;font-weight:500}
+.q-frame .b-acc summary::-webkit-details-marker{display:none}
+.q-frame .b-acc summary .ic{transition:transform .2s;color:var(--text-muted)}
+.q-frame .b-acc details[open] summary .ic{transform:rotate(180deg)}
+.q-frame .b-acc details>div{padding:0 2px 14px;color:var(--text-muted);font-size:15px}
+/* relatórios */
+.q-frame .b-rel{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:18px}
+.q-frame .b-rel .donut{width:140px;height:140px;transform:rotate(-90deg)}
+.q-frame .b-rel .donut circle{fill:none;stroke-width:10}
+.q-frame .b-rel .donut .bg{stroke:var(--surface-2)}
+.q-frame .b-rel .donut .fg{stroke-linecap:round}
+.q-frame .b-rel .donut text{transform:rotate(90deg);transform-origin:50px 50px;font-size:20px;font-weight:600;fill:var(--text)}
+.q-frame .b-rel small{display:block;color:var(--text-muted)}
+.q-frame .b-rel img{width:100%;border-radius:calc(var(--q-radius) - 4px)}
+.q-frame .b-niv{display:flex;flex-direction:column;gap:6px}
+.q-frame .b-niv strong{font-family:var(--q-font-t);font-size:26px}
+.q-frame .b-niv .trk{position:relative;height:12px;border-radius:12px;background:linear-gradient(90deg,var(--surface-2),var(--accent));margin:30px 0 4px}
+.q-frame .b-niv .pin{position:absolute;top:50%;width:18px;height:18px;border-radius:50%;background:var(--surface);border:3px solid var(--accent);transform:translate(-50%,-50%)}
+.q-frame .b-niv .pin em{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);white-space:nowrap;font-style:normal;font-size:12px;background:var(--text);color:var(--bg);padding:2px 8px;border-radius:6px}
+.q-frame .b-niv .lv{display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted)}
+.q-frame .b-bar{display:flex;gap:12px;align-items:flex-end;height:180px;padding-top:6px}
+.q-frame .b-bar .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%}
+.q-frame .b-bar .bx{flex:1;width:100%;display:flex;align-items:flex-end}
+.q-frame .b-bar .bx i{width:100%;background:var(--accent);border-radius:8px 8px 3px 3px}
+.q-frame .b-bar .rot{font-size:12px;font-weight:600}
+.q-frame .b-bar small{font-size:12px;color:var(--text-muted)}
+.q-frame .b-lin svg{width:100%;height:130px;display:block}
+.q-frame .b-lin .lb{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)}
+.q-frame .b-part{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.q-frame .b-part>div{background:var(--surface);border:1px solid var(--border);border-radius:var(--q-radius);padding:12px;display:flex;flex-direction:column;gap:2px}
+.q-frame .b-part .ic{color:var(--accent)}
+.q-frame .b-part small{color:var(--text-muted);font-size:12px}
+/* layout */
+.q-frame .b-box{border:1px solid transparent;background:var(--surface)}
+.q-frame .b-box.sh{box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.q-frame .b-esp{display:flex;align-items:center}.q-frame .b-esp hr{flex:1;border:0;border-top:1px solid var(--border)}
+/* vazios (editor) */
+.q-frame .b-vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1.5px dashed var(--border);border-radius:var(--q-radius);padding:22px;color:var(--text-muted);font-size:13px;text-align:center}
+.q-frame .b-vazio.sm{flex-direction:row;padding:8px 12px}
+.q-frame .vazio-q{text-align:center;color:var(--text-muted);padding:40px 0}
+.q-toast{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:#2F261D;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;z-index:30;max-width:90%;text-align:center;font-family:system-ui,sans-serif}
+body>.q-toast{position:fixed}
+
+</style>
+</head>
+<body>
+<div id="q" class="q-frame"><div class="boot" aria-label="Carregando"><i></i></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+/* ============================================================
+   Quiz Veraneio — núcleo compartilhado (painel + quiz público)
+   Elementos, funções e o motor que executa um fluxo.
+   ============================================================ */
+
+// ---------- utilidades ----------
+const U = {
+  esc: s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
+  uid: (p = "") => p + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3),
+  digits: s => String(s || "").replace(/\D/g, ""),
+  clone: o => JSON.parse(JSON.stringify(o)),
+  now: () => new Date().toISOString(),
+  first: n => String(n || "").trim().split(/\s+/)[0] || "",
+  phoneMask(v) {
+    const d = U.digits(v).slice(0, 11);
+    if (d.length <= 2) return d ? "(" + d : "";
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  },
+  phoneFmt(w) { const d = U.digits(w); return d.length >= 10 ? U.phoneMask(d) : d; },
+  // {{variavel}} → valor
+  interp(str, vars) {
+    return String(str ?? "").replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, k) => {
+      if (k === "primeiroNome") return U.first(vars.nome);
+      const v = vars[k]; return v === undefined || v === null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+    });
+  },
+  // texto rico simples: **negrito**, *itálico*, __sublinhado__, ~~tachado~~, quebras de linha, {{vars}}
+  rich(str, vars) {
+    let s = U.esc(U.interp(str, vars || {}));
+    s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/__(.+?)__/g, "<u>$1</u>")
+      .replace(/~~(.+?)~~/g, "<s>$1</s>").replace(/(^|[^*])\*([^*\n]+?)\*/g, "$1<i>$2</i>")
+      .replace(/\[cor=(#[0-9a-fA-F]{3,8})\](.+?)\[\/cor\]/g, '<span style="color:$1">$2</span>')
+      .replace(/\n/g, "<br>");
+    return s;
+  },
+  money(v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); },
+  css: o => Object.entries(o).filter(([, v]) => v !== "" && v !== undefined && v !== null).map(([k, v]) => `${k}:${v}`).join(";"),
+};
+
+// ---------- ícones (traço 1.75, desenhados para este projeto) ----------
+const ICON_PATHS = {
+  voltar: '<path d="M15 18l-6-6 6-6"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  escudo: '<path d="M12 3l7 3v6c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/>',
+  estrela: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
+  relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  alerta: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/>',
+  dica: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+  coracao: '<path d="M12 20s-7-4.4-9-9a4.8 4.8 0 0 1 9-3 4.8 4.8 0 0 1 9 3c-2 4.6-9 9-9 9z"/>',
+  presente: '<rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-4-6-1s6 1 6 1zm0 0c2-4 6-4 6-1s-6 1-6 1z"/>',
+  caminhao: '<path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  diamante: '<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18M9 3l3 6 3-6M12 9v12"/>',
+  sacola: '<path d="M5 8h14l-1 13H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  usuario: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+  zap: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  play: '<path d="M7 4l13 8-13 8z"/>',
+  pausa: '<path d="M7 4h4v16H7zM13 4h4v16h-4z"/>',
+  mais: '<path d="M12 5v14M5 12h14"/>',
+  seta: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11.8 7L4 20l1.1-4.6A8 8 0 1 1 21 12z"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  webhook: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><circle cx="12" cy="6" r="3"/><path d="M9 17h6M10.5 8.6 7.5 14.4M13.5 8.6l3 5.8"/>',
+  variavel: '<path d="M8 4c-2 3-2 13 0 16M16 4c2 3 2 13 0 16M10 9l4 6M14 9l-4 6"/>',
+  condicao: '<path d="M6 3v6a6 6 0 0 0 6 6h6M18 15l-3-3M18 15l-3 3M6 21v-4"/>',
+  ab: '<path d="M4 18l4-12 4 12M5.5 14h5M14 6h4a3 3 0 0 1 0 6h-4zm0 6h4.5a3 3 0 0 1 0 6H14z"/>',
+  carrinho: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a1 1 0 0 0 1 .8h9.6a1 1 0 0 0 1-.8L21 7H6"/>',
+  whatsapp: '<path d="M20 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20l1.2-4.3A8.5 8.5 0 1 1 20 11.5z"/><path d="M8.5 9c0 3 2.5 6 6 6.5l1.2-1.4-1.8-1-1 .8c-1-.4-2-1.4-2.4-2.4l.8-1-1-1.8z"/>',
+  inicio: '<path d="M5 3l14 9-14 9z"/>',
+  pagina: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/>',
+  lixo: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  copiar: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+  cima: '<path d="M6 15l6-6 6 6"/>', baixo: '<path d="M6 9l6 6 6-6"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  olho: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  imagem: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
+  texto: '<path d="M5 6h14M5 12h14M5 18h9"/>', titulo: '<path d="M6 4v16M18 4v16M6 12h12"/>',
+  botao: '<rect x="3" y="8" width="18" height="8" rx="4"/><path d="M9 12h6"/>',
+  lista: '<path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+  form: '<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/>',
+  video: '<rect x="3" y="5" width="15" height="14" rx="2"/><path d="M18 10l4-2v8l-4-2"/>',
+  audio: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  grafico: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  linha: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  carregar: '<path d="M21 12a9 9 0 1 1-6.2-8.6"/>',
+  codigo: '<path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 4l-4 16"/>',
+  regua: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>',
+  peso: '<path d="M6 7h12l2 14H4z"/><circle cx="12" cy="5" r="2"/>',
+  numero: '<path d="M10 3L8 21M16 3l-2 18M4 8h17M3 16h17"/>',
+  caixa: '<rect x="3" y="3" width="18" height="18" rx="3"/>',
+  menos: '<path d="M5 12h14"/>', espaco: '<path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/>',
+  acordeao: '<rect x="3" y="4" width="18" height="5" rx="1"/><rect x="3" y="11" width="18" height="9" rx="1"/>',
+  pixel: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+  progresso: '<rect x="3" y="10" width="18" height="4" rx="2"/><path d="M3 12h10"/>',
+  cabecalho: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+  depoimento: '<path d="M7 7h4v6H5V9a2 2 0 0 1 2-2zm8 0h4v6h-6V9a2 2 0 0 1 2-2zM5 13l2 4M13 13l2 4"/>',
+  preco: '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  troca: '<path d="M4 7h13l-3-3M20 17H7l3 3"/>',
+};
+const icon = (name, size = 20, cls = "") => `<svg class="ic ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name] || ICON_PATHS.info}</svg>`;
+const ICON_CHOICES = ["check", "escudo", "estrela", "coracao", "presente", "caminhao", "diamante", "sacola", "relogio", "info", "alerta", "dica", "zap", "usuario", "chat", "seta"];
+
+// ---------- opções comuns ----------
+const ANIM = { key: "animacao", label: "Animação de entrada", type: "select", options: [["fade", "Aparecer"], ["sobe", "Subir"], ["pulsar", "Pulsar"], ["nenhuma", "Nenhuma"]] };
+const ALIGN = { key: "alinhamento", label: "Alinhamento", type: "select", options: [["left", "Esquerda"], ["center", "Centro"], ["right", "Direita"]] };
+const SIZE = (key = "tamanho", label = "Tamanho") => ({ key, label, type: "select", options: [["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"], ["xl", "Extra grande"]] });
+const COR = (key, label) => ({ key, label, type: "color" });
+const anim = p => p.animacao && p.animacao !== "nenhuma" ? ` an-${p.animacao}` : "";
+const al = p => p.alinhamento ? ` style="text-align:${p.alinhamento}"` : "";
+const FS = { sm: "14px", md: "16px", lg: "20px", xl: "26px" };
+const TS = { sm: "22px", md: "28px", lg: "34px", xl: "42px" };
+
+// out(id, label) marca um elemento clicável que leva a uma saída do fluxo
+const outAttr = id => `data-out="${U.esc(id)}"`;
+
+/* ============================================================
+   ELEMENTOS
+   Cada um: label, cat, icon, def() (props iniciais), schema (inspetor),
+   render(props, ctx, block) → HTML, outputs(props, block) → [{id,label}]
+   ctx: { vars, mode, page, progress }
+   ============================================================ */
+const CATS = [["cab", "Cabeçalho"], ["txt", "Texto"], ["mid", "Mídia"], ["acao", "Ação"], ["entrada", "Entrada de dados"], ["venda", "Venda"], ["relat", "Relatórios"], ["esp", "Especiais"], ["rastr", "Rastreamento"], ["layout", "Layout"]];
+
+const BLOCKS = {
+  cabecalho: {
+    label: "Cabeçalho", cat: "cab", icon: "cabecalho",
+    def: () => ({ logo: true, logoUrl: "", tamanhoLogo: 36, voltar: true }),
+    schema: [{ key: "logo", label: "Mostrar logo", type: "toggle" }, { key: "logoUrl", label: "Logo diferente do tema (opcional)", type: "image" }, { key: "tamanhoLogo", label: "Altura do logo (px)", type: "number", min: 16, max: 120 }, { key: "voltar", label: "Botão voltar", type: "toggle" }],
+    render: (p, ctx) => `<div class="b-cab">${p.voltar ? `<button class="b-cab-back" data-back aria-label="Voltar"${ctx.canBack ? "" : " hidden"}>${icon("voltar", 22)}</button>` : ""}${p.logo && (p.logoUrl || ctx.tema.logo) ? `<img src="${U.esc(p.logoUrl || ctx.tema.logo)}" alt="${U.esc(ctx.nome || "Logo")}" style="height:${+p.tamanhoLogo || 36}px">` : ""}</div>`,
+  },
+  progresso: {
+    label: "Progresso", cat: "cab", icon: "progresso",
+    def: () => ({ valor: 25, cor1: "", cor2: "", fundo: "" }),
+    schema: [{ key: "valor", label: "Progresso nesta página (%)", type: "number", min: 0, max: 100 }, COR("cor1", "Cor inicial"), COR("cor2", "Cor final"), COR("fundo", "Cor de fundo")],
+    render: (p, ctx) => {
+      const from = ctx.prevProgress ?? 0, to = Math.max(0, Math.min(100, +p.valor || 0));
+      return `<div class="b-prog" style="${U.css({ background: p.fundo })}"><i data-prog-to="${to}" style="width:${from}%;${p.cor1 ? `background:linear-gradient(90deg,${p.cor1},${p.cor2 || p.cor1})` : ""}"></i></div>`;
+    },
+  },
+  titulo: {
+    label: "Título", cat: "txt", icon: "titulo",
+    def: () => ({ titulo: "Seu título aqui", subtitulo: "", tamTitulo: "md", tamSub: "md", alinhamento: "center", cor: "", animacao: "fade" }),
+    schema: [{ key: "titulo", label: "Título", type: "textarea", rich: true }, { key: "subtitulo", label: "Subtítulo", type: "textarea", rich: true }, SIZE("tamTitulo", "Tamanho do título"), SIZE("tamSub", "Tamanho do subtítulo"), ALIGN, COR("cor", "Cor do texto"), ANIM],
+    render: (p, ctx) => `<div class="b-tit${anim(p)}"${al(p)}><h2 style="${U.css({ "font-size": TS[p.tamTitulo], color: p.cor })}">${U.rich(p.titulo, ctx.vars)}</h2>${p.subtitulo ? `<p style="font-size:${FS[p.tamSub] || "16px"}">${U.rich(p.subtitulo, ctx.vars)}</p>` : ""}</div>`,
+  },
+  texto: {
+    label: "Texto", cat: "txt", icon: "texto",
+    def: () => ({ texto: "Escreva aqui. Use **negrito**, *itálico* e {{nome}} para personalizar.", tamanho: "md", entrelinha: 1.5, alinhamento: "center", cor: "", animacao: "fade" }),
+    schema: [{ key: "texto", label: "Texto", type: "textarea", rich: true }, SIZE(), { key: "entrelinha", label: "Altura da linha", type: "number", min: 1, max: 2.5, step: 0.1 }, ALIGN, COR("cor", "Cor do texto"), ANIM],
+    render: (p, ctx) => `<div class="b-txt${anim(p)}" style="${U.css({ "text-align": p.alinhamento, "font-size": FS[p.tamanho], "line-height": p.entrelinha, color: p.cor })}">${U.rich(p.texto, ctx.vars)}</div>`,
+  },
+  nota: {
+    label: "Nota", cat: "txt", icon: "info",
+    def: () => ({ titulo: "Importante", texto: "Uma observação para a cliente.", icone: "info", fundo: "", borda: "", cor: "", animacao: "fade" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "texto", label: "Texto", type: "textarea", rich: true }, { key: "icone", label: "Ícone", type: "icon" }, COR("fundo", "Fundo"), COR("borda", "Borda"), COR("cor", "Texto"), ANIM],
+    render: (p, ctx) => `<div class="b-nota${anim(p)}" style="${U.css({ background: p.fundo, "border-color": p.borda, color: p.cor })}">${icon(p.icone || "info", 22)}<div>${p.titulo ? `<b>${U.esc(U.interp(p.titulo, ctx.vars))}</b>` : ""}<div>${U.rich(p.texto, ctx.vars)}</div></div></div>`,
+  },
+  lista: {
+    label: "Lista", cat: "txt", icon: "lista",
+    def: () => ({ itens: [{ texto: "Primeiro ponto" }, { texto: "Segundo ponto" }, { texto: "Terceiro ponto" }], icone: "check", corIcone: "", tamanho: "md", lado: "left", animacao: "fade" }),
+    schema: [{ key: "itens", label: "Itens", type: "items", itemLabel: "texto", fields: [{ key: "texto", label: "Texto", type: "text" }] }, { key: "icone", label: "Ícone", type: "icon" }, COR("corIcone", "Cor do ícone"), SIZE(), { key: "lado", label: "Ícone à", type: "select", options: [["left", "Esquerda"], ["right", "Direita"]] }, ANIM],
+    render: (p, ctx) => `<ul class="b-lista${anim(p)}${p.lado === "right" ? " dir" : ""}" style="font-size:${FS[p.tamanho] || "16px"}">${(p.itens || []).map(i => `<li><span style="${U.css({ color: p.corIcone })}">${icon(p.icone || "check", 20)}</span><span>${U.rich(i.texto, ctx.vars)}</span></li>`).join("")}</ul>`,
+  },
+  numero: {
+    label: "Número animado", cat: "txt", icon: "numero",
+    def: () => ({ de: 0, ate: 100, duracao: 2, formato: "numero", casas: 0, prefixo: "", sufixo: "", tamanho: "xl", alinhamento: "center", cor: "" }),
+    schema: [{ key: "de", label: "Valor inicial", type: "number" }, { key: "ate", label: "Valor final", type: "number" }, { key: "duracao", label: "Duração (s)", type: "number", min: 0.2, max: 20, step: 0.1 }, { key: "formato", label: "Formato", type: "select", options: [["numero", "Número"], ["pct", "Percentual"], ["real", "Real (R$)"]] }, { key: "casas", label: "Casas decimais", type: "number", min: 0, max: 3 }, { key: "prefixo", label: "Antes do número", type: "text" }, { key: "sufixo", label: "Depois do número", type: "text" }, SIZE(), ALIGN, COR("cor", "Cor")],
+    render: p => `<div class="b-num" style="${U.css({ "text-align": p.alinhamento, "font-size": TS[p.tamanho], color: p.cor })}" data-count='${U.esc(JSON.stringify({ de: +p.de || 0, ate: +p.ate || 0, d: +p.duracao || 2, f: p.formato, c: +p.casas || 0, pre: p.prefixo || "", suf: p.sufixo || "" }))}'>${U.esc((p.prefixo || "") + (p.de || 0) + (p.sufixo || ""))}</div>`,
+  },
+  imagem: {
+    label: "Imagem", cat: "mid", icon: "imagem",
+    def: () => ({ url: "", alt: "", largura: 100, raio: 16, clicavel: false, animacao: "fade" }),
+    schema: [{ key: "url", label: "Imagem", type: "image" }, { key: "alt", label: "Descrição (acessibilidade)", type: "text" }, { key: "largura", label: "Largura (%)", type: "number", min: 10, max: 100 }, { key: "raio", label: "Cantos arredondados (px)", type: "number", min: 0, max: 40 }, { key: "clicavel", label: "Imagem clicável (vira uma saída no fluxo)", type: "toggle" }, ANIM],
+    outputs: (p, b) => p.clicavel ? [{ id: b.id, label: "Clique na imagem" }] : [],
+    render: (p, ctx, b) => p.url ? `<div class="b-img${anim(p)}"><img src="${U.esc(p.url)}" alt="${U.esc(p.alt)}" style="width:${+p.largura || 100}%;border-radius:${+p.raio || 0}px"${p.clicavel ? ` ${outAttr(b.id)} role="button" tabindex="0" class="clk"` : ""} loading="eager"></div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("imagem", 28)}<span>Escolha uma imagem</span></div>` : ""),
+  },
+  carrossel: {
+    label: "Carrossel", cat: "mid", icon: "imagem",
+    def: () => ({ itens: [{ url: "", titulo: "" }, { url: "", titulo: "" }], auto: true, animacao: "fade" }),
+    schema: [{ key: "itens", label: "Imagens", type: "items", itemLabel: "titulo", fields: [{ key: "url", label: "Imagem", type: "image" }, { key: "titulo", label: "Legenda", type: "text" }] }, { key: "auto", label: "Passar sozinho", type: "toggle" }, ANIM],
+    render: (p, ctx) => { const it = (p.itens || []).filter(i => i.url); if (!it.length) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("imagem", 28)}<span>Adicione imagens ao carrossel</span></div>` : ""; return `<div class="b-car${anim(p)}" data-car="${p.auto ? 1 : 0}"><div class="b-car-track">${it.map(i => `<figure><img src="${U.esc(i.url)}" alt="${U.esc(i.titulo)}">${i.titulo ? `<figcaption>${U.esc(i.titulo)}</figcaption>` : ""}</figure>`).join("")}</div><div class="b-car-dots">${it.map((_, i) => `<i${i ? "" : ' class="on"'}></i>`).join("")}</div></div>`; },
+  },
+  video: {
+    label: "Vídeo", cat: "mid", icon: "video",
+    def: () => ({ fonte: "youtube", url: "", embed: "", largura: 100 }),
+    schema: [{ key: "fonte", label: "Origem", type: "select", options: [["youtube", "Link do YouTube"], ["mp4", "Arquivo de vídeo (.mp4)"], ["embed", "Código embed (VTurb, Panda…)"]] }, { key: "url", label: "Link", type: "text", show: p => p.fonte !== "embed" }, { key: "embed", label: "Código embed", type: "code", show: p => p.fonte === "embed" }, { key: "largura", label: "Largura (%)", type: "number", min: 30, max: 100 }],
+    render: (p, ctx) => {
+      const w = `style="width:${+p.largura || 100}%"`;
+      if (p.fonte === "embed") return p.embed ? `<div class="b-vid" ${w} data-embed>${ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Vídeo incorporado (aparece no quiz publicado)</span></div>` : p.embed}</div>` : "";
+      if (p.fonte === "mp4") return p.url ? `<div class="b-vid" ${w}><video src="${U.esc(p.url)}" controls playsinline preload="metadata"></video></div>` : "";
+      const m = String(p.url || "").match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
+      if (!m) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o link do vídeo</span></div>` : "";
+      return `<div class="b-vid" ${w}><div class="ratio"><iframe src="https://www.youtube-nocookie.com/embed/${m[1]}?rel=0&playsinline=1" title="Vídeo" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></div></div>`;
+    },
+  },
+  audio: {
+    label: "Áudio", cat: "mid", icon: "audio",
+    def: () => ({ url: "", nome: "", mostrarNome: true, imagem: "", autoplay: false, animacao: "fade" }),
+    schema: [{ key: "url", label: "Arquivo de áudio", type: "image", accept: "audio/*" }, { key: "nome", label: "Nome", type: "text" }, { key: "mostrarNome", label: "Mostrar nome", type: "toggle" }, { key: "imagem", label: "Foto ao lado (opcional)", type: "image" }, { key: "autoplay", label: "Tocar sozinho (o celular pode bloquear)", type: "toggle" }, ANIM],
+    render: (p, ctx) => p.url ? `<div class="b-aud${anim(p)}">${p.imagem ? `<img src="${U.esc(p.imagem)}" alt="">` : ""}<div class="b-aud-main">${p.mostrarNome && p.nome ? `<b>${U.esc(p.nome)}</b>` : ""}<audio src="${U.esc(p.url)}" controls preload="metadata"${p.autoplay && ctx.mode !== "edit" ? " autoplay" : ""}></audio></div></div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("audio", 28)}<span>Escolha um áudio</span></div>` : ""),
+  },
+  botao: {
+    label: "Botão", cat: "acao", icon: "botao",
+    def: () => ({ texto: "Continuar", estilo: "cheio", destaque: false, animacao: "fade", fundo: "", cor: "", borda: "", ancora: "" }),
+    schema: [{ key: "texto", label: "Texto do botão", type: "text" }, { key: "estilo", label: "Estilo", type: "select", options: [["cheio", "Cheio"], ["contorno", "Contorno"], ["whats", "Verde WhatsApp"]] }, { key: "destaque", label: "Fixo na parte de baixo da tela", type: "toggle" }, { key: "ancora", label: "Rolar até um elemento desta página (em vez de avançar)", type: "blockref" }, COR("fundo", "Cor de fundo"), COR("cor", "Cor do texto"), COR("borda", "Cor da borda"), ANIM],
+    outputs: (p, b) => p.ancora ? [] : [{ id: b.id, label: p.texto || "Botão" }],
+    render: (p, ctx, b) => `<div class="b-btn-wrap${p.destaque ? " fixo" : ""}"><button class="b-btn ${p.estilo || "cheio"}${anim(p)}" ${p.ancora ? `data-anchor="${U.esc(p.ancora)}"` : outAttr(b.id)} style="${U.css({ background: p.fundo, color: p.cor, "border-color": p.borda })}">${U.esc(U.interp(p.texto, ctx.vars))}</button></div>`,
+  },
+  quiz: {
+    label: "Pergunta (quiz)", cat: "acao", icon: "lista",
+    def: () => ({ variavel: "", modelo: "texto", colunas: 1, multipla: false, botaoMultipla: "Continuar", marcador: true, opcoes: [{ id: U.uid("o"), titulo: "Opção 1", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }, { id: U.uid("o"), titulo: "Opção 2", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }], fundo: "", borda: "", cor: "", animacao: "fade" }),
+    schema: [
+      { key: "opcoes", label: "Opções", type: "items", itemLabel: "titulo", newItem: () => ({ id: U.uid("o"), titulo: "Nova opção", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }), fields: [{ key: "titulo", label: "Texto", type: "text" }, { key: "subtitulo", label: "Subtexto", type: "text" }, { key: "imagem", label: "Imagem", type: "image" }, { key: "emoji", label: "Emoji", type: "text" }, { key: "valor", label: "Valor salvo (opcional, senão salva o texto)", type: "text" }, { key: "pontos", label: "Pontos (soma em {{variavel}}_pontos)", type: "number" }] },
+      { key: "variavel", label: "Salvar resposta na variável", type: "var" },
+      { key: "modelo", label: "Modelo", type: "select", options: [["texto", "Só texto"], ["emoji", "Texto + emoji"], ["imgEsq", "Imagem à esquerda"], ["imgCima", "Imagem em cima"], ["imagem", "Só imagem"]] },
+      { key: "colunas", label: "Colunas", type: "select", options: [[1, "1"], [2, "2"], [3, "3"]] },
+      { key: "marcador", label: "Mostrar marcador de seleção", type: "toggle" },
+      { key: "multipla", label: "Permitir várias respostas", type: "toggle" },
+      { key: "botaoMultipla", label: "Texto do botão (várias respostas)", type: "text", show: p => p.multipla },
+      COR("fundo", "Fundo das opções"), COR("borda", "Borda"), COR("cor", "Texto"), ANIM],
+    outputs: (p, b) => p.multipla ? [{ id: b.id, label: p.botaoMultipla || "Continuar" }] : (p.opcoes || []).map(o => ({ id: o.id, label: o.titulo || "Opção" })),
+    render: (p, ctx, b) => {
+      const st = U.css({ background: p.fundo, "border-color": p.borda, color: p.cor });
+      const opts = (p.opcoes || []).map(o => {
+        const img = o.imagem && ["imgEsq", "imgCima", "imagem"].includes(p.modelo) ? `<img src="${U.esc(o.imagem)}" alt="">` : "";
+        const emo = p.modelo === "emoji" && o.emoji ? `<span class="emo">${U.esc(o.emoji)}</span>` : "";
+        const txt = p.modelo === "imagem" ? "" : `<span class="t"><span>${U.rich(o.titulo, ctx.vars)}</span>${o.subtitulo ? `<small>${U.esc(o.subtitulo)}</small>` : ""}</span>`;
+        return `<button class="b-opt m-${p.modelo}" ${p.multipla ? `data-multi="${U.esc(o.id)}"` : outAttr(o.id)} data-opt="${U.esc(o.id)}" style="${st}">${img}${emo}${txt}${p.marcador ? `<span class="mk${p.multipla ? " sq" : ""}"></span>` : ""}</button>`;
+      }).join("");
+      return `<div class="b-quiz${anim(p)}" data-quiz="${b.id}"><div class="b-quiz-grid c${p.colunas || 1}">${opts}</div>${p.multipla ? `<button class="b-btn cheio" ${outAttr(b.id)} data-multi-ok disabled>${U.esc(p.botaoMultipla || "Continuar")}</button>` : ""}</div>`;
+    },
+  },
+  formulario: {
+    label: "Formulário", cat: "entrada", icon: "form",
+    def: () => ({ campos: [{ id: U.uid("c"), rotulo: "Seu nome", tipo: "nome", variavel: "nome", placeholder: "Como podemos te chamar?", obrigatorio: true }, { id: U.uid("c"), rotulo: "Seu WhatsApp", tipo: "whatsapp", variavel: "whatsapp", placeholder: "(22) 99999-9999", obrigatorio: true }], botao: "Continuar", aviso: "Usamos seu contato só para te ajudar com seu pedido.", fundo: "", cor: "", animacao: "fade" }),
+    schema: [{ key: "campos", label: "Campos", type: "items", itemLabel: "rotulo", newItem: () => ({ id: U.uid("c"), rotulo: "Novo campo", tipo: "texto", variavel: "", placeholder: "", obrigatorio: false }), fields: [{ key: "rotulo", label: "Rótulo", type: "text" }, { key: "tipo", label: "Tipo", type: "select", options: [["nome", "Nome"], ["whatsapp", "WhatsApp (com máscara)"], ["email", "E-mail"], ["texto", "Texto"], ["numero", "Número"], ["cidade", "Cidade"], ["data", "Data"]] }, { key: "variavel", label: "Salvar na variável", type: "var" }, { key: "placeholder", label: "Texto de exemplo", type: "text" }, { key: "obrigatorio", label: "Obrigatório", type: "toggle" }] }, { key: "botao", label: "Texto do botão", type: "text" }, { key: "aviso", label: "Aviso abaixo do botão", type: "text" }, COR("fundo", "Cor do botão"), COR("cor", "Texto do botão"), ANIM],
+    outputs: (p, b) => [{ id: b.id, label: "Enviou: " + (p.botao || "Continuar") }],
+    render: (p, ctx, b) => `<form class="b-form${anim(p)}" data-form="${b.id}" novalidate>${(p.campos || []).map(c => {
+      const t = { whatsapp: "tel", email: "email", numero: "number", data: "date" }[c.tipo] || "text";
+      const im = c.tipo === "whatsapp" || c.tipo === "numero" ? ' inputmode="numeric"' : "";
+      const ac = { nome: "given-name", whatsapp: "tel-national", email: "email", cidade: "address-level2" }[c.tipo] || "off";
+      const val = c.variavel && ctx.vars[c.variavel] !== undefined ? (c.tipo === "whatsapp" ? U.phoneMask(ctx.vars[c.variavel]) : ctx.vars[c.variavel]) : "";
+      return `<label class="fld" data-campo="${U.esc(c.id)}"><span>${U.esc(c.rotulo)}${c.obrigatorio ? "" : ' <em>(opcional)</em>'}</span><input type="${t}"${im} autocomplete="${ac}" data-tipo="${c.tipo}" data-var="${U.esc(c.variavel || "")}" ${c.obrigatorio ? "required" : ""} placeholder="${U.esc(c.placeholder || "")}" value="${U.esc(val)}"><small class="err"></small></label>`;
+    }).join("")}<button class="b-btn cheio" type="submit" style="${U.css({ background: p.fundo, color: p.cor })}">${U.esc(p.botao || "Continuar")}</button>${p.aviso ? `<p class="b-form-aviso">${U.esc(p.aviso)}</p>` : ""}</form>`,
+  },
+  altura: {
+    label: "Altura", cat: "entrada", icon: "regua",
+    def: () => ({ unidade: "cm", inicial: 165, min: 120, max: 210, variavel: "altura", incluirUnidade: false, rodape: "", botao: "Continuar" }),
+    schema: [{ key: "unidade", label: "Unidade", type: "select", options: [["cm", "cm"], ["pol", "polegadas"]] }, { key: "inicial", label: "Valor inicial", type: "number" }, { key: "min", label: "Mínimo", type: "number" }, { key: "max", label: "Máximo", type: "number" }, { key: "variavel", label: "Salvar na variável", type: "var" }, { key: "incluirUnidade", label: "Salvar com a unidade", type: "toggle" }, { key: "rodape", label: "Texto abaixo", type: "text" }, { key: "botao", label: "Texto do botão", type: "text" }],
+    outputs: (p, b) => [{ id: b.id, label: p.botao || "Continuar" }],
+    render: (p, ctx, b) => sliderBlock(p, ctx, b, p.unidade || "cm"),
+  },
+  peso: {
+    label: "Peso", cat: "entrada", icon: "peso",
+    def: () => ({ unidade: "kg", inicial: 70, min: 35, max: 200, variavel: "peso", incluirUnidade: false, rodape: "", botao: "Continuar" }),
+    schema: [{ key: "unidade", label: "Unidade", type: "select", options: [["kg", "kg"], ["lb", "lb"]] }, { key: "inicial", label: "Valor inicial", type: "number" }, { key: "min", label: "Mínimo", type: "number" }, { key: "max", label: "Máximo", type: "number" }, { key: "variavel", label: "Salvar na variável", type: "var" }, { key: "incluirUnidade", label: "Salvar com a unidade", type: "toggle" }, { key: "rodape", label: "Texto abaixo", type: "text" }, { key: "botao", label: "Texto do botão", type: "text" }],
+    outputs: (p, b) => [{ id: b.id, label: p.botao || "Continuar" }],
+    render: (p, ctx, b) => sliderBlock(p, ctx, b, p.unidade || "kg"),
+  },
+  carregamento: {
+    label: "Carregamento", cat: "acao", icon: "carregar",
+    def: () => ({ titulo: "Analisando suas respostas…", subtitulo: "Estamos montando a melhor sugestão para você", segundos: 4, avancar: true, cor: "" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "subtitulo", label: "Subtítulo", type: "text" }, { key: "segundos", label: "Duração (s)", type: "number", min: 1, max: 60 }, { key: "avancar", label: "Avançar sozinho ao terminar (vira saída)", type: "toggle" }, COR("cor", "Cor da barra")],
+    outputs: (p, b) => p.avancar ? [{ id: b.id, label: "Ao terminar" }] : [],
+    render: (p, ctx, b) => `<div class="b-load" data-load='${U.esc(JSON.stringify({ s: +p.segundos || 4, out: p.avancar ? b.id : "" }))}'><b>${U.esc(U.interp(p.titulo, ctx.vars))}</b>${p.subtitulo ? `<p>${U.esc(U.interp(p.subtitulo, ctx.vars))}</p>` : ""}<div class="b-load-bar"><i style="${U.css({ background: p.cor })}"></i><span>0%</span></div></div>`,
+  },
+  redirecionar: {
+    label: "Avançar sozinho", cat: "acao", icon: "seta",
+    def: () => ({ segundos: 5, mostrar: false, texto: "Você será direcionada em {{segundos}}s…" }),
+    schema: [{ key: "segundos", label: "Depois de quantos segundos", type: "number", min: 0, max: 600 }, { key: "mostrar", label: "Mostrar contagem", type: "toggle" }, { key: "texto", label: "Texto da contagem", type: "text", show: p => p.mostrar }],
+    outputs: (p, b) => [{ id: b.id, label: `Após ${p.segundos || 0}s` }],
+    render: (p, ctx, b) => `<div class="b-redir" data-redir='${U.esc(JSON.stringify({ s: +p.segundos || 0, out: b.id }))}'>${p.mostrar ? `<span>${U.esc(String(p.texto || "").replace("{{segundos}}", p.segundos))}</span>` : (ctx.mode === "edit" ? `<div class="b-vazio sm">${icon("seta", 18)}<span>Avança sozinho em ${p.segundos || 0}s (invisível)</span></div>` : "")}</div>`,
+  },
+  garantia: {
+    label: "Garantia", cat: "venda", icon: "escudo",
+    def: () => ({ titulo: "Garantia", texto: "Garantia de 1 ano em todas as peças.", icone: "escudo", fundo: "", borda: "", cor: "", alinhamento: "left", animacao: "fade" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "texto", label: "Texto", type: "textarea", rich: true }, { key: "icone", label: "Ícone", type: "icon" }, ALIGN, COR("fundo", "Fundo"), COR("borda", "Borda"), COR("cor", "Texto e ícone"), ANIM],
+    render: (p, ctx) => `<div class="b-gar${anim(p)} al-${p.alinhamento || "left"}" style="${U.css({ background: p.fundo, "border-color": p.borda, color: p.cor })}">${icon(p.icone || "escudo", 30)}<div><b>${U.esc(p.titulo)}</b><div>${U.rich(p.texto, ctx.vars)}</div></div></div>`,
+  },
+  depoimento: {
+    label: "Depoimento", cat: "venda", icon: "depoimento",
+    def: () => ({ nome: "Ana Paula", local: "Nova Friburgo, RJ", foto: "", texto: "As peças são lindas e vendi tudo na primeira semana!", nota: 5, fundo: "", borda: "", cor: "", corEstrela: "", alinhamento: "left", animacao: "fade" }),
+    schema: [{ key: "nome", label: "Nome", type: "text" }, { key: "local", label: "Cidade", type: "text" }, { key: "foto", label: "Foto", type: "image" }, { key: "texto", label: "Depoimento", type: "textarea", rich: true }, { key: "nota", label: "Estrelas (1 a 5)", type: "number", min: 1, max: 5 }, ALIGN, COR("fundo", "Fundo"), COR("borda", "Borda"), COR("cor", "Texto"), COR("corEstrela", "Estrelas"), ANIM],
+    render: (p, ctx) => `<figure class="b-dep${anim(p)} al-${p.alinhamento || "left"}" style="${U.css({ background: p.fundo, "border-color": p.borda, color: p.cor })}"><div class="b-dep-top">${p.foto ? `<img src="${U.esc(p.foto)}" alt="">` : `<span class="av">${U.esc(U.first(p.nome).slice(0, 1))}</span>`}<div><b>${U.esc(p.nome)}</b><small>${U.esc(p.local)}</small></div></div><div class="stars" style="${U.css({ color: p.corEstrela })}" aria-label="${+p.nota || 5} de 5 estrelas">${Array.from({ length: 5 }, (_, i) => `<span class="${i < (+p.nota || 5) ? "on" : ""}">${icon("estrela", 16)}</span>`).join("")}</div><blockquote>${U.rich(p.texto, ctx.vars)}</blockquote></figure>`,
+  },
+  preco: {
+    label: "Preço", cat: "venda", icon: "preco",
+    def: () => ({ titulo: "Kit com 20 peças", subtitulo: "Banhadas a ouro 18k", de: "R$ 350,00", valor: "R$ 285,00", condicao: "ou 3x sem juros", selo: "Frete grátis", icone: "diamante", borda: "", fundo: "", cor: "" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "subtitulo", label: "Subtítulo", type: "text" }, { key: "de", label: "Preço antigo (riscado, opcional)", type: "text" }, { key: "valor", label: "Preço", type: "text" }, { key: "condicao", label: "Condição (ex.: parcelamento)", type: "text" }, { key: "selo", label: "Selo", type: "text" }, { key: "icone", label: "Ícone", type: "icon" }, COR("borda", "Borda e ícone"), COR("fundo", "Fundo do preço"), COR("cor", "Texto")],
+    render: (p, ctx) => `<div class="b-preco" style="${U.css({ "border-color": p.borda, color: p.cor })}">${p.selo ? `<span class="selo">${U.esc(p.selo)}</span>` : ""}<div class="b-preco-h"><span style="${U.css({ color: p.borda })}">${icon(p.icone || "diamante", 26)}</span><div><b>${U.esc(U.interp(p.titulo, ctx.vars))}</b>${p.subtitulo ? `<small>${U.esc(p.subtitulo)}</small>` : ""}</div></div><div class="b-preco-v" style="${U.css({ background: p.fundo })}">${p.de ? `<s>${U.esc(p.de)}</s>` : ""}<strong>${U.esc(U.interp(p.valor, ctx.vars))}</strong>${p.condicao ? `<small>${U.esc(p.condicao)}</small>` : ""}</div></div>`,
+  },
+  beneficios: {
+    label: "Benefícios", cat: "venda", icon: "check",
+    def: () => ({ titulo: "O que você recebe", itens: [{ texto: "Peças com garantia de 1 ano" }, { texto: "Suporte para vender" }, { texto: "Envio para todo o Brasil" }], icone: "check", fundo: "", borda: "", cor: "", animacao: "fade" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "itens", label: "Benefícios", type: "items", itemLabel: "texto", fields: [{ key: "texto", label: "Texto", type: "text" }] }, { key: "icone", label: "Ícone", type: "icon" }, COR("fundo", "Fundo"), COR("borda", "Borda"), COR("cor", "Texto"), ANIM],
+    render: (p, ctx) => `<div class="b-ben${anim(p)}" style="${U.css({ background: p.fundo, "border-color": p.borda, color: p.cor })}">${p.titulo ? `<b class="h">${U.esc(p.titulo)}</b>` : ""}<ul>${(p.itens || []).map(i => `<li>${icon(p.icone || "check", 18)}<span>${U.rich(i.texto, ctx.vars)}</span></li>`).join("")}</ul></div>`,
+  },
+  transformacao: {
+    label: "Antes e depois", cat: "venda", icon: "troca",
+    def: () => ({ a: { titulo: "Hoje", imagem: "", sub: "Sem renda extra", nivel: 30 }, b: { titulo: "Em 30 dias", imagem: "", sub: "Vendendo todo mês", nivel: 85 }, rotuloNivel: "Confiança para vender", aviso: "", cor: "" }),
+    schema: [{ key: "a.titulo", label: "Antes · título", type: "text" }, { key: "a.imagem", label: "Antes · imagem", type: "image" }, { key: "a.sub", label: "Antes · texto", type: "text" }, { key: "a.nivel", label: "Antes · nível (0–100)", type: "number", min: 0, max: 100 }, { key: "b.titulo", label: "Depois · título", type: "text" }, { key: "b.imagem", label: "Depois · imagem", type: "image" }, { key: "b.sub", label: "Depois · texto", type: "text" }, { key: "b.nivel", label: "Depois · nível (0–100)", type: "number", min: 0, max: 100 }, { key: "rotuloNivel", label: "Nome do nível", type: "text" }, { key: "aviso", label: "Aviso abaixo", type: "text" }, COR("cor", "Cor das barras")],
+    render: p => { const side = (s, k) => `<div class="b-tr-s ${k}">${s.imagem ? `<img src="${U.esc(s.imagem)}" alt="">` : ""}<b>${U.esc(s.titulo)}</b><small>${U.esc(s.sub)}</small><div class="lvl"><span>${U.esc(p.rotuloNivel)}</span><div class="bar"><i style="width:${+s.nivel || 0}%;${p.cor ? `background:${p.cor}` : ""}"></i></div></div></div>`; return `<div class="b-tr">${side(p.a || {}, "a")}${icon("seta", 22, "b-tr-ar")}${side(p.b || {}, "b")}</div>${p.aviso ? `<p class="b-tr-aviso">${U.esc(p.aviso)}</p>` : ""}`; },
+  },
+  cronometro: {
+    label: "Cronômetro", cat: "venda", icon: "relogio",
+    def: () => ({ modo: "duracao", h: 0, m: 15, s: 0, alvo: "", fixo: false, msg: "Oferta expira em", msgFim: "Oferta encerrada", fundo: "", cor: "" }),
+    schema: [{ key: "modo", label: "Modo", type: "select", options: [["duracao", "Duração a partir da entrada"], ["data", "Até uma data e hora"]] }, { key: "h", label: "Horas", type: "number", min: 0, max: 23, show: p => p.modo !== "data" }, { key: "m", label: "Minutos", type: "number", min: 0, max: 59, show: p => p.modo !== "data" }, { key: "s", label: "Segundos", type: "number", min: 0, max: 59, show: p => p.modo !== "data" }, { key: "alvo", label: "Data e hora final", type: "datetime", show: p => p.modo === "data" }, { key: "fixo", label: "Fixo no topo", type: "toggle" }, { key: "msg", label: "Texto enquanto conta", type: "text" }, { key: "msgFim", label: "Texto ao terminar", type: "text" }, COR("fundo", "Fundo"), COR("cor", "Texto")],
+    render: (p, ctx, b) => `<div class="b-cron${p.fixo ? " fixo" : ""}" style="${U.css({ background: p.fundo, color: p.cor })}" data-cron='${U.esc(JSON.stringify({ id: b.id, modo: p.modo, dur: ((+p.h || 0) * 3600 + (+p.m || 0) * 60 + (+p.s || 0)), alvo: p.alvo, fim: p.msgFim }))}'>${icon("relogio", 18)}<span class="msg">${U.esc(p.msg)}</span><b class="t">--:--</b></div>`,
+  },
+  accordion: {
+    label: "Perguntas frequentes", cat: "txt", icon: "acordeao",
+    def: () => ({ itens: [{ titulo: "Qual o prazo de entrega?", texto: "Enviamos em até 2 dias úteis." }, { titulo: "As peças têm garantia?", texto: "Sim, 1 ano de garantia." }], multiplo: false, cor: "", animacao: "fade" }),
+    schema: [{ key: "itens", label: "Itens (até 10)", type: "items", max: 10, itemLabel: "titulo", fields: [{ key: "titulo", label: "Pergunta", type: "text" }, { key: "texto", label: "Resposta", type: "textarea", rich: true }] }, { key: "multiplo", label: "Permitir abrir vários", type: "toggle" }, COR("cor", "Cor do título"), ANIM],
+    render: (p, ctx, b) => `<div class="b-acc${anim(p)}" data-acc="${p.multiplo ? "multi" : "um"}">${(p.itens || []).slice(0, 10).map(i => `<details><summary style="${U.css({ color: p.cor })}">${U.esc(i.titulo)}${icon("baixo", 18)}</summary><div>${U.rich(i.texto, ctx.vars)}</div></details>`).join("")}</div>`,
+  },
+  relatorio: {
+    label: "Relatório (pontuação)", cat: "relat", icon: "grafico",
+    def: () => ({ titulo: "Seu potencial de vendas", texto: "Você tem um ótimo perfil para revender!", subtitulo: "", pontuacao: "{{potencial}}", imagem: "", cor1: "", cor2: "", fundo: "" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "texto", label: "Texto do resultado", type: "textarea", rich: true }, { key: "subtitulo", label: "Subtítulo", type: "text" }, { key: "pontuacao", label: "Pontuação 0–100 (número ou {{variavel}})", type: "text" }, { key: "imagem", label: "Imagem", type: "image" }, COR("cor1", "Gráfico · início"), COR("cor2", "Gráfico · fim"), COR("fundo", "Fundo")],
+    render: (p, ctx) => { const v = Math.max(0, Math.min(100, parseFloat(U.interp(p.pontuacao, ctx.vars)) || 0)), c = 2 * Math.PI * 42; return `<div class="b-rel" style="${U.css({ background: p.fundo })}"><svg viewBox="0 0 100 100" class="donut"><defs><linearGradient id="g${ctx.k}"><stop offset="0" stop-color="${p.cor1 || "var(--accent-deco)"}"/><stop offset="1" stop-color="${p.cor2 || "var(--accent)"}"/></linearGradient></defs><circle cx="50" cy="50" r="42" class="bg"/><circle cx="50" cy="50" r="42" class="fg" stroke="url(#g${ctx.k})" stroke-dasharray="${c}" stroke-dashoffset="${c}" data-donut="${c * (1 - v / 100)}"/><text x="50" y="56" text-anchor="middle">${Math.round(v)}%</text></svg><div><b>${U.esc(p.titulo)}</b>${p.subtitulo ? `<small>${U.esc(p.subtitulo)}</small>` : ""}<div>${U.rich(p.texto, ctx.vars)}</div></div>${p.imagem ? `<img src="${U.esc(p.imagem)}" alt="">` : ""}</div>`; },
+  },
+  resultado: {
+    label: "Nível", cat: "relat", icon: "progresso",
+    def: () => ({ titulo: "Seu nível hoje", resultado: "Intermediária", marcador: "Você está aqui", pontuacao: "55", niveis: "Iniciante, Intermediária, Avançada", cor1: "", cor2: "" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "resultado", label: "Resultado", type: "text" }, { key: "marcador", label: "Texto do marcador", type: "text" }, { key: "pontuacao", label: "Posição 0–100 (número ou {{variavel}})", type: "text" }, { key: "niveis", label: "Nomes dos níveis (separados por vírgula)", type: "text" }, COR("cor1", "Barra · início"), COR("cor2", "Barra · fim")],
+    render: (p, ctx) => { const v = Math.max(0, Math.min(100, parseFloat(U.interp(p.pontuacao, ctx.vars)) || 0)); const nv = String(p.niveis || "").split(",").map(s => s.trim()).filter(Boolean); return `<div class="b-niv"><b>${U.esc(p.titulo)}</b><strong>${U.esc(U.interp(p.resultado, ctx.vars))}</strong><div class="trk" style="${p.cor1 ? `background:linear-gradient(90deg,${p.cor1},${p.cor2 || p.cor1})` : ""}"><span class="pin" style="left:${v}%"><em>${U.esc(p.marcador)}</em></span></div><div class="lv">${nv.map(n => `<span>${U.esc(n)}</span>`).join("")}</div></div>`; },
+  },
+  grafico: {
+    label: "Gráfico de barras", cat: "relat", icon: "grafico",
+    def: () => ({ itens: [{ titulo: "Hoje", valor: 30, rotulo: "R$ 300" }, { titulo: "3 meses", valor: 65, rotulo: "R$ 1.200" }, { titulo: "6 meses", valor: 100, rotulo: "R$ 2.500" }], cor: "" }),
+    schema: [{ key: "itens", label: "Barras", type: "items", itemLabel: "titulo", fields: [{ key: "titulo", label: "Nome", type: "text" }, { key: "valor", label: "Altura (0–100)", type: "number", min: 0, max: 100 }, { key: "rotulo", label: "Rótulo sobre a barra", type: "text" }] }, COR("cor", "Cor das barras")],
+    render: p => `<div class="b-bar">${(p.itens || []).map(i => `<div class="col"><span class="rot">${U.esc(i.rotulo)}</span><div class="bx"><i style="height:${Math.max(2, +i.valor || 0)}%;${p.cor ? `background:${p.cor}` : ""}"></i></div><small>${U.esc(i.titulo)}</small></div>`).join("")}</div>`,
+  },
+  graficoLinha: {
+    label: "Gráfico de evolução", cat: "relat", icon: "linha",
+    def: () => ({ titulo: "Sua evolução", valores: "10, 18, 30, 45, 70, 100", rotulos: "Mês 1, Mês 2, Mês 3, Mês 4, Mês 5, Mês 6", area: true, cor: "" }),
+    schema: [{ key: "titulo", label: "Título", type: "text" }, { key: "valores", label: "Valores (separados por vírgula)", type: "text" }, { key: "rotulos", label: "Rótulos (separados por vírgula)", type: "text" }, { key: "area", label: "Preencher área", type: "toggle" }, COR("cor", "Cor da linha")],
+    render: (p, ctx) => {
+      const v = String(p.valores || "").split(",").map(x => parseFloat(x)).filter(x => !isNaN(x)); if (v.length < 2) return "";
+      const r = String(p.rotulos || "").split(",").map(s => s.trim()); const mx = Math.max(...v), mn = Math.min(0, ...v), W = 300, H = 120;
+      const pts = v.map((y, i) => [i / (v.length - 1) * W, H - (y - mn) / ((mx - mn) || 1) * (H - 10) - 5]);
+      const d = pts.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" ");
+      const c = p.cor || "var(--accent)";
+      return `<div class="b-lin">${p.titulo ? `<b>${U.esc(p.titulo)}</b>` : ""}<svg viewBox="0 -4 ${W} ${H + 8}" preserveAspectRatio="none">${p.area ? `<path d="${d} L${W} ${H} L0 ${H}Z" fill="${c}" opacity=".15"/>` : ""}<path d="${d}" fill="none" stroke="${c}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg><div class="lb">${r.map(x => `<span>${U.esc(x)}</span>`).join("")}</div></div>`;
+    },
+  },
+  participantes: {
+    label: "Resumo do perfil", cat: "relat", icon: "usuario",
+    def: () => ({ itens: [{ titulo: "Estilo", valor: "{{estilo}}", icone: "diamante" }, { titulo: "Objetivo", valor: "{{objetivo}}", icone: "zap" }], fundo: "", borda: "" }),
+    schema: [{ key: "itens", label: "Itens", type: "items", itemLabel: "titulo", fields: [{ key: "titulo", label: "Título", type: "text" }, { key: "valor", label: "Valor (pode usar {{variavel}})", type: "text" }, { key: "icone", label: "Ícone", type: "icon" }] }, COR("fundo", "Fundo"), COR("borda", "Borda")],
+    render: (p, ctx) => `<div class="b-part">${(p.itens || []).map(i => `<div style="${U.css({ background: p.fundo, "border-color": p.borda })}">${icon(i.icone || "info", 20)}<small>${U.esc(i.titulo)}</small><b>${U.esc(U.interp(i.valor, ctx.vars)) || "—"}</b></div>`).join("")}</div>`,
+  },
+  pixel: {
+    label: "Evento do Pixel", cat: "rastr", icon: "pixel",
+    def: () => ({ evento: "Lead", nomeCustom: "", ativo: true }),
+    schema: [{ key: "evento", label: "Evento disparado ao abrir esta página", type: "select", options: ["Lead", "Contact", "CompleteRegistration", "ViewContent", "AddToCart", "InitiateCheckout", "AddPaymentInfo", "Purchase", "Schedule", "SubmitApplication", "Subscribe", "StartTrial", "Search", "FindLocation", "CustomizeProduct", "AddToWishlist", "Donate", "Custom"].map(x => [x, x === "Custom" ? "Personalizado" : x]) }, { key: "nomeCustom", label: "Nome do evento personalizado", type: "text", show: p => p.evento === "Custom" }, { key: "ativo", label: "Ativo", type: "toggle" }],
+    render: (p, ctx) => ctx.mode === "edit" ? `<div class="b-vazio sm">${icon("pixel", 18)}<span>Pixel: ${U.esc(p.evento === "Custom" ? p.nomeCustom || "personalizado" : p.evento)}${p.ativo ? "" : " (desligado)"}</span></div>` : "",
+  },
+  script: {
+    label: "Script", cat: "rastr", icon: "codigo",
+    def: () => ({ codigo: "", visivel: false }),
+    schema: [{ key: "codigo", label: "Código (HTML/JS). Cuidado: um erro aqui pode travar o quiz.", type: "code" }, { key: "visivel", label: "Mostrar o HTML na página", type: "toggle" }],
+    render: (p, ctx) => ctx.mode === "edit" ? `<div class="b-vazio sm">${icon("codigo", 18)}<span>Script personalizado (roda no quiz publicado)</span></div>` : `<div class="b-script"${p.visivel ? "" : " hidden"} data-script>${p.codigo || ""}</div>`,
+  },
+  container: {
+    label: "Caixa", cat: "layout", icon: "caixa",
+    def: () => ({ texto: "Destaque algo importante aqui.", fundo: "", borda: "", raio: 16, padding: 16, sombra: false, alinhamento: "center" }),
+    schema: [{ key: "texto", label: "Conteúdo", type: "textarea", rich: true }, COR("fundo", "Fundo"), COR("borda", "Borda"), { key: "raio", label: "Cantos (px)", type: "number", min: 0, max: 40 }, { key: "padding", label: "Espaço interno (px)", type: "number", min: 0, max: 48 }, { key: "sombra", label: "Sombra", type: "toggle" }, ALIGN],
+    render: (p, ctx) => `<div class="b-box${p.sombra ? " sh" : ""}" style="${U.css({ background: p.fundo, "border-color": p.borda, "border-radius": (+p.raio || 0) + "px", padding: (+p.padding || 0) + "px", "text-align": p.alinhamento })}">${U.rich(p.texto, ctx.vars)}</div>`,
+  },
+  espaco: {
+    label: "Espaço / divisória", cat: "layout", icon: "espaco",
+    def: () => ({ altura: 24, linha: false }),
+    schema: [{ key: "altura", label: "Altura (px)", type: "number", min: 4, max: 160 }, { key: "linha", label: "Mostrar linha", type: "toggle" }],
+    render: p => `<div class="b-esp" style="height:${+p.altura || 24}px">${p.linha ? "<hr>" : ""}</div>`,
+  },
+};
+
+function sliderBlock(p, ctx, b, un) {
+  const v = ctx.vars[p.variavel] !== undefined ? parseFloat(ctx.vars[p.variavel]) : +p.inicial;
+  return `<div class="b-sld" data-slider='${U.esc(JSON.stringify({ var: p.variavel, un, inc: !!p.incluirUnidade }))}'><div class="val"><b>${v}</b> ${U.esc(un)}</div><input type="range" min="${+p.min}" max="${+p.max}" value="${v}" aria-label="${U.esc(un)}">${p.rodape ? `<small>${U.esc(p.rodape)}</small>` : ""}<button class="b-btn cheio" ${outAttr(b.id)}>${U.esc(p.botao || "Continuar")}</button></div>`;
+}
+
+/* ============================================================
+   FUNÇÕES (nós do fluxo que não aparecem para a cliente)
+   ============================================================ */
+const OPS = [["igual", "é igual a"], ["diferente", "é diferente de"], ["contem", "contém"], ["naoContem", "não contém"], ["comeca", "começa com"], ["termina", "termina com"], ["maior", "maior que"], ["maiorIgual", "maior ou igual a"], ["menor", "menor que"], ["menorIgual", "menor ou igual a"], ["vazio", "está vazia"], ["naoVazio", "está preenchida"], ["regex", "combina com a expressão"], ["umDe", "é uma destas (vírgula)"]];
+function testRule(r, vars) {
+  const a = vars[r.var], A = Array.isArray(a) ? a.join(",") : String(a ?? ""), B = U.interp(r.valor ?? "", vars);
+  const n = x => parseFloat(String(x).replace(",", "."));
+  switch (r.op) {
+    case "igual": return A.toLowerCase() === B.toLowerCase();
+    case "diferente": return A.toLowerCase() !== B.toLowerCase();
+    case "contem": return A.toLowerCase().includes(B.toLowerCase());
+    case "naoContem": return !A.toLowerCase().includes(B.toLowerCase());
+    case "comeca": return A.toLowerCase().startsWith(B.toLowerCase());
+    case "termina": return A.toLowerCase().endsWith(B.toLowerCase());
+    case "maior": return n(A) > n(B);
+    case "maiorIgual": return n(A) >= n(B);
+    case "menor": return n(A) < n(B);
+    case "menorIgual": return n(A) <= n(B);
+    case "vazio": return A.trim() === "";
+    case "naoVazio": return A.trim() !== "";
+    case "regex": try { return new RegExp(B, "i").test(A); } catch (e) { return false; }
+    case "umDe": return B.split(",").map(s => s.trim().toLowerCase()).includes(A.toLowerCase());
+  }
+  return false;
+}
+
+const FUNCS = {
+  link: {
+    label: "Link", icon: "link", desc: "Leva a cliente para um endereço (site, carrinho Yampi…)",
+    def: () => ({ destino: "url", url: "https://", novaAba: false, finaliza: true }),
+    schema: [{ key: "destino", label: "Destino", type: "select", options: [["url", "Endereço (URL)"], ["carrinho", "Carrinho Yampi com as peças escolhidas"], ["loja", "Site da loja (Configurações)"]] }, { key: "url", label: "URL (pode usar {{variavel}})", type: "text", show: p => p.destino === "url" }, { key: "novaAba", label: "Abrir em nova aba", type: "toggle" }, { key: "finaliza", label: "Conta como 'finalizou' no CRM", type: "toggle" }],
+    outputs: () => [],
+    summary: p => p.destino === "carrinho" ? "Carrinho Yampi" : p.destino === "loja" ? "Site da loja" : (p.url || "").replace(/^https?:\/\//, "").slice(0, 34),
+  },
+  whatsapp: {
+    label: "WhatsApp", icon: "whatsapp", desc: "Abre conversa no WhatsApp com mensagem pronta",
+    def: () => ({ numero: "revenda", outro: "", mensagem: "Oi! Sou {{primeiroNome}}. Vim pelo quiz 💛", finaliza: true }),
+    schema: [{ key: "numero", label: "Número", type: "select", options: [["revenda", "WhatsApp revenda (Configurações)"], ["varejo", "WhatsApp varejo (Configurações)"], ["outro", "Outro número"]] }, { key: "outro", label: "Número com DDD", type: "text", show: p => p.numero === "outro" }, { key: "mensagem", label: "Mensagem ({{nome}}, {{kit}}, {{escolhas}}, {{carrinhoLink}}…)", type: "textarea" }, { key: "finaliza", label: "Conta como 'finalizou' no CRM", type: "toggle" }],
+    outputs: () => [],
+    summary: p => p.numero === "outro" ? p.outro : "Nº " + p.numero,
+  },
+  carrinho: {
+    label: "Carrinho", icon: "carrinho", desc: "Adiciona peças (SKUs da Yampi) e cupom ao carrinho da cliente",
+    def: () => ({ acao: "add", skus: "", qtd: 1, cupom: "", rotulo: "" }),
+    schema: [{ key: "acao", label: "Ação", type: "select", options: [["add", "Adicionar peças"], ["set", "Substituir o carrinho"], ["limpar", "Esvaziar carrinho"], ["cupom", "Só definir o cupom"]] }, { key: "skus", label: "SKUs da Yampi (separados por vírgula)", type: "textarea", show: p => p.acao === "add" || p.acao === "set" }, { key: "qtd", label: "Quantidade de cada", type: "number", min: 1, max: 50, show: p => p.acao === "add" || p.acao === "set" }, { key: "rotulo", label: "Nome desta escolha (aparece no CRM e em {{escolhas}})", type: "text", show: p => p.acao === "add" || p.acao === "set" }, { key: "cupom", label: "Cupom (opcional)", type: "text" }],
+    outputs: () => [{ id: "next", label: "Depois" }],
+    summary: p => p.acao === "limpar" ? "Esvaziar" : p.acao === "cupom" ? "Cupom " + p.cupom : `${String(p.skus || "").split(",").filter(s => s.trim()).length} peça(s)${p.cupom ? " · " + p.cupom : ""}`,
+  },
+  variavel: {
+    label: "Variável", icon: "variavel", desc: "Cria ou altera uma variável (contas + − × ÷)",
+    def: () => ({ nome: "", op: "set", valor: "" }),
+    schema: [{ key: "nome", label: "Variável", type: "var" }, { key: "op", label: "Operação", type: "select", options: [["set", "Definir como"], ["+", "Somar"], ["-", "Subtrair"], ["*", "Multiplicar"], ["/", "Dividir"], ["append", "Acrescentar à lista"]] }, { key: "valor", label: "Valor (pode usar {{outra}})", type: "text" }],
+    outputs: () => [{ id: "next", label: "Depois" }],
+    summary: p => `${p.nome || "?"} ${{ set: "=", "+": "+=", "-": "−=", "*": "×=", "/": "÷=", append: "+ lista" }[p.op] || "="} ${p.valor}`,
+  },
+  condicao: {
+    label: "Condição", icon: "condicao", desc: "Escolhe o caminho conforme as respostas",
+    def: () => ({ grupos: [{ id: U.uid("g"), nome: "Se…", logica: "e", regras: [{ var: "", op: "igual", valor: "" }] }] }),
+    schema: [{ key: "grupos", label: "Caminhos (o primeiro que bater é usado)", type: "conditions" }],
+    outputs: p => (p.grupos || []).map(g => ({ id: g.id, label: g.nome || "Se…" })).concat([{ id: "senao", label: "Senão" }]),
+    summary: p => (p.grupos || []).length + " caminho(s) + senão",
+  },
+  ab: {
+    label: "Teste A/B", icon: "ab", desc: "Divide o tráfego entre dois caminhos",
+    def: () => ({ pctA: 50, nomeA: "Versão A", nomeB: "Versão B" }),
+    schema: [{ key: "pctA", label: "% para A (B recebe o resto)", type: "number", min: 0, max: 100 }, { key: "nomeA", label: "Nome de A", type: "text" }, { key: "nomeB", label: "Nome de B", type: "text" }],
+    outputs: p => [{ id: "A", label: `${p.nomeA || "A"} · ${+p.pctA}%` }, { id: "B", label: `${p.nomeB || "B"} · ${100 - +p.pctA}%` }],
+    summary: p => `${+p.pctA}% / ${100 - +p.pctA}%`,
+  },
+  webhook: {
+    label: "Webhook", icon: "webhook", desc: "Envia os dados da cliente para outro sistema (POST)",
+    def: () => ({ nome: "", url: "", token: "", enviar: "tudo", vars: "" }),
+    schema: [{ key: "nome", label: "Nome", type: "text" }, { key: "url", label: "URL", type: "text" }, { key: "token", label: "Token (vai no corpo como 'token')", type: "text" }, { key: "enviar", label: "Enviar", type: "select", options: [["tudo", "Todas as variáveis e respostas"], ["lista", "Só estas variáveis"]] }, { key: "vars", label: "Variáveis (vírgula)", type: "text", show: p => p.enviar === "lista" }],
+    outputs: () => [{ id: "next", label: "Depois" }],
+    summary: p => p.nome || (p.url || "").replace(/^https?:\/\//, "").slice(0, 30),
+  },
+};
+
+// saídas de um nó
+function nodeOutputs(node) {
+  if (!node) return [];
+  if (node.type === "start") return [{ id: "next", label: "Início" }];
+  if (node.type === "fn") { const F = FUNCS[node.data.kind]; return F ? F.outputs(node.data.props || {}) : []; }
+  const outs = [];
+  (node.data.blocos || []).forEach(b => { const B = BLOCKS[b.type]; if (B && B.outputs) outs.push(...B.outputs(b.props || {}, b)); });
+  return outs;
+}
+
+/* ============================================================
+   MOTOR — executa um projeto
+   opts: { project:{flow,tema,config,nome}, root, mode:'live'|'preview', store, sessionKey, onEvent }
+   store (opcional): { begin(sess), save(patch, novosVistos) }
+   ============================================================ */
+function createRunner(opts) {
+  const { project, root } = opts;
+  const flow = project.flow || { nodes: [], edges: [] };
+  const cfg = project.config || {};
+  const N = {}; flow.nodes.forEach(n => N[n.id] = n);
+  const mode = opts.mode || "live";
+  const KEY = opts.sessionKey;
+  let S = null, timers = [], prevProgress = 0, lastPageProgress = 0;
+
+  const emit = (t, d) => { try { opts.onEvent && opts.onEvent(t, d); } catch (e) { } };
+  const persist = () => { if (KEY) try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { } };
+  const save = (patch, vista) => { if (opts.store && mode === "live") opts.store.save(S, patch, vista); };
+  const edgeFrom = (nodeId, handle) => flow.edges.find(e => e.from === nodeId && e.handle === handle);
+  const clearTimers = () => { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; };
+
+  function fresh() {
+    return { id: null, vars: {}, respostas: {}, escolhas: [], vistas: [], carrinho: [], cupom: "", ab: {}, hist: [], atual: null, finalizado: false, criado: U.now() };
+  }
+  function derived() {
+    const v = Object.assign({}, S.vars);
+    v.escolhas = S.escolhas.join(" · ");
+    v.carrinhoLink = cartUrl();
+    v.carrinhoQtd = S.carrinho.reduce((a, c) => a + c.q, 0);
+    return v;
+  }
+  function cartUrl() {
+    const base = String(cfg.carrinhoBase || "").replace(/\/?$/, "/");
+    if (!S.carrinho.length) return cfg.lojaUrl || base;
+    return base + S.carrinho.map(c => `${c.sku}:${c.q}`).join(",") + (S.cupom ? "?promocode=" + encodeURIComponent(S.cupom) : "");
+  }
+  function waUrl(num, msg) {
+    let n = num === "revenda" ? cfg.whatsRevenda : num === "varejo" ? cfg.whatsVarejo : num;
+    n = U.digits(n); if (n.length <= 11) n = "55" + n;
+    return `https://wa.me/${n}?text=${encodeURIComponent(U.interp(msg, derived()))}`;
+  }
+
+  // ---- navegação ----
+  function follow(nodeId, handle) {
+    const e = edgeFrom(nodeId, handle);
+    if (!e) { emit("semSaida", { nodeId, handle }); if (mode === "preview") toastIn(root, "Esta saída ainda não está ligada a nada no fluxo"); return; }
+    go(e.to);
+  }
+  function go(nodeId, fromBack) {
+    const n = N[nodeId]; if (!n) return;
+    if (!S.vistas.includes(nodeId)) S.vistas.push(nodeId);
+    save({ etapa: nodeId, etapaNome: nodeName(n) }, nodeId);
+    if (n.type === "start") return follow(n.id, "next");
+    if (n.type === "fn") return runFn(n);
+    if (!fromBack && S.atual && S.atual !== nodeId) S.hist.push(S.atual);
+    S.atual = nodeId; persist();
+    renderPage(n);
+    emit("pagina", { node: n });
+  }
+  function back() {
+    const prev = S.hist.pop(); if (!prev) return;
+    S.atual = prev; persist(); renderPage(N[prev]);
+  }
+  function nodeName(n) { return n.type === "page" ? (n.data.nome || "Página") : n.type === "fn" ? (FUNCS[n.data.kind]?.label || "Função") : "Início"; }
+  function finish(destino, url, newTab) {
+    S.finalizado = destino; persist();
+    save({ finalizado: true, destino, finalizadoEm: U.now(), etapa: "concluido", etapaNome: destino === "whatsapp" ? "Foi para o WhatsApp" : destino === "site" ? "Foi para o site" : "Finalizou" }, "concluido");
+    emit("fim", { destino, url });
+    if (opts.store && opts.store.flush) opts.store.flush();
+    if (!url) return;
+    if (mode === "preview") { toastIn(root, "Na versão publicada a cliente iria para: " + url.slice(0, 120)); return; }
+    setTimeout(() => { if (newTab) window.open(url, "_blank", "noopener"); else location.href = url; }, 250);
+  }
+
+  // ---- funções ----
+  function runFn(n) {
+    const p = n.data.props || {}, k = n.data.kind, v = derived();
+    if (k === "link") {
+      const url = p.destino === "carrinho" ? cartUrl() : p.destino === "loja" ? (cfg.lojaUrl || "") : U.interp(p.url, v);
+      emit("pixel", { ev: p.destino === "carrinho" ? "InitiateCheckout" : "ViewContent" });
+      if (p.finaliza !== false) finish(p.destino === "url" ? "link" : "site", url, p.novaAba); else if (mode === "live") location.href = url; else toastIn(root, "Iria para: " + url);
+      return;
+    }
+    if (k === "whatsapp") {
+      emit("pixel", { ev: "Contact" });
+      const url = waUrl(p.numero === "outro" ? p.outro : p.numero, p.mensagem);
+      if (p.finaliza !== false) finish("whatsapp", url); else if (mode === "live") location.href = url; else toastIn(root, "Abriria: " + url);
+      return;
+    }
+    if (k === "carrinho") {
+      if (p.acao === "limpar" || p.acao === "set") { S.carrinho = []; if (p.acao === "limpar") S.escolhas = []; }
+      if (p.acao === "add" || p.acao === "set") {
+        String(p.skus || "").split(/[\s,;]+/).map(s => s.trim()).filter(Boolean).forEach(sku => {
+          const ex = S.carrinho.find(c => c.sku === sku); const q = Math.max(1, +p.qtd || 1);
+          if (ex) ex.q += q; else S.carrinho.push({ sku, q });
+        });
+        if (p.rotulo) S.escolhas.push(U.interp(p.rotulo, v));
+        emit("pixel", { ev: "AddToCart" });
+      }
+      if (p.cupom) S.cupom = p.cupom;
+      save({ carrinho: S.carrinho.map(c => c.sku + ":" + c.q), cupom: S.cupom, escolhas: S.escolhas });
+      persist(); return follow(n.id, "next");
+    }
+    if (k === "variavel") {
+      const name = p.nome; if (name) {
+        const raw = U.interp(p.valor, v), cur = S.vars[name];
+        const num = x => parseFloat(String(x ?? 0).replace(",", ".")) || 0;
+        let val;
+        switch (p.op) { case "+": val = num(cur) + num(raw); break; case "-": val = num(cur) - num(raw); break; case "*": val = num(cur) * num(raw); break; case "/": val = num(raw) ? num(cur) / num(raw) : num(cur); break; case "append": val = [].concat(cur ?? [], raw); break; default: val = raw; }
+        if (typeof val === "number") val = Math.round(val * 1000) / 1000;
+        S.vars[name] = val; save({ vars: S.vars });
+      }
+      persist(); return follow(n.id, "next");
+    }
+    if (k === "condicao") {
+      for (const g of p.grupos || []) {
+        const res = (g.regras || []).map(r => testRule(r, v));
+        const ok = res.length && (g.logica === "ou" ? res.some(Boolean) : res.every(Boolean));
+        if (ok) return follow(n.id, g.id);
+      }
+      return follow(n.id, "senao");
+    }
+    if (k === "ab") {
+      if (!S.ab[n.id]) { S.ab[n.id] = Math.random() * 100 < (+p.pctA || 0) ? "A" : "B"; save({ ab: S.ab }); persist(); }
+      return follow(n.id, S.ab[n.id]);
+    }
+    if (k === "webhook") {
+      if (mode === "live" && p.url) {
+        const all = derived();
+        const pick = p.enviar === "lista" ? Object.fromEntries(String(p.vars || "").split(",").map(s => s.trim()).filter(Boolean).map(x => [x, all[x]])) : all;
+        const body = JSON.stringify({ token: p.token || undefined, quiz: project.nome, sessao: S.id, variaveis: pick, respostas: p.enviar === "lista" ? undefined : S.respostas, carrinho: S.carrinho, origem: S.origem || {}, enviadoEm: U.now() });
+        const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+        if (ctl) setTimeout(() => ctl.abort(), 4000);
+        try { fetch(p.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body, keepalive: true, mode: "cors", signal: ctl && ctl.signal }).catch(() => { }); } catch (e) { }
+      } else if (mode === "preview") toastIn(root, "Webhook seria enviado para " + (p.url || "(sem URL)"));
+      return follow(n.id, "next");
+    }
+  }
+
+  // ---- página ----
+  function renderPage(n) {
+    clearTimers();
+    const ctx = { vars: derived(), mode: "live", tema: project.tema || {}, nome: project.nome, canBack: S.hist.length > 0, prevProgress: lastPageProgress, k: n.id.slice(-4) };
+    const blocos = n.data.blocos || [];
+    const html = blocos.map(b => { const B = BLOCKS[b.type]; if (!B) return ""; try { return `<section class="blk" data-bid="${b.id}" id="b-${b.id}">${B.render(b.props || {}, ctx, b)}</section>`; } catch (e) { console.warn(e); return ""; } }).join("");
+    root.innerHTML = `<div class="pg">${html}</div>`;
+    const pr = blocos.find(b => b.type === "progresso"); if (pr) lastPageProgress = Math.max(0, Math.min(100, +pr.props.valor || 0));
+    root.scrollTop = 0; if (mode === "live") window.scrollTo(0, 0);
+    wire(n);
+    // pixel por página
+    blocos.filter(b => b.type === "pixel" && b.props.ativo !== false).forEach(b => emit("pixel", { ev: b.props.evento === "Custom" ? b.props.nomeCustom : b.props.evento, custom: b.props.evento === "Custom" }));
+    emit("pixel", { ev: "QuizEtapa", custom: true, data: { etapa: n.data.nome || "" } });
+  }
+
+  function answer(n, label, valor, varName, pontos) {
+    S.respostas[n.id] = label;
+    if (varName) {
+      S.vars[varName] = valor;
+      if (pontos) { const k = varName + "_pontos"; S.vars[k] = (parseFloat(S.vars[k]) || 0) + (+pontos || 0); }
+    }
+    save({ respostas: S.respostas, vars: S.vars });
+  }
+
+  function wire(n) {
+    const $ = s => root.querySelector(s), $$ = s => [...root.querySelectorAll(s)];
+    const blk = id => (n.data.blocos || []).find(b => b.id === id);
+    $$("[data-back]").forEach(b => b.onclick = back);
+    // animações
+    requestAnimationFrame(() => {
+      $$("[data-prog-to]").forEach(i => requestAnimationFrame(() => { i.style.transition = "width .6s ease"; i.style.width = i.dataset.progTo + "%"; }));
+      $$("[data-donut]").forEach(c => { c.style.transition = "stroke-dashoffset 1.2s ease"; c.style.strokeDashoffset = c.dataset.donut; });
+    });
+    // saídas simples (botão, imagem clicável, opção única)
+    $$("[data-out]").forEach(el => {
+      if (el.hasAttribute("data-multi-ok")) return;
+      const act = () => {
+        const h = el.dataset.out;
+        // opção de quiz?
+        const qEl = el.closest("[data-quiz]");
+        if (qEl && el.dataset.opt) {
+          const b = blk(qEl.dataset.quiz), o = (b.props.opcoes || []).find(x => x.id === el.dataset.opt);
+          $$(`[data-quiz="${b.id}"] .b-opt`).forEach(x => x.classList.toggle("sel", x === el));
+          answer(n, o.titulo, o.valor || o.titulo, b.props.variavel, o.pontos);
+          timers.push(setTimeout(() => follow(n.id, h), 220));
+          return;
+        }
+        const b = blk(h);
+        if (b && b.type === "botao") S.respostas[n.id] = S.respostas[n.id] || b.props.texto;
+        if (b && b.type === "imagem") S.respostas[n.id] = S.respostas[n.id] || ("Imagem: " + (b.props.alt || "clique"));
+        if (b && (b.type === "altura" || b.type === "peso")) { /* valor já salvo pelo slider */ }
+        save({ respostas: S.respostas });
+        follow(n.id, h);
+      };
+      el.addEventListener("click", act);
+      if (el.tagName === "IMG") el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); } });
+    });
+    // âncoras
+    $$("[data-anchor]").forEach(el => el.onclick = () => { const t = root.querySelector("#b-" + el.dataset.anchor); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); });
+    // quiz múltiplo
+    $$("[data-quiz]").forEach(q => {
+      const b = blk(q.dataset.quiz); if (!b || !b.props.multipla) return;
+      const sel = new Set();
+      const ok = q.querySelector("[data-multi-ok]");
+      q.querySelectorAll("[data-multi]").forEach(o => o.onclick = () => { const id = o.dataset.multi; sel.has(id) ? sel.delete(id) : sel.add(id); o.classList.toggle("sel", sel.has(id)); ok.disabled = sel.size === 0; });
+      ok.onclick = () => {
+        const os = (b.props.opcoes || []).filter(o => sel.has(o.id));
+        const label = os.map(o => o.titulo).join(", ");
+        S.respostas[n.id] = label;
+        if (b.props.variavel) { S.vars[b.props.variavel] = os.map(o => o.valor || o.titulo); const pts = os.reduce((a, o) => a + (+o.pontos || 0), 0); if (pts) S.vars[b.props.variavel + "_pontos"] = (parseFloat(S.vars[b.props.variavel + "_pontos"]) || 0) + pts; }
+        save({ respostas: S.respostas, vars: S.vars });
+        follow(n.id, b.id);
+      };
+    });
+    // formulários
+    $$("[data-form]").forEach(f => {
+      f.querySelectorAll('input[data-tipo="whatsapp"]').forEach(i => i.addEventListener("input", () => { i.value = U.phoneMask(i.value); }));
+      f.onsubmit = ev => {
+        ev.preventDefault();
+        let okAll = true; const vals = {};
+        f.querySelectorAll("label.fld").forEach(l => {
+          const i = l.querySelector("input"), err = l.querySelector(".err"), t = i.dataset.tipo, v = i.value.trim();
+          let msg = "";
+          if (i.required && !v) msg = "Preencha este campo";
+          else if (v && t === "whatsapp" && !/^\d{10,11}$/.test(U.digits(v))) msg = "Digite o WhatsApp com DDD";
+          else if (v && t === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) msg = "E-mail inválido";
+          else if (v && t === "nome" && v.length < 2) msg = "Nome muito curto";
+          err.textContent = msg; l.classList.toggle("bad", !!msg); if (msg) okAll = false;
+          if (i.dataset.var) vals[i.dataset.var] = t === "whatsapp" ? U.digits(v) : v;
+        });
+        if (!okAll) { const first = f.querySelector(".bad input"); first && first.focus(); return; }
+        Object.assign(S.vars, vals);
+        const patch = { vars: S.vars };
+        if (vals.nome !== undefined) patch.nome = vals.nome.slice(0, 79);
+        if (vals.whatsapp !== undefined) patch.whatsapp = vals.whatsapp.slice(0, 15);
+        if (vals.email !== undefined) patch.email = vals.email.slice(0, 120);
+        S.respostas[n.id] = Object.values(vals).filter(Boolean).join(" · ");
+        patch.respostas = S.respostas;
+        save(patch); persist();
+        emit("lead", vals);
+        follow(n.id, f.dataset.form);
+      };
+    });
+    // sliders
+    $$("[data-slider]").forEach(s => {
+      const c = JSON.parse(s.dataset.slider), r = s.querySelector("input"), out = s.querySelector(".val b");
+      const set = () => { out.textContent = r.value; if (c.var) S.vars[c.var] = c.inc ? r.value + c.un : +r.value; };
+      r.oninput = set; set();
+      s.querySelector("[data-out]").addEventListener("click", () => { S.respostas[n.id] = r.value + " " + c.un; save({ vars: S.vars, respostas: S.respostas }); }, true);
+    });
+    // carregamento
+    $$("[data-load]").forEach(l => {
+      const c = JSON.parse(l.dataset.load), bar = l.querySelector("i"), pct = l.querySelector("span"), t0 = Date.now();
+      const iv = setInterval(() => { const p = Math.min(100, (Date.now() - t0) / (c.s * 1000) * 100); bar.style.width = p + "%"; pct.textContent = Math.round(p) + "%"; if (p >= 100) { clearInterval(iv); if (c.out) follow(n.id, c.out); } }, 60);
+      timers.push(iv);
+    });
+    // avançar sozinho
+    $$("[data-redir]").forEach(r => { const c = JSON.parse(r.dataset.redir); timers.push(setTimeout(() => follow(n.id, c.out), c.s * 1000)); });
+    // número animado
+    $$("[data-count]").forEach(el => {
+      const c = JSON.parse(el.dataset.count), t0 = performance.now();
+      const fmt = x => { const v = x.toLocaleString("pt-BR", { minimumFractionDigits: c.c, maximumFractionDigits: c.c }); return c.pre + (c.f === "real" ? "R$ " : "") + v + (c.f === "pct" ? "%" : "") + c.suf; };
+      const step = t => { const k = Math.min(1, (t - t0) / (c.d * 1000)); const e = 1 - Math.pow(1 - k, 3); el.textContent = fmt(c.de + (c.ate - c.de) * e); if (k < 1) requestAnimationFrame(step); };
+      requestAnimationFrame(step);
+    });
+    // carrossel
+    $$("[data-car]").forEach(c => {
+      const tr = c.querySelector(".b-car-track"), dots = [...c.querySelectorAll(".b-car-dots i")];
+      const upd = () => { const i = Math.round(tr.scrollLeft / tr.clientWidth); dots.forEach((d, k) => d.classList.toggle("on", k === i)); };
+      tr.addEventListener("scroll", () => requestAnimationFrame(upd));
+      if (c.dataset.car === "1" && dots.length > 1) timers.push(setInterval(() => { const i = Math.round(tr.scrollLeft / tr.clientWidth); tr.scrollTo({ left: ((i + 1) % dots.length) * tr.clientWidth, behavior: "smooth" }); }, 3500));
+    });
+    // accordion único
+    $$('[data-acc="um"]').forEach(a => a.querySelectorAll("details").forEach(d => d.addEventListener("toggle", () => { if (d.open) a.querySelectorAll("details").forEach(o => { if (o !== d) o.open = false; }); })));
+    // cronômetro
+    $$("[data-cron]").forEach(el => {
+      const c = JSON.parse(el.dataset.cron), t = el.querySelector(".t"), msg = el.querySelector(".msg");
+      let end;
+      if (c.modo === "data") end = new Date(c.alvo).getTime();
+      else { const k = "cron:" + c.id; S.vars["__" + k] = S.vars["__" + k] || Date.now() + c.dur * 1000; end = S.vars["__" + k]; persist(); }
+      const tick = () => { const left = Math.max(0, Math.floor((end - Date.now()) / 1000)); const h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60), s = left % 60; t.textContent = (h ? String(h).padStart(2, "0") + ":" : "") + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0"); if (!left) { msg.textContent = c.fim; t.textContent = ""; return false; } return true; };
+      if (tick()) timers.push(setInterval(() => { if (!tick()) { } }, 1000));
+    });
+    // scripts (só no publicado)
+    if (mode === "live") $$("[data-script]").forEach(s => { s.querySelectorAll("script").forEach(old => { const n2 = document.createElement("script"); [...old.attributes].forEach(a => n2.setAttribute(a.name, a.value)); n2.textContent = old.textContent; old.replaceWith(n2); }); });
+    if (mode === "live") $$("[data-embed]").forEach(s => { s.querySelectorAll("script").forEach(old => { const n2 = document.createElement("script"); [...old.attributes].forEach(a => n2.setAttribute(a.name, a.value)); n2.textContent = old.textContent; old.replaceWith(n2); }); });
+  }
+
+  // ---- início ----
+  function start(resume) {
+    let saved = null;
+    if (KEY && resume !== false) try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { }
+    if (saved && !saved.finalizado && saved.atual && N[saved.atual] && mode === "live") { S = Object.assign(fresh(), saved); }
+    else { S = fresh(); if (saved && saved.vars) { ["nome", "whatsapp", "email"].forEach(k => { if (saved.vars[k]) S.vars[k] = saved.vars[k]; }); } }
+    S.origem = opts.origem || S.origem || {};
+    if (opts.store && mode === "live") opts.store.begin(S);
+    persist();
+    if (S.atual) { renderPage(N[S.atual]); return; }
+    const st = flow.nodes.find(n => n.type === "start");
+    if (!st) { root.innerHTML = `<div class="pg"><p class="vazio-q">Este quiz ainda não tem página inicial.</p></div>`; return; }
+    go(st.id);
+  }
+  return { start, state: () => S, go, destroy: clearTimers, cartUrl: () => cartUrl() };
+}
+
+function toastIn(root, msg) {
+  const t = document.createElement("div"); t.className = "q-toast"; t.textContent = msg;
+  (root.closest(".q-frame") || document.body).appendChild(t); setTimeout(() => t.remove(), 3200);
+}
+
+// tema → variáveis CSS
+function themeCss(t = {}) {
+  const v = {
+    "--accent": t.corPrimaria || "#8A6A3B", "--accent-deco": t.corDetalhe || t.corPrimaria || "#A27B43", "--on-accent": t.corTextoBotao || "#FFFFFF",
+    "--bg": t.corFundo || "#FAF6EE", "--surface": t.corCard || "#FFFFFF", "--surface-2": t.corCard2 || "#F3EBDD",
+    "--text": t.corTexto || "#2F261D", "--text-muted": t.corTextoSuave || "#6B5D4E", "--border": t.corBorda || "#E8DFD0",
+    "--q-radius": (t.raio ?? 14) + "px", "--q-gap": ({ compacto: "10px", normal: "16px", amplo: "24px" })[t.espacamento || "normal"],
+    "--q-font-t": `'${t.fonteTitulo || "Cormorant Garamond"}', Georgia, serif`, "--q-font": `'${t.fonteTexto || "Jost"}', system-ui, sans-serif`,
+  };
+  return Object.entries(v).map(([k, x]) => `${k}:${x}`).join(";");
+}
+const FONTES = ["Cormorant Garamond", "Playfair Display", "Lora", "Jost", "Poppins", "Montserrat", "Inter", "Nunito", "Raleway", "DM Sans"];
+const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.fonteTitulo || "Cormorant Garamond", t.fonteTexto || "Jost"])].map(f => "family=" + f.replace(/ /g, "+") + ":wght@400;500;600;700").join("&") + "&display=swap";
+
+/* ============ Quiz público ============ */
+(function () {
+  const FB = { apiKey: "AIzaSyAz-JLZaqTKIs6RmMUOxBwr2C86Tvbi11w", authDomain: "veraneio-vendas.firebaseapp.com", projectId: "veraneio-vendas", storageBucket: "veraneio-vendas.firebasestorage.app", messagingSenderId: "584612640383", appId: "1:584612640383:web:5578a9ca673323ac8e314a" };
+  const root = document.getElementById("q");
+  const qs = new URLSearchParams(location.search);
+  const slug = (qs.get("p") || location.hash.replace("#", "") || "").toLowerCase();
+  const TESTE = qs.has("teste");
+  let db = null;
+  try { firebase.initializeApp(FB); db = firebase.firestore(); } catch (e) { }
+
+  const off = (t, s) => { root.innerHTML = `<div class="off"><b>${U.esc(t)}</b>${U.esc(s || "")}</div>`; document.title = t; };
+  const meta = (name, content, prop) => { if (!content) return; const m = document.createElement("meta"); m.setAttribute(prop ? "property" : "name", name); m.content = content; document.head.appendChild(m); };
+
+  // origem (UTM) — guardada na primeira visita da sessão
+  function origem() {
+    const o = {};
+    ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "src", "sck", "fbclid", "gclid"].forEach(k => { const v = qs.get(k); if (v) o[k] = v.slice(0, 200); });
+    if (document.referrer && !document.referrer.startsWith(location.origin)) o.referrer = document.referrer.slice(0, 200);
+    return o;
+  }
+
+  // gravação no Firestore: junta mudanças e grava em lote; se cair a internet, tenta de novo
+  function makeStore(projectId) {
+    const pend = {}; let vistas = [], timer = null, began = false, S = null, retry = 2000;
+    const flush = async () => {
+      clearTimeout(timer); if (!S || !S.id || !db || TESTE) return;
+      const data = Object.assign({}, pend); Object.keys(pend).forEach(k => delete pend[k]);
+      const vv = vistas; vistas = [];
+      data.atualizadoEm = U.now();
+      if (vv.length) data.vistas = firebase.firestore.FieldValue.arrayUnion(...vv);
+      try { await db.collection("quiz_leads").doc(S.id).set(data, { merge: true }); retry = 2000; }
+      catch (e) { Object.keys(data).forEach(k => { if (k !== "vistas" && !(k in pend)) pend[k] = data[k]; }); vistas = vv.concat(vistas); timer = setTimeout(flush, retry = Math.min(retry * 2, 30000)); }
+    };
+    return {
+      begin(sess) {
+        S = sess; if (TESTE || !db) { S.id = S.id || "teste"; return; }
+        const novo = !S.id;
+        if (novo) S.id = db.collection("quiz_leads").doc().id;
+        if (!began) {
+          began = true;
+          const base = { projectId, atualizadoEm: U.now() };
+          if (novo) Object.assign(base, { criadoEm: U.now(), status: "novo", origem: S.origem || {}, vistas: [] });
+          db.collection("quiz_leads").doc(S.id).set(base, { merge: true }).catch(() => { });
+        }
+      },
+      save(sess, patch, vista) { S = sess; Object.assign(pend, patch || {}); if (vista) vistas.push(vista); clearTimeout(timer); timer = setTimeout(flush, 150); },
+      flush,
+    };
+  }
+
+  function pixel(id) {
+    if (!id || TESTE) return;
+    !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = "2.0"; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s) }(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+    fbq("init", id); fbq("track", "PageView");
+  }
+  function gtm(id) {
+    if (!id || TESTE || !/^GTM-[A-Z0-9]+$/i.test(id)) return;
+    window.dataLayer = window.dataLayer || []; window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+    const s = document.createElement("script"); s.async = true; s.src = "https://www.googletagmanager.com/gtm.js?id=" + id; document.head.appendChild(s);
+  }
+  function headScript(html) {
+    if (!html || TESTE) return;
+    const box = document.createElement("div"); box.innerHTML = html;
+    [...box.childNodes].forEach(n => {
+      if (n.tagName === "SCRIPT") { const s = document.createElement("script"); [...n.attributes].forEach(a => s.setAttribute(a.name, a.value)); s.textContent = n.textContent; document.head.appendChild(s); }
+      else if (n.nodeType === 1) document.head.appendChild(n);
+    });
+  }
+
+  async function boot() {
+    if (!slug) return off("Quiz não encontrado", "Confira o link que você recebeu.");
+    if (!db) return off("Sem conexão", "Verifique sua internet e tente de novo.");
+    let snap;
+    try { snap = await db.collection("quiz_public").doc(slug).get(); }
+    catch (e) { return off("Sem conexão", "Verifique sua internet e recarregue a página."); }
+    if (!snap.exists) return off("Este quiz não está disponível", "Ele pode ter sido encerrado. Fale com a Veraneio pelo Instagram.");
+    const P = snap.data(), cfg = P.config || {}, tema = P.tema || {};
+    document.title = cfg.tituloSite || P.nome || "Quiz";
+    document.querySelector('meta[name="robots"]').content = cfg.robos ? "index,follow" : "noindex";
+    meta("description", cfg.descricaoSite); meta("og:title", cfg.tituloSite || P.nome, true); meta("og:description", cfg.descricaoSite, true); meta("og:image", cfg.imagemSite, true);
+    if (tema.favicon) { const l = document.createElement("link"); l.rel = "icon"; l.href = tema.favicon; document.head.appendChild(l); }
+    const f = document.createElement("link"); f.rel = "stylesheet"; f.href = fontHref(tema); document.head.appendChild(f);
+    root.setAttribute("style", themeCss(tema)); document.body.style.background = tema.corFundo || "#FAF6EE";
+    document.querySelector('meta[name="theme-color"]').content = tema.corFundo || "#FAF6EE";
+    pixel(cfg.pixelId); gtm(cfg.gtmId); headScript(cfg.headerScript);
+    const store = makeStore(P.projectId);
+    const runner = createRunner({
+      project: P, root, mode: "live", store, origem: origem(),
+      sessionKey: TESTE ? null : "vq:" + slug + ":v" + (P.versao || 1),
+      onEvent(t, d) {
+        if (t === "pixel" && window.fbq && d.ev) { try { fbq(d.custom ? "trackCustom" : "track", d.ev, d.data || {}); } catch (e) { } }
+        if (t === "pixel" && window.dataLayer && d.ev) window.dataLayer.push({ event: "quiz_" + d.ev });
+      },
+    });
+    runner.start();
+    window.addEventListener("pagehide", () => store.flush());
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") store.flush(); });
+  }
+  boot();
+})();
+
+</script>
+</body>
+</html>
