@@ -318,7 +318,7 @@ table.tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:
 /* ===== Quiz (compartilhado: publicado + prévia do editor). Tudo escopado em .q-frame ===== */
 .q-frame{background:var(--bg);color:var(--text);font-family:var(--q-font);font-size:16px;line-height:1.5;position:relative;-webkit-font-smoothing:antialiased}
 .q-frame *{box-sizing:border-box}
-.q-frame .pg{max-width:480px;margin:0 auto;padding:12px 16px 32px;display:flex;flex-direction:column;gap:var(--q-gap)}
+.q-frame .pg{max-width:var(--q-maxw,480px);margin:0 auto;padding:12px 16px 32px;display:flex;flex-direction:column;gap:var(--q-gap)}
 .q-frame .blk{min-width:0}
 .q-frame h2,.q-frame .b-tit h2{font-family:var(--q-font-t);font-weight:600;line-height:1.15;margin:0;color:var(--text)}
 .q-frame p{margin:0}
@@ -441,6 +441,10 @@ table.tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:
 .q-frame .b-opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .q-frame .b-opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
 .q-frame .b-opt .t{flex:1;display:flex;flex-direction:column}
+.q-frame .b-opt.ctr{justify-content:center;text-align:center}
+.q-frame .b-opt.ctr .t{align-items:center}
+.q-frame .b-opt.bb{border-bottom-width:4px}
+.q-frame .b-opt.ts-sm{font-size:14px}.q-frame .b-opt.ts-lg{font-size:18px}
 .q-frame .b-opt .t small{color:var(--text-muted);font-size:13px}
 .q-frame .b-opt .emo{font-size:24px;line-height:1}
 .q-frame .b-opt img{border-radius:calc(var(--q-radius) - 4px);object-fit:cover;background:var(--surface-2)}
@@ -697,12 +701,12 @@ const ICON_CHOICES = ["check", "escudo", "estrela", "coracao", "presente", "cami
 // ---------- opções comuns ----------
 const ANIM = { key: "animacao", label: "Animação de entrada", type: "select", options: [["fade", "Aparecer"], ["sobe", "Subir"], ["pulsar", "Pulsar"], ["nenhuma", "Nenhuma"]] };
 const ALIGN = { key: "alinhamento", label: "Alinhamento", type: "select", options: [["left", "Esquerda"], ["center", "Centro"], ["right", "Direita"]] };
-const SIZE = (key = "tamanho", label = "Tamanho") => ({ key, label, type: "select", options: [["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"], ["xl", "Extra grande"]] });
+const SIZE = (key = "tamanho", label = "Tamanho") => ({ key, label, type: "select", options: [["xs", "Extra pequeno"], ["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"], ["xl", "Extra grande"]] });
 const COR = (key, label) => ({ key, label, type: "color" });
 const anim = p => p.animacao && p.animacao !== "nenhuma" ? ` an-${p.animacao}` : "";
 const al = p => p.alinhamento ? ` style="text-align:${p.alinhamento}"` : "";
-const FS = { sm: "14px", md: "16px", lg: "20px", xl: "26px" };
-const TS = { sm: "22px", md: "28px", lg: "34px", xl: "42px" };
+const FS = { xs: "13px", sm: "14px", md: "16px", lg: "20px", xl: "26px" };
+const TS = { xs: "18px", sm: "22px", md: "28px", lg: "34px", xl: "42px" };
 
 // out(id, label) marca um elemento clicável que leva a uma saída do fluxo
 const outAttr = id => `data-out="${U.esc(id)}"`;
@@ -857,6 +861,9 @@ const BLOCKS = {
       { key: "modelo", label: "Modelo", type: "select", options: [["texto", "Só texto"], ["emoji", "Texto + emoji"], ["imgEsq", "Imagem à esquerda"], ["imgCima", "Imagem em cima"], ["imagem", "Só imagem"]] },
       { key: "colunas", label: "Colunas", type: "select", options: [[1, "1"], [2, "2"], [3, "3"]] },
       { key: "marcador", label: "Mostrar marcador de seleção", type: "toggle" },
+      { key: "centralizar", label: "Texto das opções centralizado", type: "toggle" },
+      { key: "bordaGrossa", label: "Borda mais grossa embaixo (estilo botão)", type: "toggle" },
+      { key: "tamanhoTexto", label: "Tamanho do texto das opções", type: "select", options: [["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"]] },
       { key: "multipla", label: "Permitir várias respostas", type: "toggle" },
       { key: "botaoMultipla", label: "Texto do botão (várias respostas)", type: "text", show: p => p.multipla },
       COR("fundo", "Fundo das opções"), COR("borda", "Borda"), COR("cor", "Texto"), ANIM],
@@ -867,7 +874,7 @@ const BLOCKS = {
         const img = o.imagem && ["imgEsq", "imgCima", "imagem"].includes(p.modelo) ? `<img src="${U.esc(o.imagem)}" alt="">` : "";
         const emo = p.modelo === "emoji" && o.emoji ? `<span class="emo">${U.esc(o.emoji)}</span>` : "";
         const txt = p.modelo === "imagem" ? "" : `<span class="t"><span>${U.rich(o.titulo, ctx.vars)}</span>${o.subtitulo ? `<small>${U.esc(o.subtitulo)}</small>` : ""}</span>`;
-        return `<button class="b-opt m-${p.modelo}" ${p.multipla ? `data-multi="${U.esc(o.id)}"` : outAttr(o.id)} data-opt="${U.esc(o.id)}" style="${st}">${img}${emo}${txt}${p.marcador ? `<span class="mk${p.multipla ? " sq" : ""}"></span>` : ""}</button>`;
+        return `<button class="b-opt m-${p.modelo}${p.centralizar ? " ctr" : ""}${p.bordaGrossa ? " bb" : ""}${p.tamanhoTexto && p.tamanhoTexto !== "md" ? " ts-" + p.tamanhoTexto : ""}" ${p.multipla ? `data-multi="${U.esc(o.id)}"` : outAttr(o.id)} data-opt="${U.esc(o.id)}" style="${st}">${img}${emo}${txt}${p.marcador ? `<span class="mk${p.multipla ? " sq" : ""}"></span>` : ""}</button>`;
       }).join("");
       return `<div class="b-quiz${anim(p)}" data-quiz="${b.id}"><div class="b-quiz-grid c${p.colunas || 1}">${opts}</div>${p.multipla ? `<button class="b-btn cheio" ${outAttr(b.id)} data-multi-ok disabled>${U.esc(p.botaoMultipla || "Continuar")}</button>` : ""}</div>`;
     },
@@ -1211,7 +1218,8 @@ function createRunner(opts) {
     if (k === "link") {
       const url = p.destino === "carrinho" ? cartUrl() : p.destino === "loja" ? (cfg.lojaUrl || "") : U.interp(p.url, v);
       emit("pixel", { ev: p.destino === "carrinho" ? "InitiateCheckout" : "ViewContent" });
-      if (p.finaliza !== false) finish(p.destino === "url" ? "link" : "site", url, p.novaAba); else if (mode === "live") location.href = url; else toastIn(root, "Iria para: " + url);
+      const dest = p.destino !== "url" ? "site" : /wa\.me|whatsapp\.com/i.test(url) ? "whatsapp" : /\/r\/[A-Z0-9]+:\d|checkout|carrinho|seguro\./i.test(url) ? "site" : "link";
+      if (p.finaliza !== false) finish(dest, url, p.novaAba); else if (mode === "live") location.href = url; else toastIn(root, "Iria para: " + url);
       return;
     }
     if (k === "whatsapp") {
@@ -1513,12 +1521,12 @@ function themeCss(t = {}) {
     "--accent": t.corPrimaria || "#8A6A3B", "--accent-deco": t.corDetalhe || t.corPrimaria || "#A27B43", "--on-accent": t.corTextoBotao || "#FFFFFF",
     "--bg": t.corFundo || "#FAF6EE", "--surface": t.corCard || "#FFFFFF", "--surface-2": t.corCard2 || "#F3EBDD",
     "--text": t.corTexto || "#2F261D", "--text-muted": t.corTextoSuave || "#6B5D4E", "--border": t.corBorda || "#E8DFD0",
-    "--q-radius": (t.raio ?? 14) + "px", "--q-gap": ({ compacto: "10px", normal: "16px", amplo: "24px" })[t.espacamento || "normal"],
+    "--q-radius": (t.raio ?? 14) + "px", "--q-gap": ({ compacto: "10px", normal: "16px", amplo: "24px", xamplo: "32px" })[t.espacamento || "normal"], "--q-maxw": (+t.largura || 480) + "px",
     "--q-font-t": `'${t.fonteTitulo || "Cormorant Garamond"}', Georgia, serif`, "--q-font": `'${t.fonteTexto || "Jost"}', system-ui, sans-serif`,
   };
   return Object.entries(v).map(([k, x]) => `${k}:${x}`).join(";");
 }
-const FONTES = ["Cormorant Garamond", "Playfair Display", "Lora", "Jost", "Poppins", "Montserrat", "Inter", "Nunito", "Raleway", "DM Sans"];
+const FONTES = ["Cormorant Garamond", "Playfair Display", "Lora", "Jost", "Poppins", "Montserrat", "Inter", "Nunito", "Raleway", "DM Sans", "Plus Jakarta Sans", "Outfit"];
 const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.fonteTitulo || "Cormorant Garamond", t.fonteTexto || "Jost"])].map(f => "family=" + f.replace(/ /g, "+") + ":wght@400;500;600;700").join("&") + "&display=swap";
 
 /* ============ Padrões e modelos de quiz ============ */
@@ -1620,6 +1628,92 @@ const TEMPLATES = {
     },
   },
 };
+
+/* ============ Importador XQuiz → Quiz Veraneio ============
+   Converte o fluxo de um projeto do XQuiz (nós, ligações, tema) no formato deste app,
+   mantendo páginas, textos, imagens, opções, links e posições no mapa.
+   Autocontido: não depende de BLOCKS/FUNCS (roda também fora do painel). */
+function xquizToProject(input) {
+  const f = input && (input.funnel || input.flow || input.project || input.projeto || input);
+  const nodesIn = f.nodes || (f.flow && f.flow.nodes) || [];
+  const edgesIn = f.edges || (f.flow && f.flow.edges) || [];
+  if (!Array.isArray(nodesIn) || !nodesIn.length) throw new Error("não encontrei páginas neste arquivo do XQuiz");
+  const IMG = u => u ? "https://cdn.xquiz.co/images/" + u : "";
+  const imgOf = o => o && (o.uuid ? IMG(o.uuid) : o.url || o.src || "");
+  const ent = s => s.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  const html2txt = h => ent(String(h || "")
+    .replace(/<\s*(strong|b)\b[^>]*>/gi, "**").replace(/<\s*\/\s*(strong|b)\s*>/gi, "**")
+    .replace(/<\s*(em|i)\b[^>]*>/gi, "*").replace(/<\s*\/\s*(em|i)\s*>/gi, "*")
+    .replace(/<\s*u\b[^>]*>/gi, "__").replace(/<\s*\/\s*u\s*>/gi, "__")
+    .replace(/<\s*br\s*\/?>/gi, "\n").replace(/<\s*\/\s*p\s*>\s*<\s*p[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")).replace(/\*\*\s*\*\*/g, "").replace(/\n{3,}/g, "\n\n").trim();
+  const sz = s => ({ "text-xs": "sm", "text-sm": "sm", "text-base": "md", "text-lg": "xs", "text-xl": "sm", "text-2xl": "md", "text-3xl": "lg", "text-4xl": "xl" })[s] || "md";
+  const al = a => ["left", "center", "right"].includes(a) ? a : "center";
+  const anim = a => a === "pulse" || a === "pulsar" ? "pulsar" : a === "none" ? "nenhuma" : "fade";
+  let warnings = [];
+
+  const conv = (b) => {
+    const d = b.data || {}, id = b.id;
+    switch (b.type) {
+      case "headerV2": case "header":
+        return { id, type: "cabecalho", props: { logo: !!(d.logo || true), logoUrl: d.logo && d.logo.custom === false ? "" : imgOf(d.logo), tamanhoLogo: Math.max(24, Math.min(120, Math.round((d.logo && d.logo.size || 100) * 0.4))), voltar: !(d.backButton && d.backButton.show === false) } };
+      case "image":
+        return { id, type: "imagem", props: { url: imgOf(d.image), alt: "", largura: d.size === "w-full" || !d.size ? 100 : parseInt(String(d.size).replace(/\D/g, "")) || 100, raio: d.style === "rounded" ? 16 : 0, clicavel: !!d.clickable || !!d.link, animacao: anim(d.animation) } };
+      case "title":
+        return { id, type: "titulo", props: { titulo: html2txt(d.title), subtitulo: html2txt(d.subtitle), tamTitulo: sz(d.titleSize || "text-lg"), tamSub: sz(d.subtitleSize || "text-sm") === "md" ? "md" : "sm", alinhamento: al(d.alignment), cor: "", animacao: anim(d.animation) } };
+      case "text":
+        return { id, type: "texto", props: { texto: html2txt(d.text), tamanho: sz(d.size || "text-base"), entrelinha: 1.5, alinhamento: al(d.alignment), cor: "", animacao: anim(d.animation) } };
+      case "button":
+        return { id, type: "botao", props: { texto: html2txt(d.title).replace(/\*\*/g, "") || "Continuar", estilo: "cheio", destaque: !!d.fixed, atraso: d.videoDelay ? +d.videoDelayTime || 0 : 0, animacao: anim(d.animation), fundo: "", cor: "", borda: "", ancora: "", xq: true } };
+      case "quiz": case "newQuiz": {
+        const model = d.model || "text-only";
+        const ops = (d.content || d.options || []).filter(o => !o.deleted).map(o => ({ id: o.id, titulo: html2txt(o.title), subtitulo: html2txt(o.subtitle || ""), imagem: model.includes("image") || model === "image" ? imgOf(o.image) : "", emoji: model.includes("emoji") ? (o.emoji || "") : "", valor: "", pontos: 0 }));
+        const modelo = model === "text-only" ? "texto" : model.includes("emoji") ? "emoji" : model === "image-only" ? "imagem" : (d.placement || "").includes("top") ? "imgCima" : model.includes("image") ? "imgEsq" : "texto";
+        return { id, type: "quiz", props: { variavel: "", modelo, colunas: parseInt(String(d.columns || "1").replace(/\D/g, "")) || 1, multipla: !!d.multiple, botaoMultipla: "Continuar", marcador: d.checkbox && d.checkbox !== "none", opcoes: ops, fundo: "", borda: (d.colors && d.colors.border) || "", cor: "", centralizar: true, bordaGrossa: true, tamanhoTexto: "sm", animacao: anim(d.animation) } };
+      }
+      case "warranty":
+        return { id, type: "garantia", props: { titulo: html2txt(d.title) || "Garantia", texto: html2txt(d.text), icone: "escudo", fundo: "", borda: "", cor: "", alinhamento: al(d.alignment) === "center" ? "center" : "left", animacao: anim(d.animation) } };
+      default:
+        warnings.push(b.type); return null;
+    }
+  };
+
+  const idMap = {};
+  const nodes = [];
+  nodesIn.forEach(n => {
+    const x = Math.round((n.position && n.position.x) || 0), y = Math.round((n.position && n.position.y) || 0);
+    if (n.type === "function" && n.data && n.data.type === "start") { idMap[n.id] = "start"; nodes.push({ id: "start", type: "start", x, y, data: {} }); return; }
+    if (n.type === "function") {
+      const t = n.data && n.data.type;
+      if (t === "link") { nodes.push({ id: n.id, type: "fn", x, y, data: { kind: "link", props: { destino: "url", url: n.data.url || "", novaAba: false, finaliza: true } } }); idMap[n.id] = n.id; return; }
+      warnings.push("função " + t); return;
+    }
+    const blocos = (n.data.content || []).map(conv).filter(Boolean);
+    nodes.push({ id: n.id, type: "page", x, y, data: { nome: n.data.title || "Nova Página", blocos } });
+    idMap[n.id] = n.id;
+  });
+  // nomes de página repetidos ("Nova Página") ganham o primeiro texto da página, para o CRM e os Resultados
+  const firstText = n => { for (const b of n.data.blocos) { const t = b.props.titulo || b.props.texto; if (t) return t.replace(/\*|_|~/g, "").replace(/\s+/g, " ").slice(0, 40); const o = b.props.opcoes; if (o && o[0]) return o.map(x => x.titulo).join(" / ").slice(0, 40); } return ""; };
+  const count = {}; nodes.filter(n => n.type === "page").forEach(n => count[n.data.nome] = (count[n.data.nome] || 0) + 1);
+  nodes.filter(n => n.type === "page" && count[n.data.nome] > 1).forEach(n => { const t = firstText(n); if (t) n.data.nomeOriginal = n.data.nome, n.data.nome = t; });
+  const edges = edgesIn.filter(e => idMap[e.source] && idMap[e.target]).map((e, i) => ({ id: "x" + i, from: idMap[e.source], handle: idMap[e.source] === "start" ? "next" : String(e.sourceHandle || "").replace(/^(source-|handle-)/, ""), to: idMap[e.target] }));
+  if (!nodes.some(n => n.type === "start")) nodes.unshift({ id: "start", type: "start", x: 0, y: 0, data: {} });
+
+  const th = f.theme || {};
+  const tema = { logo: imgOf(th.logo), favicon: imgOf(th.favicon), corPrimaria: "#0A0A0A", corDetalhe: th.color || "#0284c7", corTextoBotao: "#FFFFFF", corFundo: th.dark ? "#020617" : "#F8FAFC", corCard: th.dark ? "#0F172A" : "#F9FAFB", corCard2: th.dark ? "#1E293B" : "#F1F5F9", corTexto: th.dark ? "#F8FAFC" : "#020617", corTextoSuave: th.dark ? "#94A3B8" : "#475569", corBorda: th.dark ? "#334155" : "#E2E8F0", fonteTitulo: "Poppins", fonteTexto: "Poppins", raio: 12, espacamento: "xamplo", largura: 512 };
+  const st = f.settings || {};
+  const integ = st.integrations || f.integrations || [];
+  const pix = (integ.find(i => i.type === "meta") || {}).key || "";
+  const urls = nodes.filter(n => n.type === "fn").map(n => n.data.props.url);
+  const wa = urls.map(u => (u.match(/wa\.me\/(\d+)/) || [])[1]).filter(Boolean);
+  const cart = urls.find(u => /\/r\/[A-Z0-9]+:\d/.test(u));
+  const config = {
+    pixelId: pix, tituloSite: st.title || f.name || "", descricaoSite: st.description || "", headerScript: st.headerScript || "",
+    whatsRevenda: wa[0] ? wa[0].replace(/^55/, "") : "", whatsVarejo: (wa.find(x => x !== wa[0]) || wa[0] || "").replace(/^55/, ""),
+    carrinhoBase: cart ? cart.split("/r/")[0] + "/r/" : "", lojaUrl: (urls.find(u => /^https?:\/\/[^/]+\/?$/.test(u)) || ""),
+  };
+  return { nome: f.name || "Quiz importado do XQuiz", flow: { nodes, edges }, tema, config, avisos: [...new Set(warnings)] };
+}
 
 /* ============ Painel — base: Firebase, login, dados, rotas, projetos, inspetor ============ */
 const FB_CONFIG = {
@@ -1852,13 +1946,28 @@ function newProjectDialog() {
     } catch (e) { btn.disabled = false; btn.textContent = "Criar quiz"; toast("Erro: " + e.message); }
   };
 }
+function isXQuiz(j) { const f = j && (j.funnel || j.project || j); return !!(f && Array.isArray(f.nodes) && f.nodes.some(n => n.type === "function" || (n.data && Array.isArray(n.data.content)))); }
+async function createFromXQuiz(j, nomeExtra) {
+  const r = xquizToProject(j);
+  const nome = (nomeExtra || r.nome || "Quiz do XQuiz").slice(0, 80);
+  const base = TEMPLATES.branco.build();
+  const p = { nome, slug: await uniqueSlug(slugify(nome)), status: "rascunho", pasta: null, flow: r.flow, tema: Object.assign(base.tema, r.tema), config: Object.assign(base.config, Object.fromEntries(Object.entries(r.config).filter(([, v]) => v))) };
+  const id = await DB.create(p);
+  return { id, avisos: r.avisos, paginas: r.flow.nodes.filter(n => n.type === "page").length, funcoes: r.flow.nodes.filter(n => n.type === "fn").length, ligacoes: r.flow.edges.length };
+}
 function importDialog() {
-  const m = modal({ title: "Importar quiz", body: `<p class="muted" style="margin-top:0">Escolha um arquivo <b>.quiz.json</b> exportado deste painel.</p><input type="file" accept=".json,application/json" class="inp" data-f>`, foot: `<button class="btn primary" data-ok>Importar</button>` });
+  const m = modal({ title: "Importar quiz", body: `<p class="muted" style="margin-top:0">Escolha um arquivo <b>.quiz.json</b> exportado deste painel ou um projeto <b>exportado do XQuiz</b> (aba Compartilhe → Exportar Projeto). O fluxo, os textos, as imagens e os links são copiados.</p><input type="file" accept=".json,application/json" class="inp" data-f>`, foot: `<button class="btn primary" data-ok>Importar</button>` });
   $("[data-ok]", m.el).onclick = async () => {
     const f = $("[data-f]", m.el).files[0]; if (!f) return toast("Escolha um arquivo");
     try {
-      const j = JSON.parse(await f.text()); const p = j.projeto || j;
-      if (!p.flow || !Array.isArray(p.flow.nodes) || !Array.isArray(p.flow.edges)) throw new Error("arquivo não é um quiz deste painel");
+      const j = JSON.parse(await f.text());
+      if (isXQuiz(j) && !(j.projeto || j.formato)) {
+        const r = await createFromXQuiz(j); m.close();
+        toast(`Importado do XQuiz: ${r.paginas} páginas, ${r.funcoes} funções, ${r.ligacoes} ligações` + (r.avisos.length ? ` (não suportado: ${r.avisos.join(", ")})` : ""), 6000);
+        return go("p/" + r.id + "/fluxo");
+      }
+      const p = j.projeto || j;
+      if (!p.flow || !Array.isArray(p.flow.nodes) || !Array.isArray(p.flow.edges)) throw new Error("arquivo não é um quiz deste painel nem do XQuiz");
       p.nome = (p.nome || "Quiz importado").slice(0, 80); p.slug = await uniqueSlug(slugify(p.nome)); p.status = "rascunho"; p.pasta = null;
       const id = await DB.create(p); m.close(); toast("Quiz importado"); go("p/" + id + "/fluxo");
     } catch (e) { toast("Não deu para importar: " + e.message, 4000); }
@@ -2399,7 +2508,8 @@ const TEMA_SCHEMA = [
   { key: "corTexto", label: "Texto", type: "color" }, { key: "corTextoSuave", label: "Texto secundário", type: "color" }, { key: "corBorda", label: "Bordas", type: "color" },
   { key: "fonteTitulo", label: "Fonte dos títulos", type: "select", options: FONTES.map(f => [f, f]) }, { key: "fonteTexto", label: "Fonte do texto", type: "select", options: FONTES.map(f => [f, f]) },
   { key: "raio", label: "Arredondamento dos cantos (px)", type: "number", min: 0, max: 32 },
-  { key: "espacamento", label: "Espaço entre elementos", type: "select", options: [["compacto", "Compacto"], ["normal", "Normal"], ["amplo", "Amplo"]] },
+  { key: "espacamento", label: "Espaço entre elementos", type: "select", options: [["compacto", "Compacto"], ["normal", "Normal"], ["amplo", "Amplo"], ["xamplo", "Bem espaçado"]] },
+  { key: "largura", label: "Largura máxima da página (px)", type: "number", min: 360, max: 720 },
 ];
 TABS.tema = {
   render(host) {

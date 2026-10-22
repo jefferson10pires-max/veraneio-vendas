@@ -21,7 +21,7 @@ body{min-height:100dvh}
 /* ===== Quiz (compartilhado: publicado + prévia do editor). Tudo escopado em .q-frame ===== */
 .q-frame{background:var(--bg);color:var(--text);font-family:var(--q-font);font-size:16px;line-height:1.5;position:relative;-webkit-font-smoothing:antialiased}
 .q-frame *{box-sizing:border-box}
-.q-frame .pg{max-width:480px;margin:0 auto;padding:12px 16px 32px;display:flex;flex-direction:column;gap:var(--q-gap)}
+.q-frame .pg{max-width:var(--q-maxw,480px);margin:0 auto;padding:12px 16px 32px;display:flex;flex-direction:column;gap:var(--q-gap)}
 .q-frame .blk{min-width:0}
 .q-frame h2,.q-frame .b-tit h2{font-family:var(--q-font-t);font-weight:600;line-height:1.15;margin:0;color:var(--text)}
 .q-frame p{margin:0}
@@ -144,6 +144,10 @@ body{min-height:100dvh}
 .q-frame .b-opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .q-frame .b-opt.sel{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
 .q-frame .b-opt .t{flex:1;display:flex;flex-direction:column}
+.q-frame .b-opt.ctr{justify-content:center;text-align:center}
+.q-frame .b-opt.ctr .t{align-items:center}
+.q-frame .b-opt.bb{border-bottom-width:4px}
+.q-frame .b-opt.ts-sm{font-size:14px}.q-frame .b-opt.ts-lg{font-size:18px}
 .q-frame .b-opt .t small{color:var(--text-muted);font-size:13px}
 .q-frame .b-opt .emo{font-size:24px;line-height:1}
 .q-frame .b-opt img{border-radius:calc(var(--q-radius) - 4px);object-fit:cover;background:var(--surface-2)}
@@ -386,12 +390,12 @@ const ICON_CHOICES = ["check", "escudo", "estrela", "coracao", "presente", "cami
 // ---------- opções comuns ----------
 const ANIM = { key: "animacao", label: "Animação de entrada", type: "select", options: [["fade", "Aparecer"], ["sobe", "Subir"], ["pulsar", "Pulsar"], ["nenhuma", "Nenhuma"]] };
 const ALIGN = { key: "alinhamento", label: "Alinhamento", type: "select", options: [["left", "Esquerda"], ["center", "Centro"], ["right", "Direita"]] };
-const SIZE = (key = "tamanho", label = "Tamanho") => ({ key, label, type: "select", options: [["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"], ["xl", "Extra grande"]] });
+const SIZE = (key = "tamanho", label = "Tamanho") => ({ key, label, type: "select", options: [["xs", "Extra pequeno"], ["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"], ["xl", "Extra grande"]] });
 const COR = (key, label) => ({ key, label, type: "color" });
 const anim = p => p.animacao && p.animacao !== "nenhuma" ? ` an-${p.animacao}` : "";
 const al = p => p.alinhamento ? ` style="text-align:${p.alinhamento}"` : "";
-const FS = { sm: "14px", md: "16px", lg: "20px", xl: "26px" };
-const TS = { sm: "22px", md: "28px", lg: "34px", xl: "42px" };
+const FS = { xs: "13px", sm: "14px", md: "16px", lg: "20px", xl: "26px" };
+const TS = { xs: "18px", sm: "22px", md: "28px", lg: "34px", xl: "42px" };
 
 // out(id, label) marca um elemento clicável que leva a uma saída do fluxo
 const outAttr = id => `data-out="${U.esc(id)}"`;
@@ -546,6 +550,9 @@ const BLOCKS = {
       { key: "modelo", label: "Modelo", type: "select", options: [["texto", "Só texto"], ["emoji", "Texto + emoji"], ["imgEsq", "Imagem à esquerda"], ["imgCima", "Imagem em cima"], ["imagem", "Só imagem"]] },
       { key: "colunas", label: "Colunas", type: "select", options: [[1, "1"], [2, "2"], [3, "3"]] },
       { key: "marcador", label: "Mostrar marcador de seleção", type: "toggle" },
+      { key: "centralizar", label: "Texto das opções centralizado", type: "toggle" },
+      { key: "bordaGrossa", label: "Borda mais grossa embaixo (estilo botão)", type: "toggle" },
+      { key: "tamanhoTexto", label: "Tamanho do texto das opções", type: "select", options: [["sm", "Pequeno"], ["md", "Padrão"], ["lg", "Grande"]] },
       { key: "multipla", label: "Permitir várias respostas", type: "toggle" },
       { key: "botaoMultipla", label: "Texto do botão (várias respostas)", type: "text", show: p => p.multipla },
       COR("fundo", "Fundo das opções"), COR("borda", "Borda"), COR("cor", "Texto"), ANIM],
@@ -556,7 +563,7 @@ const BLOCKS = {
         const img = o.imagem && ["imgEsq", "imgCima", "imagem"].includes(p.modelo) ? `<img src="${U.esc(o.imagem)}" alt="">` : "";
         const emo = p.modelo === "emoji" && o.emoji ? `<span class="emo">${U.esc(o.emoji)}</span>` : "";
         const txt = p.modelo === "imagem" ? "" : `<span class="t"><span>${U.rich(o.titulo, ctx.vars)}</span>${o.subtitulo ? `<small>${U.esc(o.subtitulo)}</small>` : ""}</span>`;
-        return `<button class="b-opt m-${p.modelo}" ${p.multipla ? `data-multi="${U.esc(o.id)}"` : outAttr(o.id)} data-opt="${U.esc(o.id)}" style="${st}">${img}${emo}${txt}${p.marcador ? `<span class="mk${p.multipla ? " sq" : ""}"></span>` : ""}</button>`;
+        return `<button class="b-opt m-${p.modelo}${p.centralizar ? " ctr" : ""}${p.bordaGrossa ? " bb" : ""}${p.tamanhoTexto && p.tamanhoTexto !== "md" ? " ts-" + p.tamanhoTexto : ""}" ${p.multipla ? `data-multi="${U.esc(o.id)}"` : outAttr(o.id)} data-opt="${U.esc(o.id)}" style="${st}">${img}${emo}${txt}${p.marcador ? `<span class="mk${p.multipla ? " sq" : ""}"></span>` : ""}</button>`;
       }).join("");
       return `<div class="b-quiz${anim(p)}" data-quiz="${b.id}"><div class="b-quiz-grid c${p.colunas || 1}">${opts}</div>${p.multipla ? `<button class="b-btn cheio" ${outAttr(b.id)} data-multi-ok disabled>${U.esc(p.botaoMultipla || "Continuar")}</button>` : ""}</div>`;
     },
@@ -900,7 +907,8 @@ function createRunner(opts) {
     if (k === "link") {
       const url = p.destino === "carrinho" ? cartUrl() : p.destino === "loja" ? (cfg.lojaUrl || "") : U.interp(p.url, v);
       emit("pixel", { ev: p.destino === "carrinho" ? "InitiateCheckout" : "ViewContent" });
-      if (p.finaliza !== false) finish(p.destino === "url" ? "link" : "site", url, p.novaAba); else if (mode === "live") location.href = url; else toastIn(root, "Iria para: " + url);
+      const dest = p.destino !== "url" ? "site" : /wa\.me|whatsapp\.com/i.test(url) ? "whatsapp" : /\/r\/[A-Z0-9]+:\d|checkout|carrinho|seguro\./i.test(url) ? "site" : "link";
+      if (p.finaliza !== false) finish(dest, url, p.novaAba); else if (mode === "live") location.href = url; else toastIn(root, "Iria para: " + url);
       return;
     }
     if (k === "whatsapp") {
@@ -1202,12 +1210,12 @@ function themeCss(t = {}) {
     "--accent": t.corPrimaria || "#8A6A3B", "--accent-deco": t.corDetalhe || t.corPrimaria || "#A27B43", "--on-accent": t.corTextoBotao || "#FFFFFF",
     "--bg": t.corFundo || "#FAF6EE", "--surface": t.corCard || "#FFFFFF", "--surface-2": t.corCard2 || "#F3EBDD",
     "--text": t.corTexto || "#2F261D", "--text-muted": t.corTextoSuave || "#6B5D4E", "--border": t.corBorda || "#E8DFD0",
-    "--q-radius": (t.raio ?? 14) + "px", "--q-gap": ({ compacto: "10px", normal: "16px", amplo: "24px" })[t.espacamento || "normal"],
+    "--q-radius": (t.raio ?? 14) + "px", "--q-gap": ({ compacto: "10px", normal: "16px", amplo: "24px", xamplo: "32px" })[t.espacamento || "normal"], "--q-maxw": (+t.largura || 480) + "px",
     "--q-font-t": `'${t.fonteTitulo || "Cormorant Garamond"}', Georgia, serif`, "--q-font": `'${t.fonteTexto || "Jost"}', system-ui, sans-serif`,
   };
   return Object.entries(v).map(([k, x]) => `${k}:${x}`).join(";");
 }
-const FONTES = ["Cormorant Garamond", "Playfair Display", "Lora", "Jost", "Poppins", "Montserrat", "Inter", "Nunito", "Raleway", "DM Sans"];
+const FONTES = ["Cormorant Garamond", "Playfair Display", "Lora", "Jost", "Poppins", "Montserrat", "Inter", "Nunito", "Raleway", "DM Sans", "Plus Jakarta Sans", "Outfit"];
 const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.fonteTitulo || "Cormorant Garamond", t.fonteTexto || "Jost"])].map(f => "family=" + f.replace(/ /g, "+") + ":wght@400;500;600;700").join("&") + "&display=swap";
 
 /* ============ Quiz público ============ */
