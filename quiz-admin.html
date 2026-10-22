@@ -196,7 +196,7 @@ main.wrap{padding:24px;max-width:1280px;margin:0 auto}
 /* ---------- editor de página ---------- */
 .ped{position:fixed;inset:0;z-index:80;background:var(--bg);display:grid;grid-template-rows:56px 1fr;grid-template-columns:300px 1fr 360px}
 .ped>header{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border)}
-.ped>header .inp{max-width:280px;font-weight:700}
+.ped>header .inp{max-width:280px;min-width:120px;flex:1;font-weight:700}
 .ped .lib{border-right:1px solid var(--border);overflow:auto;padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:10px}
 .ped .lib .grp{background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:8px}
 .ped .lib .items{display:grid;grid-template-columns:1fr 1fr;gap:5px}
@@ -297,10 +297,11 @@ table.tbl{border-collapse:separate;border-spacing:0;width:max-content;min-width:
 .tema-grid .phone{position:sticky;top:76px}
 .share-link{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 10px;font-family:var(--font-mono);font-size:12px;word-break:break-all}
 .stack{display:flex;flex-direction:column;gap:14px}
-@media (max-width:1100px){.ped{grid-template-columns:260px 1fr 320px}}
+@media (max-width:1100px){.ped{grid-template-columns:260px 1fr 320px}.ped .hdr-hint{display:none}}
 @media (max-width:1000px){
   .ped{grid-template-columns:1fr;grid-template-rows:56px auto 1fr auto}
   .ped .lib{max-height:200px}.ped .insp{max-height:45vh}
+  .ped>header{gap:6px;padding:0 8px}.ped>header .seg{display:none}
   .tema-grid{grid-template-columns:1fr}
   .pv{grid-template-columns:1fr}
   .picker{left:14px;width:calc(100% - 28px);top:110px;max-height:calc(100% - 124px)}
@@ -2269,7 +2270,7 @@ function openPageEditor(node, onClose) {
   const p = ST.project; let selId = null, wide = false;
   const ov = document.createElement("div"); ov.className = "ped"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Editar página");
   const libHtml = () => CATS.map(([c, l]) => { const it = Object.entries(BLOCKS).filter(([, B]) => B.cat === c); return it.length ? `<div class="grp"><h5>${l}</h5><div class="items">${it.map(([k, B]) => `<button data-add="${k}" class="${B.novo ? "novo" : ""}" title="Adicionar ${esc(B.label)}">${icon(B.icon, 16)}<span>${esc(B.label)}</span></button>`).join("")}</div></div>` : ""; }).join("");
-  ov.innerHTML = `<header><button class="btn icon ghost" data-close aria-label="Voltar ao fluxo">${icon("voltar", 18)}</button><input class="inp" id="pgName" value="${esc(node.data.nome || "")}" aria-label="Nome da página" maxlength="60"><span class="muted" style="font-size:12px">O nome aparece nos Resultados e no CRM</span><span style="flex:1"></span><div class="seg" role="group" aria-label="Largura"><button data-w="0" aria-pressed="true">Celular</button><button data-w="1" aria-pressed="false">Largo</button></div><button class="btn sm sec" data-test>${icon("play", 14)}Testar daqui</button><button class="btn sm primary" data-close>Concluir</button></header>
+  ov.innerHTML = `<header><button class="btn icon ghost" data-close aria-label="Voltar ao fluxo">${icon("voltar", 18)}</button><input class="inp" id="pgName" value="${esc(node.data.nome || "")}" aria-label="Nome da página" maxlength="60"><span class="muted hdr-hint" style="font-size:12px">O nome aparece nos Resultados e no CRM</span><span style="flex:1"></span><div class="seg" role="group" aria-label="Largura"><button data-w="0" aria-pressed="true">Celular</button><button data-w="1" aria-pressed="false">Largo</button></div><button class="btn sm sec" data-test>${icon("play", 14)}Testar daqui</button><button class="btn sm primary" data-close>Concluir</button></header>
     <aside class="lib"><input class="inp" id="libq" placeholder="Buscar elemento…" aria-label="Buscar elemento"><div id="libl" style="display:flex;flex-direction:column;gap:10px">${libHtml()}</div></aside>
     <div class="stage"><div class="phone" id="ph"><div class="q-frame" id="qf"></div></div></div>
     <aside class="insp" id="insp"></aside>`;
