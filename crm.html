@@ -752,7 +752,7 @@ function buildContext(sales, leads, yorders) {
   sales = sales.filter(s => !(s.yampi_order && ynum.has(String(s.yampi_order).replace(/\D/g, "")))).concat(ys); // o pedido da Yampi vale mais que a cópia lançada no sistema
   const dateOf = s => { const d = String(s.date || ""); const t = new Date(d.length === 10 ? d + "T12:00:00" : (d || s.created_at || 0)).getTime(); return isNaN(t) ? 0 : t; };
   sales.forEach(s => {
-    if (s.status === "cancelado") return;
+    if (s.status === "cancelado" || s.deleted) return; // cancelada ou na lixeira do sistema de vendas
     const sd = s.shipping_data || {};
     const tel = U.digits(sd.tel || s.phone || s.tel); const tk = U.telKey(tel);
     const key = tk || (s.client ? "n:" + U.norm(s.client).replace(/\s+/g, " ").trim() : ""); if (!key) return;
