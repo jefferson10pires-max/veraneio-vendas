@@ -2132,7 +2132,7 @@ function renderDisparos() {
   const camps = S.campaigns;
   const pct = (a, b) => b ? Math.round(a / b * 100) + "%" : "—";
   $("#view").innerHTML = `<div class="page">
-    <div class="ph"><div><h1>Disparos</h1><p>Mensagens em massa com modelo aprovado. As respostas caem direto nas Conversas.</p></div><button class="btn pri" id="dNew">${icon("plus")} Novo disparo</button></div>
+    <div class="ph"><div><h1>Disparos</h1><p>Pela API (modelo aprovado, respostas caem nas Conversas) ou pelo WhatsApp Web (você confirma cada envio).</p></div><button class="btn pri" id="dNew">${icon("plus")} Novo disparo</button></div>
     ${camps.length ? `<div class="cards">${camps.map(c => `<div class="card">
       <div class="row"><h3 class="grow">${U.esc(c.nome)}</h3><span class="pill ${c.status === "concluida" ? "green" : c.status === "enviando" ? "blue" : c.status === "pausada" ? "amber" : ""}">${{ concluida: "Concluído", enviando: "Enviando", agendada: "Agendado", pausada: "Pausado", rascunho: "Rascunho" }[c.status] || c.status}</span></div>
       <div class="muted tiny">${U.esc(c.modelo)} · ${new Date(c.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
@@ -2140,13 +2140,21 @@ function renderDisparos() {
       <div class="stats"><div><small>Enviadas</small><b>${c.enviadas || 0}/${c.total || 0}</b></div><div><small>Lidas</small><b>${pct(c.lidas, c.entregues)}</b></div><div><small>Responderam</small><b>${c.respondidas || 0}</b></div><div><small>Pedidos</small><b>${c.pedidos || 0}</b></div><div><small>Receita</small><b>${U.brl(c.receita)}</b></div><div><small>Custo</small><b>${U.brl(c.custo)}</b></div></div>
       ${(c.falhas || c.sairam) ? `<div class="muted tiny" style="margin-top:8px">${c.falhas || 0} não entregues · ${c.sairam || 0} pediram para sair</div>` : ""}
     </div>`).join("")}</div>` : `<div class="card empty"><h3>Nenhum disparo ainda</h3><p>Comece pelas revendedoras em risco: é onde mais volta pedido.</p></div>`}
+    ${webCampsHtml()}
     <p class="muted tiny" style="margin-top:16px">Venda atribuída: pedido da mesma cliente até ${S.settings.atribuicaoHoras}h depois da mensagem. Ajuste em Conexões › Configurações.</p>
   </div>`;
   $("#dNew").onclick = () => openNewCampaign();
+  $$("[data-wq]").forEach(b => b.onclick = () => runWebQueue(b.dataset.wq));
 }
+function webLinesList() { const w = S.settings.webLines || {}; return Object.keys(w).filter(id => !S.lines.some(l => l.id === id && l.status === "conectado")).map(id => Object.assign({ id }, w[id])); }
 async function openNewCampaign(preset) {
-  const lines = S.lines.filter(l => l.status === "conectado");
-  if (!lines.length) { toast("Conecte um número em Conexões primeiro"); return; }
+  const lines = S.lines.filter(l => l.status === "conectado"), webs = webLinesList();
+  if (!lines.length && !webs.length) { toast("Conecte um número em Conexões primeiro"); return; }
+  if (!lines.length) return openWebCampaign(preset);
+  if (webs.length) {
+    const via = await new Promise(res => { const m = modal("Novo disparo", `<p class="muted" style="margin-top:8px">Por onde vai sair?</p><div class="modes"><button class="mode" data-v="api"><div class="row">${icon("cloud")}<h3 class="grow">API (modelo aprovado)</h3></div><div class="muted tiny">Automático, com relatório de lidas e respostas</div></button><button class="mode" data-v="web"><div class="row">${icon("send")}<h3 class="grow">WhatsApp Web</h3></div><div class="muted tiny">Texto livre, você confirma cada envio</div></button></div>`, "", true); $$("[data-v]", m.el).forEach(b => b.onclick = () => { m.close(); res(b.dataset.v); }); $("[data-x]", m.el).addEventListener("click", () => res(null)); });
+    if (!via) return; if (via === "web") return openWebCampaign(preset);
+  }
   if (!CTX.loaded) await API.loadContext();
   const sets = audienceSets(preset && preset.list ? preset : null);
   const m = modal("Novo disparo", `<div class="empty tiny">Carregando…</div>`, `<span class="grow muted tiny" id="ncost" style="align-self:center"></span><button class="btn" id="ntest">Enviar teste para mim</button><button class="btn pri" id="ngo" disabled>Disparar</button>`, true);
@@ -2245,6 +2253,106 @@ async function openNewCampaign(preset) {
   if (preset && preset.sel) preset.sel.forEach(k => sets.some(s => s.k === k) && setSel(k));
 }
 
+/* ---------- Disparo pelo WhatsApp Web (sem API): fila assistida ----------
+   O CRM não envia sozinho: abre web.whatsapp.com/send com o texto pronto e a pessoa aperta Enter.
+   A fila fica neste navegador; o resumo (sem os números) vai para wa_settings/web_disparos. */
+const WQ = {
+  all() { try { return JSON.parse(localStorage.getItem("crm_webq") || "[]"); } catch (e) { return WQ._mem || []; } },
+  save(list) { WQ._mem = list; try { localStorage.setItem("crm_webq", JSON.stringify(list)); } catch (e) { } },
+  get(id) { return WQ.all().find(q => q.id === id); },
+  put(q) { const l = WQ.all().filter(x => x.id !== q.id); l.unshift(q); WQ.save(l.slice(0, 20)); },
+};
+function fillMsg(t, c) { const nome = (c.name || "").trim(); const pn = nome.split(/\s+/)[0] || ""; const cap = pn ? pn[0].toUpperCase() + pn.slice(1).toLowerCase() : ""; return t.replace(/\{primeiroNome\}/g, cap).replace(/\{nome\}/g, nome).replace(/\{atendente\}/g, (S.me && S.me.name || "").split(" ")[0]).replace(/  +/g, " ").replace(/ ([!,.?])/g, "$1"); }
+function webCampsHtml() {
+  const qs = WQ.all(); if (!qs.length) return "";
+  return `<h3 style="margin:22px 0 10px">Pelo WhatsApp Web</h3><div class="cards">${qs.map(q => { const ok = q.list.filter(x => x.st === "ok").length, pul = q.list.filter(x => x.st === "pulou").length, falta = q.list.length - ok - pul; return `<div class="card">
+    <div class="row"><h3 class="grow">${U.esc(q.nome)}</h3><span class="pill ${falta ? "amber" : "green"}">${falta ? "Em andamento" : "Concluído"}</span></div>
+    <div class="muted tiny">${U.esc(q.linhaNome || "")} · ${new Date(q.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
+    ${falta ? `<div class="bar" style="margin-top:10px"><i style="width:${Math.round((ok + pul) / q.list.length * 100)}%"></i></div>` : ""}
+    <div class="stats"><div><small>Enviadas</small><b>${ok}/${q.list.length}</b></div><div><small>Puladas</small><b>${pul}</b></div><div><small>Faltam</small><b>${falta}</b></div></div>
+    ${falta ? `<div class="row" style="margin-top:12px"><button class="btn pri sm" data-wq="${U.esc(q.id)}">Continuar envio</button></div>` : ""}</div>`; }).join("")}</div>`;
+}
+async function openWebCampaign(preset) {
+  const webs = webLinesList();
+  if (!CTX.loaded) await API.loadContext();
+  const sets = audienceSets(preset && preset.list ? preset : null);
+  const m = modal("Novo disparo · WhatsApp Web", `<div class="empty tiny">Carregando…</div>`, `<span class="grow muted tiny" id="wcnt" style="align-self:center"></span><button class="btn" data-x2>Cancelar</button><button class="btn pri" id="wgo" disabled>Montar fila</button>`, true);
+  $("[data-x2]", m.el).onclick = m.close;
+  let sel = [], paste = [];
+  const sec = (title, list) => list.length ? `<div class="sgh">${title}</div><div class="segs">${list.map(s => `<button class="seg" data-k="${U.esc(s.k)}" aria-pressed="false"><b>${s.list.length}</b>${U.esc(s.label)}<br><small>${U.esc(s.desc)}${s.blocked ? ` · ${s.blocked} pediram p/ sair` : ""}</small></button>`).join("")}</div>` : "";
+  $(".mb", m.el).innerHTML = `
+    <div class="banner" style="margin:6px 0 0">Sem API: o CRM abre cada conversa no WhatsApp Web com o texto pronto e <b>você aperta Enter</b>. Mande para quem já é cliente, até umas 50 por dia, para não arriscar o número.</div>
+    <label class="f" for="wn">Nome</label><input type="text" id="wn" placeholder="Ex.: Novidades novembro">
+    <label class="f">1. Para quem</label>
+    ${sec("Seleção", sets.filter(s => s.k === "preset"))}
+    ${sec("Jornada de compra", sets.filter(s => s.jor))}
+    ${sec("Seus grupos", sets.filter(s => s.k.startsWith("g:") && !s.jor))}
+    ${sec("Segmentos RFM", sets.filter(s => s.k.startsWith("s:")))}
+    <div class="sgh">Outros</div><div class="segs">${sets.filter(s => s.k === "quiz" || s.k === "todas").map(s => `<button class="seg" data-k="${s.k}" aria-pressed="false"><b>${s.list.length}</b>${U.esc(s.label)}<br><small>${U.esc(s.desc)}</small></button>`).join("")}<button class="seg" data-k="colar" aria-pressed="false"><b>✎</b>Colar números<br><small>um por linha</small></button></div>
+    <textarea id="wpaste" class="hide" rows="4" placeholder="22999998888&#10;21988887777" style="margin-top:8px"></textarea>
+    <label class="f" for="wmsg">2. Mensagem</label><textarea id="wmsg" rows="5" placeholder="Oi {primeiroNome}! Chegaram as novidades da semana ✨ Quer que eu te mande as fotos?"></textarea>
+    <p class="muted tiny">{primeiroNome} vira o primeiro nome de cada cliente. Texto pessoal e com pergunta tem mais resposta e menos bloqueio.</p>
+    <div class="phone" style="width:100%"><div class="m out"><div class="b" id="wprev"></div></div></div>
+    <label class="f" for="wl">Pelo número</label><select id="wl">${webs.map(l => `<option value="${U.esc(l.id)}">${U.esc(l.nome)} ${U.esc(l.numero || "")}</option>`).join("")}</select>
+    <p class="muted tiny" style="margin-top:12px">Quem pediu para não receber fica de fora e cada pessoa entra uma vez só.</p>`;
+  const lista = () => {
+    if (sel[0] === "colar") return paste.map(d => ({ tel: d, name: "" }));
+    const seen = new Set(), out = [];
+    sel.forEach(k => sets.find(x => x.k === k).list.forEach(c => { const key = U.telKey(c.tel); if (!key || seen.has(key)) return; seen.add(key); out.push({ tel: U.digits(c.tel), name: c.name || "" }); }));
+    return out;
+  };
+  const upd = () => {
+    const n = lista().length, msg = $("#wmsg", m.el).value.trim();
+    $("#wprev", m.el).innerHTML = `<div class="tx">${U.esc(fillMsg(msg || "…", lista()[0] || { name: "Mariana" }))}</div>`;
+    $("#wcnt", m.el).innerHTML = n ? `<b>${n}</b> contatos${n > 50 ? ` · <span style="color:var(--amber,#b45309)">acima de 50: faça em dias diferentes</span>` : ""}` : "Escolha o público";
+    $("#wgo", m.el).disabled = !n || !msg || !$("#wn", m.el).value.trim();
+  };
+  $$(".seg", m.el).forEach(b => b.onclick = () => {
+    const k = b.dataset.k;
+    if (k === "colar") sel = sel[0] === "colar" ? [] : ["colar"]; else { sel = sel.filter(x => x !== "colar"); sel.includes(k) ? sel = sel.filter(x => x !== k) : sel.push(k); }
+    $$(".seg", m.el).forEach(x => x.setAttribute("aria-pressed", sel.includes(x.dataset.k)));
+    $("#wpaste", m.el).classList.toggle("hide", sel[0] !== "colar");
+    const wn = $("#wn", m.el); if (!wn.dataset.touched && sel.length && sel[0] !== "colar") wn.value = (sel.length === 1 ? sets.find(s => s.k === sel[0]).label : sel.length + " públicos") + " · " + new Date().toLocaleDateString("pt-BR", { month: "long" });
+    upd();
+  });
+  $("#wpaste", m.el).oninput = e => { const blocked = new Set(S.convs.filter(c => c.optOut).map(c => U.telKey(c.id))); paste = [...new Set(e.target.value.split(/[\n,;]+/).map(U.digits).filter(d => d.length >= 10))].filter(d => !blocked.has(U.telKey(d))); upd(); };
+  $("#wn", m.el).oninput = e => { e.target.dataset.touched = "1"; upd(); };
+  $("#wmsg", m.el).oninput = upd;
+  $("#wgo", m.el).onclick = () => {
+    const l = webs.find(x => x.id === $("#wl", m.el).value) || webs[0];
+    const q = { id: "wq" + Date.now().toString(36), nome: $("#wn", m.el).value.trim(), msg: $("#wmsg", m.el).value.trim(), linha: l.id, linhaNome: l.nome, criadoEm: Date.now(), i: 0, list: lista().map(c => Object.assign(c, { st: "" })) };
+    WQ.put(q); m.close();
+    renderDisparos(); runWebQueue(q.id);
+  };
+  upd();
+  if (preset && preset.list) $(`[data-k="preset"]`, m.el) && $(`[data-k="preset"]`, m.el).click();
+}
+function runWebQueue(id) {
+  const q = WQ.get(id); if (!q) return toast("Fila não encontrada neste navegador");
+  const m = modal(q.nome, "", "", true);
+  const next = () => { const i = q.list.findIndex(x => !x.st); return i; };
+  const draw = () => {
+    const i = next(), ok = q.list.filter(x => x.st === "ok").length, pul = q.list.filter(x => x.st === "pulou").length;
+    if (i < 0) { $(".mb", m.el).innerHTML = `<div class="empty"><h3>Fila concluída ✓</h3><p>${ok} enviadas · ${pul} puladas.</p><p class="muted tiny">As respostas chegam no WhatsApp do número.</p></div>`; renderDisparos(); return; }
+    const c = q.list[i], txt = fillMsg(q.msg, c), tel = U.toWa(c.tel);
+    $(".mb", m.el).innerHTML = `
+      <div class="row tiny" style="margin-top:6px"><span class="grow">${ok + pul} de ${q.list.length} · ${ok} enviadas</span><span class="muted">${U.esc(q.linhaNome || "")}</span></div>
+      <div class="bar" style="margin:6px 0 14px"><i style="width:${Math.round((ok + pul) / q.list.length * 100)}%"></i></div>
+      <h3 style="margin:0">${U.esc(c.name || "Sem nome")}</h3><div class="muted">${U.esc(U.fmtPhone(c.tel))}</div>
+      <div class="phone" style="width:100%;margin-top:10px"><div class="m out"><div class="b"><div class="tx">${U.esc(txt)}</div></div></div></div>
+      <ol class="steps" style="margin-top:12px"><li>Clique em <b>Abrir no WhatsApp Web</b> (abre sempre na mesma aba).</li><li>Confira o texto e aperte <b>Enter</b> lá.</li><li>Volte aqui e clique em <b>Enviei, próxima</b>.</li></ol>
+      <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn pri" id="wqOpen">${icon("send")} Abrir no WhatsApp Web</button><button class="btn" id="wqOk">Enviei, próxima</button><button class="btn ghost" id="wqSkip">Pular</button><span class="grow"></span><button class="btn ghost sm" id="wqCopy">Copiar texto</button></div>
+      <p class="muted tiny" style="margin-top:12px">Dica: espere uns segundos entre um envio e outro. Se a pessoa não tiver WhatsApp, clique em Pular.</p>`;
+    const mark = st => { c.st = st; c.em = Date.now(); WQ.put(q); draw(); };
+    $("#wqOpen", m.el).onclick = () => { window.open(`https://web.whatsapp.com/send?phone=${tel}&text=${encodeURIComponent(txt)}`, "crm_waweb"); $("#wqOk", m.el).classList.add("pri"); };
+    $("#wqOk", m.el).onclick = () => mark("ok");
+    $("#wqSkip", m.el).onclick = () => mark("pulou");
+    $("#wqCopy", m.el).onclick = async () => { try { await navigator.clipboard.writeText(txt); toast("Texto copiado"); } catch (e) { toast("Não consegui copiar"); } };
+  };
+  $("[data-x]", m.el).addEventListener("click", () => renderDisparos());
+  draw();
+}
+
 /* =========================================================
    MODELOS + RESPOSTAS RÁPIDAS
    ========================================================= */
@@ -2311,10 +2419,11 @@ const LINE_SLOTS = [{ id: "ln_revenda", nome: "Revenda", sugestao: "(22) 99847-8
 function renderConexoes() {
   if (VIEW !== "conexoes") return;
   if ($(".ov")) return; // não redesenhar por baixo de um modal aberto
-  const slots = LINE_SLOTS.map(s => Object.assign({}, s, S.lines.find(l => l.id === s.id) || { status: "desconectado" }));
-  S.lines.filter(l => !LINE_SLOTS.some(s => s.id === l.id)).forEach(l => slots.push(l));
+  const base = LINE_SLOTS.concat((S.settings.linhasExtras || []).map(x => Object.assign({ extra: true }, x)));
+  const slots = base.map(s => Object.assign({}, s, S.lines.find(l => l.id === s.id) || { status: "desconectado" }));
+  S.lines.filter(l => !base.some(s => s.id === l.id)).forEach(l => slots.push(l));
   $("#view").innerHTML = `<div class="page">
-    <div class="ph"><div><h1>Conexões do WhatsApp</h1><p>Cada número pode entrar pela <b>API oficial</b> ou pela <b>API híbrida</b> (o número continua no WhatsApp Business do celular).</p></div></div>
+    <div class="ph"><div><h1>Conexões do WhatsApp</h1><p>Cada número pode entrar pela <b>API oficial</b>, pela <b>API híbrida</b> (continua no celular) ou só pelo <b>WhatsApp Web</b>, sem API, para disparos manuais.</p></div>${S.me.gestor ? `<button class="btn pri" id="lnAdd">${icon("plus")} Adicionar número</button>` : ""}</div>
     <div class="cards">${slots.map(l => lineCard(l)).join("")}</div>
     ${S.me.gestor ? `<div class="card" style="margin-top:16px"><div class="row" style="flex-wrap:wrap;gap:10px"><div class="grow"><h3>Pedidos da Yampi</h3><p class="muted tiny" style="margin:2px 0 0">${(window.CTX_SRC || {}).yampiEm ? `Última atualização há ${U.ago(Date.now() - window.CTX_SRC.yampiEm)} · ${(window.CTX_SRC.yampiN || 0).toLocaleString("pt-BR")} pedidos carregados. Atualiza sozinho a cada hora.` : "Ainda não importado. Os pedidos do site entram em Clientes e Indicadores (recorrência, cupons e frete)."}</p></div>
       <select id="ymes" style="width:auto" aria-label="Meses para importar"><option value="3">Últimos 3 meses</option><option value="6">Últimos 6 meses</option><option value="13" selected>Últimos 12 meses</option></select><button class="btn" id="yimp">Importar agora</button></div></div>` : ""}
@@ -2329,11 +2438,38 @@ function renderConexoes() {
       <p class="muted tiny">Valores em reais usados para estimar custo antes de disparar. A Meta cobra em dólar (Brasil: ~US$ 0,07 marketing · ~US$ 0,008 utilidade) e passa a cobrar em reais em 2026.</p></div>` : ""}
   </div>`;
   $$("[data-conn]").forEach(b => b.onclick = () => openConnect(slots.find(s => s.id === b.dataset.conn)));
+  const la = $("#lnAdd"); if (la) la.onclick = () => addLine();
+  $$("[data-rmln]").forEach(b => b.onclick = async () => { if (!await ask("Remover número", "Tirar este número da lista de conexões?", "Remover")) return; await API.saveSettings({ linhasExtras: (S.settings.linhasExtras || []).filter(x => x.id !== b.dataset.rmln) }); renderConexoes(); });
+  $$("[data-webon]").forEach(b => b.onclick = async () => { const w = Object.assign({}, S.settings.webLines || {}); delete w[b.dataset.webon]; await API.saveSettings({ webLines: w }); toast("WhatsApp Web desligado neste número"); renderConexoes(); });
   $$("[data-disc]").forEach(b => b.onclick = async () => { if (!await ask("Desconectar", "Desconectar este número do CRM? As conversas ficam salvas.", "Desconectar")) return; try { await API.disconnect(b.dataset.disc); toast("Desconectado"); } catch (e) { toast(errMsg(e)); } });
   const yi = $("#yimp"); if (yi) yi.onclick = async () => { yi.disabled = true; yi.textContent = "Importando…"; try { const n = +$("#ymes").value === 13 ? 12 : +$("#ymes").value; let tot = 0; for (let k = 0; k < n; k++) { yi.textContent = `Importando mês ${k + 1} de ${n}…`; const r = await API.importYampi(k); tot += r.gravados || 0; } toast(`${tot} pedidos da Yampi importados`); await API.loadContext(); renderConexoes(); } catch (e) { toast(errMsg(e), 6000); yi.disabled = false; yi.textContent = "Importar agora"; } };
   const ps = $("#psave"); if (ps) ps.onclick = async () => { await API.saveSettings({ precoMarketing: +$("#pm").value || 0, precoUtilidade: +$("#pu").value || 0, atribuicaoHoras: +$("#pa").value || 72, metaAppId: $("#pmeta").value.trim(), metaConfigId: $("#pcfg").value.trim() }); toast("Configurações salvas"); };
 }
+function addLine() {
+  const m = modal("Adicionar número", `<label class="f" for="lnn">Nome</label><input type="text" id="lnn" placeholder="Ex.: Atacado 2, Loja física">
+    <label class="f" for="lnt">Número com DDD</label><input type="tel" id="lnt" placeholder="(22) 99999-9999">
+    <p class="muted tiny">Depois de adicionar, clique em <b>Conectar</b> no cartão do número e escolha API oficial, híbrida ou WhatsApp Web.</p>`,
+    `<button class="btn" data-x2>Cancelar</button><button class="btn pri" id="lnok">Adicionar</button>`);
+  $("[data-x2]", m.el).onclick = m.close;
+  $("#lnok", m.el).onclick = async () => {
+    const nome = $("#lnn", m.el).value.trim(), tel = U.digits($("#lnt", m.el).value);
+    if (!nome) return toast("Dê um nome para o número"); if (tel.length < 10) return toast("Número com DDD");
+    let id = "ln_" + nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24);
+    if (id.length < 5) id = "ln_n" + tel.slice(-6);
+    const ex = S.settings.linhasExtras || [];
+    if (LINE_SLOTS.concat(ex).some(x => x.id === id)) id += "_" + tel.slice(-4);
+    const fmt = U.fmtPhone(tel);
+    try { await API.saveSettings({ linhasExtras: ex.concat([{ id, nome, sugestao: fmt }]) }); m.close(); toast("Número adicionado"); renderConexoes(); } catch (e) { toast("Não salvou: " + e.message); }
+  };
+}
 function lineCard(l) {
+  const web = !(l.status === "conectado") && (S.settings.webLines || {})[l.id];
+  if (web) return `<div class="card">
+    <div class="row"><h3 class="grow">${U.esc(l.nome)}</h3><span class="pill">${icon("send")} WhatsApp Web</span><span class="pill green"><span class="dot"></span>Pronto</span></div>
+    <div class="muted" style="margin-top:2px">${U.esc(l.numero || l.sugestao || "")}</div>
+    <p class="muted tiny" style="margin:10px 0 0">Sem API: o CRM monta a fila e abre cada conversa no WhatsApp Web com a mensagem pronta; você confere e aperta Enter. As respostas ficam no WhatsApp, não entram nas Conversas do CRM.</p>
+    <div class="row" style="margin-top:14px"><button class="btn sm" data-webon="${U.esc(l.id)}">Desligar WhatsApp Web</button><button class="btn sm" data-conn="${U.esc(l.id)}">Trocar para API</button></div>
+  </div>`;
   const on = l.status === "conectado", busy = l.status === "conectando";
   const modo = l.modo === "hibrida" ? `<span class="pill gold">${icon("phone")} Híbrida</span>` : l.modo === "oficial" ? `<span class="pill blue">${icon("cloud")} Oficial</span>` : "";
   const h = l.historico;
@@ -2344,7 +2480,7 @@ function lineCard(l) {
     ${on ? `<div class="stats"><div><small>Qualidade</small><b>${l.qualidade === "verde" || l.qualidade === "GREEN" ? "Boa" : l.qualidade === "amarela" || l.qualidade === "YELLOW" ? "Atenção" : l.qualidade ? "Baixa" : "—"}</b></div><div><small>Limite de envio</small><b style="font-size:14px">${U.esc(l.limite || "—")}</b></div><div><small>Desde</small><b style="font-size:14px">${l.conectadoEm ? new Date(l.conectadoEm).toLocaleDateString("pt-BR") : "—"}</b></div></div>` : ""}
     ${h ? `<div style="margin-top:12px"><div class="row tiny"><span class="grow">${h.status === "concluido" ? "✓ Histórico importado do celular" : h.status === "erro" ? "⚠ Importação do histórico falhou" : "Importando histórico do celular…"}</span><span class="muted">${(h.conversas || 0).toLocaleString("pt-BR")} conversas · ${(h.mensagens || 0).toLocaleString("pt-BR")} mensagens</span></div>${h.status === "importando" ? `<div class="bar" style="margin-top:6px"><i style="width:${h.pct || 5}%"></i></div>` : ""}</div>` : ""}
     ${appWarn ? `<div class="banner warn" style="margin:12px 0 0">Abra o WhatsApp Business no celular: na híbrida ele precisa ser aberto pelo menos a cada 13 dias ou o número desconecta.</div>` : ""}
-    <div class="row" style="margin-top:14px">${on ? `<button class="btn sm danger" data-disc="${U.esc(l.id)}">Desconectar</button>` : `<button class="btn pri" data-conn="${U.esc(l.id)}" ${busy ? "disabled" : ""}>${icon("plug")} Conectar</button>`}</div>
+    <div class="row" style="margin-top:14px">${on ? `<button class="btn sm danger" data-disc="${U.esc(l.id)}">Desconectar</button>` : `<button class="btn pri" data-conn="${U.esc(l.id)}" ${busy ? "disabled" : ""}>${icon("plug")} Conectar</button>${l.extra && S.me.gestor ? `<button class="btn sm ghost" data-rmln="${U.esc(l.id)}">Remover</button>` : ""}`}</div>
   </div>`;
 }
 function openConnect(slot) {
@@ -2363,8 +2499,17 @@ function openConnect(slot) {
           <div class="muted tiny">Número só no CRM (sem o app no celular)</div>
           <ul><li>Mais volume e estabilidade para disparos</li><li>Vários atendentes sem depender de um celular</li><li>Melhor para número novo dedicado</li>
           <li class="c">O número sai do app do celular</li><li class="c">Conversas antigas não vêm</li></ul></button>
+        <button class="mode" data-m="web" aria-pressed="${modo === "web"}"><div class="row">${icon("send")}<h3 class="grow">WhatsApp Web</h3><span class="pill">sem API</span></div>
+          <div class="muted tiny">Disparo manual assistido, sem cadastro na Meta</div>
+          <ul><li>Funciona agora, com o número como está</li><li>Sem custo por mensagem</li><li>O CRM abre cada conversa com a mensagem pronta</li>
+          <li class="c">Você aperta Enter em cada uma</li><li class="c">Respostas não entram no CRM</li><li class="c">Volume alto pode bloquear o número</li></ul></button>
       </div>
-      ${modo === "hibrida" ? `
+      ${modo === "web" ? `
+        <h3 style="margin-top:6px">Como funciona</h3>
+        <ol class="steps"><li>Deixe o <b>WhatsApp Web</b> (web.whatsapp.com) aberto e conectado com o número <b>${U.esc(slot.sugestao || slot.numero || "")}</b> neste computador.</li>
+        <li>Em <b>Disparos › Novo disparo</b>, escolha o público e escreva a mensagem.</li>
+        <li>O CRM abre uma conversa por vez com o texto pronto. Confira e aperta <b>Enter</b>; depois clique em “Enviei, próxima”.</li></ol>
+        <div class="banner warn" style="margin:8px 0 0">Para não ter o número bloqueado: mande só para clientes que já falaram com você, no máximo umas 50 por dia, com intervalo, e personalize o texto. O WhatsApp não permite automação sem API — por isso o envio é sempre você quem confirma.</div>` : modo === "hibrida" ? `
         <h3 style="margin-top:6px">Antes de conectar</h3>
         <ol class="steps"><li>O número <b>${U.esc(slot.sugestao || "")}</b> precisa estar no <b>WhatsApp Business</b> (não o comum), atualizado e em uso há algum tempo.</li>
         <li>Deixe o celular com internet e o app aberto durante a conexão.</li>
@@ -2373,15 +2518,19 @@ function openConnect(slot) {
       : `<h3 style="margin-top:6px">Como conectar</h3>
         <div class="row" style="gap:16px;margin:8px 0"><label class="row" style="gap:5px"><input type="radio" name="via" value="meta" ${via === "meta" ? "checked" : ""}> Pela tela da Meta (recomendado)</label><label class="row" style="gap:5px"><input type="radio" name="via" value="manual" ${via === "manual" ? "checked" : ""}> Manual (token)</label></div>
         ${via === "manual" ? `<label class="f" for="mpn">Phone number ID</label><input type="text" id="mpn"><label class="f" for="mwb">WhatsApp Business Account ID</label><input type="text" id="mwb"><label class="f" for="mtk">Token permanente (usuário do sistema)</label><input type="password" id="mtk" autocomplete="off"><p class="muted tiny">O token vai direto para o servidor e não fica no navegador.</p>` : `<ol class="steps"><li>Use um número que <b>não</b> esteja em nenhum WhatsApp (ou apague a conta do app antes).</li><li>Na tela da Meta, crie ou escolha a conta do WhatsApp Business e confirme o número por SMS.</li></ol>`}`}
-      ${!DEMO && via === "meta" && !(S.settings.metaAppId && S.settings.metaConfigId) ? `<div class="banner warn" style="margin:8px 0 0">Falta configurar o App ID e o Configuration ID da Meta (Conexões › Configurações).</div>` : ""}`;
+      ${!DEMO && modo !== "web" && via === "meta" && !(S.settings.metaAppId && S.settings.metaConfigId) ? `<div class="banner warn" style="margin:8px 0 0">Falta configurar o App ID e o Configuration ID da Meta (Conexões › Configurações).</div>` : ""}`;
     $$(".mode", m.el).forEach(b => b.onclick = () => { modo = b.dataset.m; if (modo === "hibrida") via = "meta"; draw(); });
     $$("[name=via]", m.el).forEach(r => r.onchange = () => { via = r.value; draw(); });
-    $("#cgo", m.el).textContent = via === "manual" && modo === "oficial" ? "Conectar" : "Abrir tela da Meta";
+    $("#cgo", m.el).textContent = modo === "web" ? "Usar WhatsApp Web" : via === "manual" && modo === "oficial" ? "Conectar" : "Abrir tela da Meta";
   };
   draw();
   $("#cgo", m.el).onclick = async () => {
     const b = $("#cgo", m.el); b.disabled = true; b.textContent = "Conectando…";
     try {
+      if (modo === "web") {
+        await API.saveSettings({ webLines: Object.assign({}, S.settings.webLines || {}, { [slot.id]: { nome: slot.nome, numero: slot.sugestao || slot.numero || "", desde: Date.now() } }) });
+        m.close(); toast("Pronto! Faça os disparos em Disparos › Novo disparo", 4000); renderConexoes(); return;
+      }
       if (modo === "oficial" && via === "manual") {
         const pn = $("#mpn", m.el).value.trim(), wb = $("#mwb", m.el).value.trim(), tk = $("#mtk", m.el).value.trim();
         if (!pn || !wb || !tk) throw new Error("Preencha os três campos");
