@@ -2311,7 +2311,7 @@ function renderCanvas(host, opts = {}) {
   const p = ST.project;
   const v = Object.assign({ x: 60, y: 40, z: 0.9 }, loadView() || {});
   host.innerHTML = `<div class="cv" id="cv" tabindex="0" aria-label="Fluxo do quiz. Arraste o fundo para mover, use a roda do mouse para zoom.">
-    ${opts.readonly ? "" : `<div class="cv-tools"><button class="btn primary" id="addPage">${icon("pagina", 16)}Nova página</button><button class="btn sec" id="addFn">${icon("zap", 16)}Nova função</button></div>`}
+    ${opts.readonly ? "" : `<div class="cv-tools"><button class="btn primary" id="addPage">${icon("pagina", 16)}Nova página</button><button class="btn sec" id="addFn">${icon("zap", 16)}Nova função</button>${xquizUrls(p).length ? `<button class="btn sec" id="migImg" title="As imagens ainda estão no servidor do XQuiz e somem quando ele for desligado">${icon("alerta", 16)}Trazer ${xquizUrls(p).length} imagens do XQuiz</button>` : ""}</div>`}
     ${opts.toolbar || ""}
     <div class="cv-zoom"><button class="btn icon sm" id="zIn" aria-label="Aproximar">${icon("mais", 16)}</button><button class="btn icon sm" id="zOut" aria-label="Afastar">${icon("menos", 16)}</button><button class="btn icon sm" id="zFit" aria-label="Enquadrar tudo">${icon("caixa", 15)}</button></div>
     ${opts.readonly ? "" : `<div class="cv-hint">Dois cliques numa página para editar · arraste as bolinhas para ligar</div>`}
@@ -2400,6 +2400,7 @@ function renderCanvas(host, opts = {}) {
     if (opts.readonly || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
     if ((e.key === "Delete" || e.key === "Backspace") && sel) { const n = p.flow.nodes.find(x => x.id === sel); if (n) delNode(n); else { p.flow.edges = p.flow.edges.filter(x => x.id !== sel); sel = null; markDirty(); drawNodes(); } }
   });
+  if (!opts.readonly && $("#migImg")) $("#migImg").onclick = () => migrateXQuizImages($("#migImg"), drawNodes);
   if (!opts.readonly) {
     $("#addPage").onclick = () => picker("Nova página", "pagina", PAGE_TPL_CATS.map(([c, nome]) => [nome, PAGE_TPLS.filter(t => t.cat === c).map(t => ({ label: t.nome, desc: t.desc, icon: t.icon, novo: t.novo, run: () => { const n = addNode("page", null, t); editNode(n); } }))]));
     $("#addFn").onclick = () => picker("Nova função", "zap", FN_CATS.map(([c, nome, cor]) => [nome, Object.entries(FUNCS).filter(([, F]) => F.cat === c).map(([k, F]) => ({ label: F.label, desc: F.desc, icon: F.icon, novo: F.novo, color: cor, run: () => { const n = addNode("fn", k); editNode(n); } }))]));
@@ -2438,6 +2439,29 @@ function renderCanvas(host, opts = {}) {
   if (!loadView() || opts.fitOnOpen) requestAnimationFrame(fit);
   window.addEventListener("resize", drawEdges, { once: true });
   return { redraw: drawNodes, fit };
+}
+// imagens copiadas do XQuiz que ainda apontam para o servidor deles
+function xquizUrls(p) { return [...new Set((JSON.stringify([p.flow, p.tema, p.config]).match(/https:\/\/cdn\.xquiz\.co\/images\/[0-9a-f-]{36}/g) || []))]; }
+async function migrateXQuizImages(btn, redraw) {
+  const p = ST.project, urls = xquizUrls(p); if (!urls.length) return;
+  if (!await confirmBox("Trazer imagens do XQuiz", `Vou baixar as <b>${urls.length}</b> imagens que ainda estão no servidor do XQuiz e guardar no armazenamento da Veraneio. Depois disso o quiz não depende mais do XQuiz. Leva cerca de 1 minuto; não feche a aba.`, "Trazer imagens")) return;
+  btn.disabled = true; const map = {}; let ok = 0, fail = 0, i = 0;
+  const one = async u => {
+    try {
+      const r = await fetch(u); if (!r.ok) throw new Error(r.status);
+      const b = await r.blob(); const type = b.type && b.type.startsWith("image/") ? b.type : "image/webp";
+      const f = new File([b], u.split("/").pop() + "." + (type.split("/")[1] || "webp").replace("jpeg", "jpg"), { type });
+      map[u] = await DB.upload(f, p.id); ok++;
+    } catch (e) { fail++; }
+    btn.textContent = `Trazendo imagens… ${ok + fail}/${urls.length}`;
+  };
+  const worker = async () => { while (i < urls.length) await one(urls[i++]); };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  let js = JSON.stringify({ flow: p.flow, tema: p.tema, config: p.config });
+  Object.entries(map).forEach(([a, b]) => { js = js.split(a).join(b); });
+  Object.assign(p, JSON.parse(js)); markDirty(); await saveNow();
+  toast(fail ? `${ok} imagens trazidas; ${fail} falharam (tente de novo)` : `Pronto: ${ok} imagens agora estão no servidor da Veraneio. Publique de novo para valer no link.`, 6000);
+  renderProject(currentTab());
 }
 function pruneEdges(n) { const ids = new Set(nodeOutputs(n).map(o => o.id)); const before = ST.project.flow.edges.length; ST.project.flow.edges = ST.project.flow.edges.filter(e => e.from !== n.id || ids.has(e.handle)); if (ST.project.flow.edges.length !== before) markDirty(); }
 function mkBlock(type) { return { id: U.uid("b"), type, props: BLOCKS[type].def() }; }
