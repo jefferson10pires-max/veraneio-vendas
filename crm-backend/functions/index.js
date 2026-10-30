@@ -19,19 +19,21 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
-const admin = require("firebase-admin");
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const { getStorage } = require("firebase-admin/storage");
 const crypto = require("crypto");
 const W = require("./lib/wa");
 
-admin.initializeApp();
-const db = admin.firestore();
-const bucket = () => admin.storage().bucket();
+initializeApp();
+const db = getFirestore();
+const bucket = () => getStorage().bucket();
 setGlobalOptions({ region: "southamerica-east1", maxInstances: 10 });
 
-const META_APP_ID = defineString("META_APP_ID", { default: "" });
+const META_APP_ID = defineString("META_APP_ID", { default: "pendente" });
 const META_APP_SECRET = defineSecret("META_APP_SECRET");
 const WA_VERIFY_TOKEN = defineSecret("WA_VERIFY_TOKEN");
-const YAMPI_ALIAS = defineString("YAMPI_ALIAS", { default: "" });
+const YAMPI_ALIAS = defineSecret("YAMPI_ALIAS"); // mesmos segredos que o conector Veraneio já usa
 const YAMPI_TOKEN = defineSecret("YAMPI_TOKEN");
 const YAMPI_SECRET = defineSecret("YAMPI_SECRET");
 const GRAPH = "https://graph.facebook.com/v23.0";
@@ -133,14 +135,14 @@ async function saveInbound(line, wa, contactName, msg, origin = "crm") {
     if (!cur.name && contactName) patch.name = contactName;
     if (contactName) patch.perfilNome = contactName;
     if (newer) Object.assign(patch, { lastTs: msg.ts, lastText: W.previewText(msg), lastDir: "in", status: "aberta", waitingSince: cur.lastDir === "in" && cur.waitingSince ? cur.waitingSince : msg.ts });
-    if (origin !== "historico") patch.unread = admin.firestore.FieldValue.increment(1);
+    if (origin !== "historico") patch.unread = FieldValue.increment(1);
     if (optOut) Object.assign(patch, { optOut: true, optOutEm: msg.ts, optOutMotivo: msg.text });
     if (!c.exists) Object.assign(patch, { tags: [], notes: "", criadoEm: Date.now() });
     tx.set(cref, patch, { merge: true });
     // campanha: conta resposta e saída uma vez por cliente
     if (d && d.exists && !d.data().respondeuEm) {
       tx.set(dref, { respondeuEm: msg.ts, saiu: optOut || null }, { merge: true });
-      tx.set(db.collection("wa_campaigns").doc(camp.id), { respondidas: admin.firestore.FieldValue.increment(1), sairam: admin.firestore.FieldValue.increment(optOut ? 1 : 0) }, { merge: true });
+      tx.set(db.collection("wa_campaigns").doc(camp.id), { respondidas: FieldValue.increment(1), sairam: FieldValue.increment(optOut ? 1 : 0) }, { merge: true });
     }
   });
 }
@@ -166,7 +168,7 @@ async function applyStatus(ev, prices) {
     const patch = { status: nx }; if (nx === "failed") patch.error = ev.error || "Não entregue";
     tx.set(mref, patch, { merge: true });
     if (campaignId) {
-      const inc = admin.firestore.FieldValue.increment;
+      const inc = FieldValue.increment;
       const c = {};
       if (nx === "failed") c.falhas = inc(1);
       if (["delivered", "read"].includes(nx) && !["delivered", "read"].includes(cur)) c.entregues = inc(1);
@@ -240,7 +242,7 @@ async function saveHistory(line, ev) {
       tx.set(cref, patch, { merge: true });
     });
   }
-  const inc = admin.firestore.FieldValue.increment;
+  const inc = FieldValue.increment;
   const status = ev.error ? "erro" : ev.progress >= 100 ? "concluido" : "importando";
   await db.collection("wa_lines").doc(line.id).set({ historico: { status, pct: ev.progress || 0, conversas: inc(convs), mensagens: inc(msgs), erro: ev.error || null, em: Date.now() } }, { merge: true });
 }
@@ -385,10 +387,10 @@ exports.waFila = onSchedule({ schedule: "every 1 minutes", timeoutSeconds: 120, 
         await saveOutbound(convId, x.wa, wamid, { type: "template", template: { name: c.modelo, buttons: tpl.buttons || null }, text: tpl.body.replace(/\{\{(\d+)\}\}/g, (m, i) => vars[i - 1] || m), status: "pending", origin: "campanha", campanha: c.nome, campanhaId: cdoc.id, ts: Date.now() },
           Object.assign({ line: line.id, lastCampaign: { id: cdoc.id, ts: Date.now(), destId: dd.id } }, exists ? {} : { name: x.name, tags: [], notes: "", status: "encerrada", criadoEm: Date.now(), windowUntil: 0 }));
         await dd.ref.set({ status: "enviada", wamid, convId, em: Date.now() }, { merge: true });
-        await cdoc.ref.update({ enviadas: admin.firestore.FieldValue.increment(1) });
+        await cdoc.ref.update({ enviadas: FieldValue.increment(1) });
       } catch (e) {
         await dd.ref.set({ status: "falha", erro: e.message }, { merge: true });
-        await cdoc.ref.update({ falhas: admin.firestore.FieldValue.increment(1) });
+        await cdoc.ref.update({ falhas: FieldValue.increment(1) });
         if ([131048, 131031, 190, 368].includes(e.code)) { await cdoc.ref.update({ status: "pausada", motivo: e.message }); break; } // proteger o número
         if (e.code === 130429) break; // limite por segundo: continua no próximo minuto
       }
@@ -413,14 +415,14 @@ exports.waAtribuir = onSchedule({ schedule: "every 10 minutes", timeoutSeconds: 
     await db.runTransaction(async tx => {
       if ((await tx.get(aref)).exists) return;
       tx.set(aref, { campaignId: lc.id, valor: Number(v.value) || 0 });
-      tx.set(db.collection("wa_campaigns").doc(lc.id), { pedidos: admin.firestore.FieldValue.increment(1), receita: admin.firestore.FieldValue.increment(Number(v.value) || 0) }, { merge: true });
+      tx.set(db.collection("wa_campaigns").doc(lc.id), { pedidos: FieldValue.increment(1), receita: FieldValue.increment(Number(v.value) || 0) }, { merge: true });
     });
   }
   await mark.set({ ate: nowIso });
 });
 
 /* ================= CATÁLOGO (Yampi) ================= */
-exports.waCatalogo = onCall({ secrets: [YAMPI_TOKEN, YAMPI_SECRET] }, async req => {
+exports.waCatalogo = onCall({ secrets: [YAMPI_ALIAS, YAMPI_TOKEN, YAMPI_SECRET] }, async req => {
   await member(req);
   if (!YAMPI_ALIAS.value()) throw new HttpsError("failed-precondition", "Configure a Yampi (YAMPI_ALIAS, YAMPI_TOKEN, YAMPI_SECRET).");
   const q = String((req.data && req.data.q) || "").slice(0, 60);
@@ -440,22 +442,26 @@ exports.waCatalogo = onCall({ secrets: [YAMPI_TOKEN, YAMPI_SECRET] }, async req 
 
 /* ================= PEDIDOS DA YAMPI (para recorrência, cupons e frete) ================= */
 const Y = require("./lib/yampi");
+let yampiInclude = "customer,status,items,shipping_address,promocode,transactions";
 async function yampiPage(page, extra = {}) {
   const url = new URL(`https://api.dooki.com.br/v2/${YAMPI_ALIAS.value()}/orders`);
-  url.searchParams.set("include", "items,customer,shipping_address,promocode,transactions");
+  url.searchParams.set("include", yampiInclude);
   url.searchParams.set("limit", "50"); url.searchParams.set("page", String(page));
   url.searchParams.set("orderBy", "id"); url.searchParams.set("sortedBy", "desc");
   Object.entries(extra).forEach(([k, v]) => url.searchParams.set(k, v));
   const r = await fetch(url, { headers: { "User-Token": YAMPI_TOKEN.value(), "User-Secret-Key": YAMPI_SECRET.value(), Accept: "application/json" } });
   if (r.status === 429) { await new Promise(x => setTimeout(x, 3000)); return yampiPage(page, extra); }
+  if ((r.status === 400 || r.status === 422) && yampiInclude.includes("promocode")) { logger.warn("Yampi recusou include promocode/transactions; seguindo sem eles"); yampiInclude = "customer,status,items,shipping_address"; return yampiPage(page, extra); }
   if (!r.ok) throw new Error("Yampi respondeu " + r.status);
   return r.json();
 }
 /** Lê da mais nova para a mais antiga até passar da data limite e grava em yampi_orders. */
-async function yampiSync(desdeMs, maxPaginas) {
+async function yampiSync(desdeMs, maxPaginas, ateMs) {
   let page = 1, gravados = 0, fim = false;
+  const dia = t => new Date(t - 3 * 3600e3).toISOString().slice(0, 10);
+  const filtro = { date: `created_at:${dia(desdeMs)}|${dia((ateMs || Date.now()) + 864e5)}` };
   while (!fim && page <= maxPaginas) {
-    const j = await yampiPage(page);
+    const j = await yampiPage(page, filtro);
     const list = (j.data || []).map(Y.normalizeYampiOrder);
     if (!list.length) break;
     const b = db.batch();
@@ -469,14 +475,21 @@ async function yampiSync(desdeMs, maxPaginas) {
   return { gravados, paginas: page - 1 };
 }
 // a cada hora revisa os últimos 10 dias (pedidos novos e mudanças de status)
-exports.waYampiSync = onSchedule({ schedule: "every 60 minutes", timeoutSeconds: 300, secrets: [YAMPI_TOKEN, YAMPI_SECRET] }, async () => {
+exports.waYampiSync = onSchedule({ schedule: "every 60 minutes", timeoutSeconds: 300, secrets: [YAMPI_ALIAS, YAMPI_TOKEN, YAMPI_SECRET] }, async () => {
   if (!YAMPI_ALIAS.value()) return;
   await yampiSync(Date.now() - 10 * 864e5, 40);
 });
 // importação inicial: gestor escolhe quantos meses (até 13)
-exports.waYampiImportar = onCall({ timeoutSeconds: 540, memory: "512MiB", secrets: [YAMPI_TOKEN, YAMPI_SECRET] }, async req => {
+exports.waYampiImportar = onCall({ timeoutSeconds: 540, memory: "512MiB", secrets: [YAMPI_ALIAS, YAMPI_TOKEN, YAMPI_SECRET] }, async req => {
   await member(req, true);
   if (!YAMPI_ALIAS.value()) throw new HttpsError("failed-precondition", "Configure a Yampi (YAMPI_ALIAS, YAMPI_TOKEN, YAMPI_SECRET).");
-  const meses = Math.min(13, Math.max(1, Number(req.data && req.data.meses) || 3));
+  const d = req.data || {};
+  // em partes: o CRM pede um mês por vez (mesAtras 0 = últimos 31 dias, 1 = o mês antes…) para não estourar o tempo
+  if (d.mesAtras !== undefined) {
+    const k = Math.min(12, Math.max(0, Number(d.mesAtras) || 0));
+    const ate = Date.now() - k * 31 * 864e5;
+    return yampiSync(ate - 31 * 864e5, 120, ate);
+  }
+  const meses = Math.min(13, Math.max(1, Number(d.meses) || 3));
   return yampiSync(Date.now() - meses * 31 * 864e5, 400);
 });

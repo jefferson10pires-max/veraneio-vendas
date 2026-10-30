@@ -738,7 +738,7 @@ const Real = {
   disconnect(line) { return this.call("waDesconectar", { line }); },
   startCampaign(data) { return this.call("waDisparo", data); },
   newConversation(data) { return this.call("waEnviar", data); },
-  importYampi(meses) { return this.call("waYampiImportar", { meses }); },
+  importYampi(mesAtras) { return this.call("waYampiImportar", { mesAtras }); },
 };
 
 /* pedido da Yampi no mesmo formato das vendas do WhatsApp */
@@ -979,7 +979,7 @@ const Demo = (() => {
     },
     async upload(file) { return new Promise(r => { const fr = new FileReader(); fr.onload = () => r({ url: fr.result, mime: file.type || "application/octet-stream", name: file.name, size: file.size }); fr.readAsDataURL(file); }); },
     async loadContext() { window.CTX_SRC = { yampiEm: now - 40 * 60000, yampiN: yOut.length }; buildContext(allSales, leads, yOut); },
-    async importYampi(meses) { await new Promise(r => setTimeout(r, 900)); return { gravados: yOut.length, paginas: Math.ceil(yOut.length / 50) }; },
+    async importYampi(mesAtras) { await new Promise(r => setTimeout(r, 300)); return { gravados: mesAtras ? 0 : yOut.length, paginas: 1 }; },
     watchGroups(cb) { setTimeout(emitGroups, 0); return sub(L.groups, cb); },
     async saveGroup(g) { const i = groups.findIndex(x => x.id === g.id); i >= 0 ? groups[i] = g : groups.push(g); emitGroups(); },
     async deleteGroup(id) { const i = groups.findIndex(x => x.id === id); if (i >= 0) groups.splice(i, 1); emitGroups(); },
@@ -2320,7 +2320,7 @@ function renderConexoes() {
   </div>`;
   $$("[data-conn]").forEach(b => b.onclick = () => openConnect(slots.find(s => s.id === b.dataset.conn)));
   $$("[data-disc]").forEach(b => b.onclick = async () => { if (!await ask("Desconectar", "Desconectar este número do CRM? As conversas ficam salvas.", "Desconectar")) return; try { await API.disconnect(b.dataset.disc); toast("Desconectado"); } catch (e) { toast(errMsg(e)); } });
-  const yi = $("#yimp"); if (yi) yi.onclick = async () => { yi.disabled = true; yi.textContent = "Importando…"; try { const r = await API.importYampi(+$("#ymes").value); toast(`${r.gravados} pedidos da Yampi importados`); await API.loadContext(); renderConexoes(); } catch (e) { toast(errMsg(e), 6000); yi.disabled = false; yi.textContent = "Importar agora"; } };
+  const yi = $("#yimp"); if (yi) yi.onclick = async () => { yi.disabled = true; yi.textContent = "Importando…"; try { const n = +$("#ymes").value === 13 ? 12 : +$("#ymes").value; let tot = 0; for (let k = 0; k < n; k++) { yi.textContent = `Importando mês ${k + 1} de ${n}…`; const r = await API.importYampi(k); tot += r.gravados || 0; } toast(`${tot} pedidos da Yampi importados`); await API.loadContext(); renderConexoes(); } catch (e) { toast(errMsg(e), 6000); yi.disabled = false; yi.textContent = "Importar agora"; } };
   const ps = $("#psave"); if (ps) ps.onclick = async () => { await API.saveSettings({ precoMarketing: +$("#pm").value || 0, precoUtilidade: +$("#pu").value || 0, atribuicaoHoras: +$("#pa").value || 72, metaAppId: $("#pmeta").value.trim(), metaConfigId: $("#pcfg").value.trim() }); toast("Configurações salvas"); };
 }
 function lineCard(l) {
