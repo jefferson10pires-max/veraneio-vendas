@@ -632,6 +632,8 @@ const U = {
 // ---------- ícones (traço 1.75, desenhados para este projeto) ----------
 const ICON_PATHS = {
   voltar: '<path d="M15 18l-6-6 6-6"/>',
+  desfazer: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
+  refazer: '<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/>',
   check: '<path d="M20 6L9 17l-5-5"/>',
   escudo: '<path d="M12 3l7 3v6c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/>',
   estrela: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
@@ -797,7 +799,8 @@ const BLOCKS = {
     render: (p, ctx, b) => {
       const ar = { "9:16": "9/16", "16:9": "16/9", "1:1": "1/1", "4:5": "4/5" }[p.formato] || "16/9";
       const box = `style="width:${+p.largura || 100}%;max-width:${p.formato === "9:16" ? "340px" : "100%"};border-radius:${+p.raio || 0}px;aspect-ratio:${ar}"`;
-      if (p.fonte === "embed") return p.embed ? `<div class="b-vid" data-embed>${ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Vídeo incorporado (aparece no quiz publicado)</span></div>` : p.embed}</div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o código do player</span></div>` : "");
+      if (p.fonte === "embed") { const ifr = (String(p.embed || "").match(/<iframe[^>]+src=["'](https:\/\/[^"']+)["']/i) || [])[1];
+        return p.embed ? `<div class="b-vid" data-embed>${ctx.mode === "edit" ? (ifr ? `<iframe src="${U.esc(ifr)}" title="Vídeo" style="width:100%;aspect-ratio:${p.formato === "9:16" ? "9/16" : "16/9"};border:0;border-radius:var(--q-radius)" allow="autoplay; fullscreen; picture-in-picture" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>` : `<div class="b-vazio">${icon("video", 28)}<span>Player por script (ex.: VTurb): por segurança ele só roda no quiz publicado</span></div>`) : p.embed}</div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o código do player</span></div>` : ""); }
       if (p.fonte === "youtube") {
         const m = String(p.url || "").match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/);
         if (!m) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("video", 28)}<span>Cole o link do YouTube</span></div>` : "";
@@ -1297,7 +1300,9 @@ function createRunner(opts) {
         const body = JSON.stringify({ token: p.token || undefined, quiz: project.nome, sessao: S.id, variaveis: pick, respostas: p.enviar === "lista" ? undefined : S.respostas, carrinho: S.carrinho, origem: S.origem || {}, enviadoEm: U.now() });
         const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
         if (ctl) setTimeout(() => ctl.abort(), 4000);
-        try { fetch(p.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body, keepalive: true, mode: "cors", signal: ctl && ctl.signal }).catch(() => { }); } catch (e) { }
+        // se a rede falhar, tenta mais uma vez depois de 2 s (sem travar a cliente)
+        const send = (again) => { try { fetch(p.url, { method: "POST", headers: { "Content-Type": "text/plain;charset=UTF-8" }, body, keepalive: true, mode: "cors", signal: !again && ctl ? ctl.signal : undefined }).then(r => { if (again && r.type !== "opaque" && r.status >= 500) setTimeout(() => send(false), 2000); }).catch(() => { if (again) setTimeout(() => send(false), 2000); }); } catch (e) { } };
+        send(true);
       } else if (mode === "preview") toastIn(root, "Webhook seria enviado para " + (p.url || "(sem URL)"));
       return follow(n.id, "next");
     }
@@ -1999,7 +2004,7 @@ async function openProject(id) {
     const s = await DB.projects().doc(id).get();
     if (!s.exists) { $("#app").innerHTML = topbar() + `<main class="wrap"><div class="empty">Este quiz não existe mais. <a href="#/">Voltar aos quizzes</a></div></main>`; bindTop(); ST.pid = null; return; }
     ST.project = Object.assign({ id }, s.data()); ST.known = ST.project.atualizadoEm || null; ST.conflict = false;
-    normalizeProject(ST.project);
+    normalizeProject(ST.project); undoReset();
     watchLeads(id);
   } catch (e) { $("#app").innerHTML = topbar() + `<main class="wrap"><div class="card">Erro ao abrir: ${esc(e.message)}</div></main>`; bindTop(); ST.pid = null; }
 }
@@ -2012,7 +2017,33 @@ function normalizeProject(p) {
   p.config.mensagensCRM = Object.assign(U.clone(DEFAULT_CONFIG.mensagensCRM), p.config.mensagensCRM || {});
 }
 let saveTimer = null;
-function markDirty() { ST.dirty = true; setSaveState(); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500); }
+// ---------- desfazer / refazer (Ctrl+Z / Ctrl+Shift+Z) ----------
+const UNDO = { stack: [], redo: [], last: null, t: 0 };
+const snapProject = () => JSON.stringify({ nome: ST.project.nome, flow: ST.project.flow, tema: ST.project.tema, config: ST.project.config });
+function undoReset() { UNDO.stack = []; UNDO.redo = []; UNDO.last = ST.project ? snapProject() : null; UNDO.t = 0; updUndoBtns(); }
+function undoTrack() {
+  if (!ST.project) return; const cur = snapProject(); if (cur === UNDO.last) return;
+  // digitação seguida vira um passo só
+  if (Date.now() - UNDO.t > 900 || !UNDO.stack.length) { UNDO.stack.push(UNDO.last); if (UNDO.stack.length > 60) UNDO.stack.shift(); }
+  UNDO.t = Date.now(); UNDO.last = cur; UNDO.redo = []; updUndoBtns();
+}
+function undoApply(from, to) {
+  if (!ST.project || !from.length || document.querySelector(".ped,.modal-bg")) return;
+  to.push(snapProject()); const st = JSON.parse(from.pop());
+  Object.assign(ST.project, st); UNDO.last = snapProject(); UNDO.t = 0;
+  ST.dirty = true; setSaveState(); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500);
+  renderProject(currentTab()); toast(from === UNDO.stack ? "Desfeito" : "Refeito", 1200);
+}
+const undo = () => undoApply(UNDO.stack, UNDO.redo), redo = () => undoApply(UNDO.redo, UNDO.stack);
+function updUndoBtns() { const u = $("#undo"), r = $("#redo"); if (u) u.disabled = !UNDO.stack.length; if (r) r.disabled = !UNDO.redo.length; }
+document.addEventListener("keydown", e => {
+  if (!ST.project || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const t = document.activeElement && document.activeElement.tagName; if (["INPUT", "TEXTAREA", "SELECT"].includes(t)) return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); undo(); } else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); redo(); }
+  else if (k === "s") { e.preventDefault(); saveNow().then(() => toast("Salvo", 1000)); }
+});
+function markDirty() { ST.dirty = true; undoTrack(); setSaveState(); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500); }
 function setSaveState(err, msg) {
   const el = $("#savest"); if (!el) return;
   el.className = "savest" + (err ? " err" : ST.dirty || ST.saving ? " dirty" : "");
@@ -2116,12 +2147,12 @@ function renderProject(tab) {
   const p = ST.project; if (!TABS[tab]) tab = "fluxo";
   $("#app").innerHTML = `<div class="top"><a class="back" href="#/" aria-label="Voltar aos quizzes">${icon("voltar", 18)}</a><span class="pname" title="${esc(p.nome)}">${esc(p.nome)}</span>
     <nav class="tabs" aria-label="Seções do quiz">${TAB_LIST.map(([k, l]) => `<a class="tab" href="#/p/${p.id}/${k}" ${k === tab ? 'aria-current="page"' : ""}>${l}</a>`).join("")}</nav>
-    <span class="sp"></span><span class="savest" id="savest" aria-live="polite"></span>${themeBtn()}
+    <span class="sp"></span><span class="savest" id="savest" aria-live="polite"></span><button class="btn icon sm ghost" id="undo" aria-label="Desfazer" title="Desfazer (Ctrl+Z)">${icon("desfazer", 16)}</button><button class="btn icon sm ghost" id="redo" aria-label="Refazer" title="Refazer (Ctrl+Shift+Z)">${icon("refazer", 16)}</button>${themeBtn()}
     <button class="btn sm sec" id="testar">${icon("play", 14)}Testar</button>
     ${p.status === "publicado" ? `<button class="btn sm sec" id="unpub">Despublicar</button>` : ""}
     <button class="btn sm primary" id="pub">${p.status === "publicado" ? "Publicar alterações" : "Publicar"}</button></div><div id="tabc"></div>`;
   setSaveState(); bindTheme();
-  $("#testar").onclick = () => openPreview();
+  $("#testar").onclick = () => openPreview(); $("#undo").onclick = undo; $("#redo").onclick = redo; updUndoBtns();
   $("#pub").onclick = publish;
   if ($("#unpub")) $("#unpub").onclick = unpublish;
   TABS[tab].render($("#tabc"));
