@@ -1193,12 +1193,16 @@ function createRunner(opts) {
     if (n.type === "start") return follow(n.id, "next");
     if (n.type === "fn") return runFn(n);
     if (!fromBack && S.atual && S.atual !== nodeId) S.hist.push(S.atual);
+    // guarda como o carrinho e as respostas estavam ao chegar nesta página (para o Voltar desfazer as escolhas)
+    S.snaps = S.snaps || {}; S.snaps[nodeId] = U.clone({ carrinho: S.carrinho, escolhas: S.escolhas, cupom: S.cupom, tags: S.tags, vars: S.vars, respostas: S.respostas });
     S.atual = nodeId; persist();
     renderPage(n);
     emit("pagina", { node: n });
   }
   function back() {
     const prev = S.hist.pop(); if (!prev) return;
+    const sn = (S.snaps || {})[prev];
+    if (sn) { Object.assign(S, U.clone(sn)); save({ carrinho: S.carrinho.map(c => c.sku + ":" + c.q), cupom: S.cupom, escolhas: S.escolhas, tags: S.tags, vars: S.vars, respostas: S.respostas }); }
     S.atual = prev; persist(); renderPage(N[prev]);
   }
   function nodeName(n) { return n.type === "page" ? (n.data.nome || "Página") : n.type === "fn" ? (FUNCS[n.data.kind]?.label || "Função") : "Início"; }
@@ -1496,9 +1500,17 @@ function createRunner(opts) {
   // ---- início ----
   function start(resume) {
     let saved = null;
-    if (KEY && resume !== false) try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { }
+    if (KEY && resume !== false) try {
+      saved = JSON.parse(localStorage.getItem(KEY) || "null");
+      // versões antigas guardavam a sessão por versão publicada ("vq:slug:v3"): aproveita a mais recente
+      if (!saved) { const old = Object.keys(localStorage).filter(k => k.startsWith(KEY + ":v")).sort((a, b) => (+b.split(":v").pop()) - (+a.split(":v").pop()))[0]; if (old) { saved = JSON.parse(localStorage.getItem(old) || "null"); localStorage.removeItem(old); } }
+    } catch (e) { }
     if (saved && !saved.finalizado && saved.atual && N[saved.atual] && mode === "live") { S = Object.assign(fresh(), saved); }
-    else { S = fresh(); if (saved && saved.vars) { ["nome", "whatsapp", "email"].forEach(k => { if (saved.vars[k]) S.vars[k] = saved.vars[k]; }); } }
+    else {
+      S = fresh(); if (saved && saved.vars) { ["nome", "whatsapp", "email"].forEach(k => { if (saved.vars[k]) S.vars[k] = saved.vars[k]; }); }
+      // quiz republicado e a página onde ela estava sumiu: recomeça, mas continua sendo a mesma cliente no CRM
+      if (saved && !saved.finalizado && saved.id && mode === "live") S.id = saved.id;
+    }
     S.origem = opts.origem || S.origem || {};
     if (opts.store && mode === "live") opts.store.begin(S);
     persist();
@@ -1736,6 +1748,8 @@ function toast(t, ms = 2400) { const d = document.createElement("div"); d.classN
 function ago(iso) { if (!iso) return ""; const s = (Date.now() - new Date(iso)) / 1000; if (s < 60) return "agora"; if (s < 3600) return Math.floor(s / 60) + " min"; if (s < 86400) return Math.floor(s / 3600) + " h"; if (s < 2592000) return Math.floor(s / 86400) + " d"; return new Date(iso).toLocaleDateString("pt-BR"); }
 const fmtDT = iso => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—";
 const slugify = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+// enquanto digita: aceita o hífen no fim (senão "kit-" vira "kit" e não dá para digitar "kit-maes")
+const slugTyping = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+/, "").slice(0, 40);
 const PLAYER_URL = slug => new URL("q.html?p=" + encodeURIComponent(slug), location.href).href;
 
 // ---------- modal / menu / confirmação ----------
@@ -1756,17 +1770,19 @@ function modal({ title, body, foot, wide, onClose }) {
   return { el: bg, close };
 }
 function confirmBox(title, text, okLabel = "Confirmar", danger) {
-  return new Promise(res => {
+  return new Promise(r0 => {
+    let res = r0;
     const m = modal({ title, body: `<p style="margin:0">${text}</p>`, foot: `<button class="btn sec" data-no>Cancelar</button><button class="btn ${danger ? "danger fill" : "primary"}" data-ok>${esc(okLabel)}</button>`, onClose: () => res(false) });
     $("[data-no]", m.el).onclick = () => m.close();
-    $("[data-ok]", m.el).onclick = () => { res(true); m.el.remove(); };
+    $("[data-ok]", m.el).onclick = () => { res(true); res = () => { }; m.close(); };
   });
 }
 function promptBox(title, label, value = "", okLabel = "Salvar") {
   return new Promise(res => {
-    const m = modal({ title, body: `<label class="fld"><span class="lbl">${esc(label)}</span><input class="inp" data-v value="${esc(value)}"></label>`, foot: `<button class="btn sec" data-no>Cancelar</button><button class="btn primary" data-ok>${esc(okLabel)}</button>`, onClose: () => res(null) });
+    let done = false;
+    const m = modal({ title, body: `<label class="fld"><span class="lbl">${esc(label)}</span><input class="inp" data-v value="${esc(value)}"></label>`, foot: `<button class="btn sec" data-no>Cancelar</button><button class="btn primary" data-ok>${esc(okLabel)}</button>`, onClose: () => { if (!done) res(null); } });
     const inp = $("[data-v]", m.el);
-    const ok = () => { res(inp.value.trim()); m.el.remove(); };
+    const ok = () => { done = true; res(inp.value.trim()); m.close(); };
     $("[data-no]", m.el).onclick = () => m.close(); $("[data-ok]", m.el).onclick = ok;
     inp.onkeydown = e => { if (e.key === "Enter") ok(); };
     setTimeout(() => { inp.focus(); inp.select(); }, 40);
@@ -1793,7 +1809,7 @@ const DB = {
   leads: () => db.collection("quiz_leads"),
   pub: () => db.collection("quiz_public"),
   async create(data) { const ref = DB.projects().doc(); const now = U.now(); await ref.set(Object.assign({ status: "rascunho", pasta: null, criadoEm: now, atualizadoEm: now, atualizadoPor: me.name }, data)); return ref.id; },
-  async save(id, data) { await DB.projects().doc(id).set(Object.assign({}, data, { atualizadoEm: U.now(), atualizadoPor: me.name }), { merge: false }); },
+  async save(id, data) { await DB.projects().doc(id).set(Object.assign({ atualizadoEm: U.now() }, data, { atualizadoPor: me.name }), { merge: false }); },
   async remove(id, slug) { await DB.projects().doc(id).delete(); if (slug) { try { const p = await DB.pub().doc(slug).get(); if (p.exists && p.data().projectId === id) await DB.pub().doc(slug).delete(); } catch (e) { } } },
   async slugFree(slug, id) { const p = await DB.pub().doc(slug).get(); if (p.exists && p.data().projectId !== id) return false; const q = await DB.projects().where("slug", "==", slug).get(); return q.docs.every(d => d.id === id); },
   async upload(file, projectId) {
@@ -1926,9 +1942,10 @@ function moveDialog(p) {
   $("[data-ok]", m.el).onclick = async () => { await DB.projects().doc(p.id).update({ pasta: $("[data-v]", m.el).value || null }); m.close(); toast("Movido"); };
 }
 async function deleteProject(p) {
-  if (!me.gestor) return toast("Só o gestor pode excluir quizzes");
-  if (!await confirmBox("Excluir quiz", `Excluir <b>${esc(p.nome)}</b>? ${p.status === "publicado" ? "O link público para de funcionar. " : ""}Os contatos captados continuam no banco, mas o quiz não pode ser recuperado.`, "Excluir", true)) return;
-  await DB.remove(p.id, p.slugPublicado || p.slug); toast("Quiz excluído");
+  if (!me.gestor) { toast("Só o gestor pode excluir quizzes"); return false; }
+  if (!await confirmBox("Excluir quiz", `Excluir <b>${esc(p.nome)}</b>? ${p.status === "publicado" ? "O link público para de funcionar. " : ""}Os contatos captados continuam no banco, mas o quiz não pode ser recuperado.`, "Excluir", true)) return false;
+  if (ST.pid === p.id) { clearTimeout(saveTimer); ST.dirty = false; ST.project = null; ST.pid = null; }
+  await DB.remove(p.id, p.slugPublicado || p.slug); toast("Quiz excluído"); return true;
 }
 function newProjectDialog() {
   const tpls = Object.entries(TEMPLATES);
@@ -1981,7 +1998,7 @@ async function openProject(id) {
   try {
     const s = await DB.projects().doc(id).get();
     if (!s.exists) { $("#app").innerHTML = topbar() + `<main class="wrap"><div class="empty">Este quiz não existe mais. <a href="#/">Voltar aos quizzes</a></div></main>`; bindTop(); ST.pid = null; return; }
-    ST.project = Object.assign({ id }, s.data());
+    ST.project = Object.assign({ id }, s.data()); ST.known = ST.project.atualizadoEm || null; ST.conflict = false;
     normalizeProject(ST.project);
     watchLeads(id);
   } catch (e) { $("#app").innerHTML = topbar() + `<main class="wrap"><div class="card">Erro ao abrir: ${esc(e.message)}</div></main>`; bindTop(); ST.pid = null; }
@@ -1996,21 +2013,43 @@ function normalizeProject(p) {
 }
 let saveTimer = null;
 function markDirty() { ST.dirty = true; setSaveState(); clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 1500); }
-function setSaveState(err) {
+function setSaveState(err, msg) {
   const el = $("#savest"); if (!el) return;
   el.className = "savest" + (err ? " err" : ST.dirty || ST.saving ? " dirty" : "");
-  el.innerHTML = `<i></i>${err ? "Erro ao salvar — tentando de novo" : ST.saving ? "Salvando…" : ST.dirty ? "Alterações não salvas" : "Salvo"}`;
+  el.innerHTML = `<i></i>${err ? esc(msg || "Erro ao salvar — tentando de novo") : ST.saving ? "Salvando…" : ST.dirty ? "Alterações não salvas" : "Salvo"}`;
 }
+let savingP = null;
 async function saveNow() {
   clearTimeout(saveTimer);
-  if (!ST.project || !ST.dirty || ST.saving) return;
-  ST.saving = true; ST.dirty = false; setSaveState();
+  while (savingP) await savingP; // espera o salvamento em andamento e salva de novo o que mudou nesse meio tempo
+  if (!ST.project || !ST.dirty || ST.conflict) return;
+  savingP = doSave(); try { await savingP; } finally { savingP = null; }
+}
+// alguém (outra pessoa ou outra aba) salvou este quiz depois que eu abri?
+async function checkConflict(p) {
+  let s; try { s = await DB.projects().doc(p.id).get(); } catch (e) { return false; }
+  if (!s.exists) return { excluido: true };
+  const r = s.data();
+  if (ST.known && r.atualizadoEm && r.atualizadoEm !== ST.known) return { por: r.atualizadoPor || "Outra pessoa", em: r.atualizadoEm };
+  return false;
+}
+function conflictDialog(c) {
+  const quem = c.por === me.name ? "Você (em outra aba ou aparelho)" : esc(c.por);
+  const m = modal({ title: c.excluido ? "Este quiz foi excluído" : "Outra pessoa alterou este quiz", body: c.excluido ? `<p style="margin-top:0">Enquanto você editava, este quiz foi excluído. Suas alterações não foram salvas para não recriá-lo.</p>` : `<p style="margin-top:0"><b>${quem}</b> salvou este quiz às ${esc(fmtDT(c.em))}, depois que você o abriu. Para não apagar o trabalho de ninguém, suas últimas alterações ainda não foram salvas.</p><p class="muted" style="font-size:13px">Recarregar traz a versão salva (você perde o que mudou agora). Manter a minha substitui a versão da outra pessoa.</p>`, foot: c.excluido ? `<button class="btn primary" data-home>Voltar aos quizzes</button>` : `<button class="btn sec" data-mine>Manter a minha</button><button class="btn primary" data-reload>Recarregar a versão salva</button>`, onClose: () => { } });
+  const go2 = async keep => { m.close(); if (keep) { ST.conflict = false; ST.known = null; ST.dirty = true; await saveNow(); toast("Sua versão foi salva"); } else { ST.conflict = false; ST.dirty = false; const id = ST.pid; ST.pid = null; await openProject(id); if (ST.project) renderProject(currentTab()); toast("Versão salva carregada"); } };
+  if ($("[data-mine]", m.el)) { $("[data-mine]", m.el).onclick = () => go2(true); $("[data-reload]", m.el).onclick = () => go2(false); }
+  if ($("[data-home]", m.el)) $("[data-home]", m.el).onclick = () => { ST.conflict = false; ST.dirty = false; ST.project = null; ST.pid = null; m.close(); go(""); };
+}
+async function doSave() {
   const p = ST.project;
+  const c = await checkConflict(p);
+  if (c) { ST.conflict = true; setSaveState(true, c.excluido ? "Quiz excluído — não salvo" : "Não salvo: " + (c.por || "outra pessoa") + " alterou"); conflictDialog(c); return; }
+  ST.saving = true; ST.dirty = false; setSaveState();
   const data = { nome: p.nome, slug: p.slug, status: p.status, pasta: p.pasta || null, flow: p.flow, tema: p.tema, config: p.config, criadoEm: p.criadoEm || U.now() };
   ["publicadoEm", "slugPublicado", "versaoPublicada"].forEach(k => { if (p[k] !== undefined) data[k] = p[k]; });
   const size = new Blob([JSON.stringify(data)]).size;
   if (size > 900000) { ST.saving = false; ST.dirty = true; setSaveState(true); toast("O quiz passou do tamanho máximo. Use imagens por link/upload, nunca coladas como texto.", 5000); return; }
-  try { await DB.save(p.id, data); p.atualizadoEm = U.now(); ST.saving = false; setSaveState(); }
+  try { const now = U.now(); await DB.save(p.id, Object.assign(data, { atualizadoEm: now })); p.atualizadoEm = now; ST.known = now; ST.saving = false; setSaveState(); }
   catch (e) { ST.saving = false; ST.dirty = true; setSaveState(true); console.warn(e); saveTimer = setTimeout(saveNow, 5000); }
 }
 
@@ -2033,6 +2072,7 @@ function validateFlow(p) {
 }
 async function publish() {
   const p = ST.project; await saveNow();
+  if (ST.conflict) return toast("Resolva o aviso de alteração antes de publicar", 4000);
   const { errs, warns } = validateFlow(p);
   if (errs.length) { modal({ title: "Ainda não dá para publicar", body: `<ul style="margin:0;padding-left:18px">${errs.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` }); return; }
   if (warns.length && !await confirmBox("Publicar mesmo assim?", `<ul style="margin:0 0 6px;padding-left:18px">${warns.slice(0, 8).map(e => `<li>${esc(e)}</li>`).join("")}</ul>`, "Publicar")) return;
@@ -2484,6 +2524,8 @@ function orderedPages(p = ST.project) {
   p.flow.nodes.filter(n => n.type === "page" && !seen.has(n.id)).forEach(n => out.push(n));
   return out;
 }
+// "Pergunta", "Pergunta (2)"… para colunas e filtros não ficarem iguais
+function pageNames(pages) { const seen = {}, out = {}; pages.forEach(n => { const b = n.data.nome || "Página"; seen[b] = (seen[b] || 0) + 1; out[n.id] = seen[b] > 1 ? `${b} (${seen[b]})` : b; }); return out; }
 const nodeLabel = (id, p = ST.project) => { if (id === "concluido") return "Finalizou"; const n = p.flow.nodes.find(x => x.id === id); return n ? n.type === "page" ? n.data.nome : n.type === "fn" ? FUNCS[n.data.kind]?.label : "Início" : "—"; };
 function lastPage(l, p = ST.project) { const v = (l.vistas || []).filter(id => { const n = p.flow.nodes.find(x => x.id === id); return n && n.type === "page"; }); return v[v.length - 1] || null; }
 const isLive = l => !l.finalizado && Date.now() - new Date(l.atualizadoEm || 0) < 30 * 60000;
@@ -2570,8 +2612,8 @@ TABS.estatisticas = {
       renderCanvas($("#cvh"), { readonly: true, stats });
       const cv = $("#cv"); if (cv) cv.style.height = `calc(100vh - 56px - ${host.firstElementChild.offsetHeight}px)`;
     } else if (this.view === "funil") {
-      const pages = orderedPages(); const mx = Math.max(1, total);
-      host.innerHTML = head + `<main class="wrap"><div class="card"><h3>Funil por página</h3><p class="sub">Retenção = das que começaram, quantas viram a página. Clique para ver no CRM quem parou ali.</p>${pages.map((n, i) => { const s = stats[n.id]; const prev = i ? stats[pages[i - 1].id].views : total; const drop = prev ? Math.round((1 - s.views / prev) * 100) : 0; const parou = L.filter(l => !l.finalizado && lastPage(l) === n.id).length; return `<div class="fn-row click" data-n="${n.id}" tabindex="0"><span>${esc(n.data.nome)}</span><div class="trk"><i style="width:${s.views / mx * 100}%"></i><b>${s.views}</b></div><span class="r">${s.ret}%${i && drop > 0 ? ` · <span class="d">−${drop}%</span>` : ""}${parou ? ` · ${parou} parou` : ""}</span></div>`; }).join("")}<div class="fn-row"><b>Finalizou</b><div class="trk"><i style="width:${fin / mx * 100}%;background:var(--success)"></i><b>${fin}</b></div><span class="r">${total ? Math.round(fin / total * 100) : 0}%</span></div></div></main>`;
+      const pages = orderedPages(), nm = pageNames(pages); const mx = Math.max(1, total);
+      host.innerHTML = head + `<main class="wrap"><div class="card"><h3>Funil por página</h3><p class="sub">Retenção = das que começaram, quantas viram a página. Clique para ver no CRM quem parou ali.</p>${pages.map((n, i) => { const s = stats[n.id]; const prev = i ? stats[pages[i - 1].id].views : total; const drop = prev ? Math.round((1 - s.views / prev) * 100) : 0; const parou = L.filter(l => !l.finalizado && lastPage(l) === n.id).length; return `<div class="fn-row click" data-n="${n.id}" tabindex="0"><span>${esc(nm[n.id])}</span><div class="trk"><i style="width:${s.views / mx * 100}%"></i><b>${s.views}</b></div><span class="r">${s.ret}%${i && drop > 0 ? ` · <span class="d">−${drop}%</span>` : ""}${parou ? ` · ${parou} parou` : ""}</span></div>`; }).join("")}<div class="fn-row"><b>Finalizou</b><div class="trk"><i style="width:${fin / mx * 100}%;background:var(--success)"></i><b>${fin}</b></div><span class="r">${total ? Math.round(fin / total * 100) : 0}%</span></div></div></main>`;
       $$("[data-n]", host).forEach(r => { const g = () => { TABS.clientes.filter = r.dataset.n; go(`p/${p.id}/clientes`); }; r.onclick = g; r.onkeydown = e => { if (e.key === "Enter") g(); }; });
     } else {
       const abs = p.flow.nodes.filter(n => n.type === "fn" && (n.data.kind === "ab" || n.data.kind === "divisao"));
@@ -2588,12 +2630,12 @@ TABS.resultados = {
   render(host) { this.host = host; this.page = 0; this.sel = new Set(); this.draw(); },
   refresh() { if (this.host && document.body.contains(this.host)) this.draw(); },
   cols() {
-    const pages = orderedPages(); const builtin = new Set(["nome", "whatsapp", "email"]);
+    const pages = orderedPages(), nm = pageNames(pages); const builtin = new Set(["nome", "whatsapp", "email"]);
     const vars = new Set(); ST.leads.forEach(l => Object.keys(l.vars || {}).forEach(k => { if (!builtin.has(k) && !k.startsWith("__")) vars.add(k); }));
     return [
       { h: "Data", v: l => fmtDT(l.criadoEm) }, { h: "Nome", v: l => l.nome || "" }, { h: "WhatsApp", v: l => U.phoneFmt(l.whatsapp) }, { h: "E-mail", v: l => l.email || "" },
       { h: "Situação", v: l => l.finalizado ? stageText(l) : "Parou em: " + stageText(l) },
-      ...pages.map(n => ({ h: n.data.nome, v: l => (l.respostas || {})[n.id] || "" })),
+      ...pages.map(n => ({ h: nm[n.id], v: l => (l.respostas || {})[n.id] || "" })),
       ...[...vars].map(k => ({ h: "{{" + k + "}}", v: l => { const x = (l.vars || {})[k]; return Array.isArray(x) ? x.join(", ") : x ?? ""; } })),
       { h: "Etiquetas", v: l => (l.tags || []).join(", ") }, { h: "Escolhas", v: l => (l.escolhas || []).join(" · ") }, { h: "Carrinho", v: l => (l.carrinho || []).length ? (l.carrinho.length + " peça(s)" + (l.cupom ? " · " + l.cupom : "")) : "" },
       ...UTMS.map(k => ({ h: k, v: l => (l.origem || {})[k] || "" })),
@@ -2614,12 +2656,14 @@ TABS.resultados = {
     $$("[data-s]").forEach(c => c.onchange = () => { c.checked ? this.sel.add(c.dataset.s) : this.sel.delete(c.dataset.s); this.draw(); });
     if ($("#all")) $("#all").onchange = e => { rows.forEach(l => e.target.checked ? this.sel.add(l.id) : this.sel.delete(l.id)); this.draw(); };
     if ($("#pv")) { $("#pv").onclick = () => { this.page--; this.draw(); }; $("#nx").onclick = () => { this.page++; this.draw(); }; }
-    $("#csv").onclick = () => { const rws = [cols.map(c => c.h)].concat(L.map(l => cols.map(c => String(c.v(l))))); download(slugify(ST.project.nome) + "-respostas.csv", "﻿" + rws.map(r => r.map(x => `"${x.replace(/"/g, '""')}"`).join(";")).join("\n"), "text/csv;charset=utf-8"); };
-    $("#xls").onclick = () => { const t = `<html><head><meta charset="utf-8"></head><body><table border="1"><tr>${cols.map(c => `<th>${esc(c.h)}</th>`).join("")}</tr>${L.map(l => `<tr>${cols.map(c => `<td>${esc(c.v(l))}</td>`).join("")}</tr>`).join("")}</table></body></html>`; download(slugify(ST.project.nome) + "-respostas.xls", t, "application/vnd.ms-excel"); };
+    $("#csv").onclick = () => { const rws = [cols.map(c => c.h)].concat(L.map(l => cols.map(c => safeCell(c.v(l))))); download(slugify(ST.project.nome) + "-respostas.csv", "﻿" + rws.map(r => r.map(x => `"${x.replace(/"/g, '""')}"`).join(";")).join("\n"), "text/csv;charset=utf-8"); };
+    $("#xls").onclick = () => { const t = `<html><head><meta charset="utf-8"></head><body><table border="1"><tr>${cols.map(c => `<th>${esc(c.h)}</th>`).join("")}</tr>${L.map(l => `<tr>${cols.map(c => `<td>${esc(safeCell(c.v(l)))}</td>`).join("")}</tr>`).join("")}</table></body></html>`; download(slugify(ST.project.nome) + "-respostas.xls", t, "application/vnd.ms-excel"); };
     if ($("#rdel")) $("#rdel").onclick = async () => { if (!await confirmBox("Excluir respostas", `Excluir ${this.sel.size} resposta(s)? Isso também tira essas clientes do CRM.`, "Excluir", true)) return; await deleteLeads([...this.sel]); this.sel.clear(); toast("Excluídas"); };
     if ($("#clear")) $("#clear").onclick = async () => { const n = await promptBox("Limpar quiz", `Isso apaga TODAS as ${ST.leads.length} respostas deste quiz. Digite APAGAR para confirmar.`, "", "Apagar tudo"); if (n !== "APAGAR") return; await deleteLeads(ST.leads.map(l => l.id)); toast("Respostas apagadas"); };
   },
 };
+// o nome vem do formulário público: "=HYPERLINK(…)" viraria fórmula ao abrir no Excel
+const safeCell = v => { const x = String(v ?? ""); return /^[=+@\t\r]/.test(x) || (/^-/.test(x) && !/^-?\d+([.,]\d+)?$/.test(x)) ? "'" + x : x; };
 async function deleteLeads(ids) { for (let i = 0; i < ids.length; i += 400) { const b = db.batch(); ids.slice(i, i + 400).forEach(id => b.delete(DB.leads().doc(id))); await b.commit(); } }
 
 // ---------- CLIENTES (CRM) ----------
@@ -2647,9 +2691,9 @@ TABS.clientes = {
     const host = this.host; if (leadsNotReady(host)) return;
     const p = ST.project, L = ST.leads.filter(l => this.match(l));
     const pb = periodBar(() => this.draw());
-    const opts = `<option value="">Todas as etapas</option><option value="parados" ${this.filter === "parados" ? "selected" : ""}>Pararam no meio</option><option value="carrinho" ${this.filter === "carrinho" ? "selected" : ""}>Montaram carrinho e não finalizaram</option><option value="fim" ${this.filter === "fim" ? "selected" : ""}>Finalizaram</option>${orderedPages().map(n => `<option value="${n.id}" ${this.filter === n.id ? "selected" : ""}>Parou em: ${esc(n.data.nome)}</option>`).join("")}`;
+    const opts = `<option value="">Todas as etapas</option><option value="parados" ${this.filter === "parados" ? "selected" : ""}>Pararam no meio</option><option value="carrinho" ${this.filter === "carrinho" ? "selected" : ""}>Montaram carrinho e não finalizaram</option><option value="fim" ${this.filter === "fim" ? "selected" : ""}>Finalizaram</option>${(() => { const op = orderedPages(), nm = pageNames(op); return op.map(n => `<option value="${n.id}" ${this.filter === n.id ? "selected" : ""}>Parou em: ${esc(nm[n.id])}</option>`).join(""); })()}`;
     const cols = STATUS.map(([k, nm]) => { const it = L.filter(l => (l.status || "novo") === k); return `<div class="col" data-st="${k}"><h4>${nm}<span>${it.length}</span></h4><div>${it.slice(0, 150).map(l => this.card(l)).join("") || `<p class="muted" style="text-align:center;font-size:12px">—</p>`}${it.length > 150 ? `<p class="muted" style="text-align:center;font-size:12px">+${it.length - 150} (use a busca)</p>` : ""}</div></div>`; }).join("");
-    host.innerHTML = `<main class="wrap" style="max-width:none"><div class="bar">${pb.html}<input class="inp" id="cq" placeholder="Buscar nome ou telefone" value="${esc(this.q)}" style="max-width:220px"><select class="inp" id="cf" style="max-width:280px">${opts}</select>${(() => { const all = [...new Set(ST.leads.flatMap(l => l.tags || []))].sort(); return all.length ? `<select class="inp" id="ctag" style="max-width:180px" aria-label="Etiqueta"><option value="">Todas as etiquetas</option>${all.map(t => `<option value="${esc(t)}" ${this.tag === t ? "selected" : ""}>#${esc(t)}</option>`).join("")}</select>` : ""; })()}<label class="toggle"><input type="checkbox" id="sc" ${this.soContato ? "checked" : ""}><span class="sw"></span>Só com WhatsApp</label><span style="flex:1"></span><span class="muted">${L.length} cliente(s)</span></div><div class="board">${cols}</div></main>`;
+    host.innerHTML = `<main class="wrap" style="max-width:none"><div class="bar">${pb.html}<input class="inp" id="cq" placeholder="Buscar nome ou telefone" value="${esc(this.q)}" style="max-width:220px"><select class="inp" id="cf" style="max-width:280px" aria-label="Etapa">${opts}</select>${(() => { const all = [...new Set(ST.leads.flatMap(l => l.tags || []))].sort(); return all.length ? `<select class="inp" id="ctag" style="max-width:180px" aria-label="Etiqueta"><option value="">Todas as etiquetas</option>${all.map(t => `<option value="${esc(t)}" ${this.tag === t ? "selected" : ""}>#${esc(t)}</option>`).join("")}</select>` : ""; })()}<label class="toggle"><input type="checkbox" id="sc" ${this.soContato ? "checked" : ""}><span class="sw"></span>Só com WhatsApp</label><span style="flex:1"></span><span class="muted">${L.length} cliente(s)</span></div><div class="board">${cols}</div></main>`;
     pb.bind(host);
     const cq = $("#cq"); cq.oninput = () => { this.q = cq.value; clearTimeout(cq._t); cq._t = setTimeout(() => { this.draw(); const n = $("#cq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
     $("#cf").onchange = e => { this.filter = e.target.value; this.draw(); };
@@ -2670,7 +2714,7 @@ TABS.clientes = {
     const o = l.origem || {}; const orig = [o.utm_source, o.utm_medium, o.utm_campaign, o.utm_content].filter(Boolean).join(" · ") || (o.fbclid ? "Anúncio Meta" : o.referrer || "Direto");
     const cartLink = (l.carrinho || []).length ? String(p.config.carrinhoBase || "").replace(/\/?$/, "/") + l.carrinho.join(",") + (l.cupom ? "?promocode=" + encodeURIComponent(l.cupom) : "") : "";
     d.innerHTML = `<div class="dr"><div class="row" style="justify-content:space-between;align-items:flex-start"><h2>${esc(l.nome || "Sem nome")}</h2><button class="btn sm sec" data-x>Fechar</button></div><div class="muted">${esc(U.phoneFmt(l.whatsapp))}${l.email ? " · " + esc(l.email) : ""}</div><div class="row" style="margin-top:8px;flex-wrap:wrap">${badge(l)}${(l.tags || []).map(t => `<span class="pill tag">#${esc(t)}</span>`).join("")}</div>
-      <div class="row" style="margin-top:14px;flex-wrap:wrap">${l.whatsapp ? `<a class="btn wa" id="dwa" href="${esc(waLead(l))}" target="_blank" rel="noopener">${icon("whatsapp", 16)}Chamar no WhatsApp</a>` : ""}<select class="inp" id="dst" style="width:auto">${STATUS.map(([k, n]) => `<option value="${k}" ${(l.status || "novo") === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div class="row" style="margin-top:14px;flex-wrap:wrap">${l.whatsapp ? `<a class="btn wa" id="dwa" href="${esc(waLead(l))}" target="_blank" rel="noopener">${icon("whatsapp", 16)}Chamar no WhatsApp</a>` : ""}<select class="inp" id="dst" style="width:auto" aria-label="Status">${STATUS.map(([k, n]) => `<option value="${k}" ${(l.status || "novo") === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
       ${l.whatsapp ? `<div class="sec">Mensagem que vai</div><div style="white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:10px;font-size:13px">${esc(waText(l))}</div>` : ""}
       <div class="sec">Respostas</div><dl class="kv">${resp || "<dt>—</dt><dd></dd>"}</dl>
       ${(l.escolhas || []).length ? `<div class="sec">Escolhas de peças</div><ol style="margin:0;padding-left:18px;font-size:13px">${l.escolhas.map(e => `<li>${esc(e)}</li>`).join("")}</ol>` : ""}
@@ -2727,11 +2771,12 @@ TABS.config = {
       <div class="card"><h3>Mensagens do CRM</h3><p class="sub">Texto do botão WhatsApp na aba Clientes, conforme onde a cliente parou. Use {{primeiroNome}}, {{etapa}}, {{escolhas}} ou qualquer variável.</p><div id="cf2"></div></div>
       ${me.gestor ? `<div class="card danger"><h3>Zona de perigo</h3><p class="sub">Excluir o quiz tira o link do ar. Os contatos ficam guardados.</p><button class="btn danger fill" id="cdel">Excluir quiz</button></div>` : ""}</div></main>`;
     $("#cn").oninput = e => { p.nome = e.target.value; markDirty(); };
-    $("#cs").oninput = async e => { const s = slugify(e.target.value); if (s !== e.target.value) e.target.value = s; p.slug = s; markDirty(); clearTimeout(e.target._t); e.target._t = setTimeout(async () => { const ok = s.length >= 3 && await DB.slugFree(s, p.id); $("#csh").textContent = ok ? "Endereço disponível ✓" : "Esse endereço já está em uso ou é curto demais"; $("#csh").style.color = ok ? "var(--success)" : "var(--danger)"; }, 400); };
+    $("#cs").onblur = e => { const s = slugify(e.target.value); if (s !== e.target.value) { e.target.value = s; p.slug = s; markDirty(); } };
+    $("#cs").oninput = async e => { const s = slugTyping(e.target.value); if (s !== e.target.value) e.target.value = s; p.slug = s; markDirty(); clearTimeout(e.target._t); e.target._t = setTimeout(async () => { const ok = s.length >= 3 && await DB.slugFree(s, p.id); $("#csh").textContent = ok ? "Endereço disponível ✓" : "Esse endereço já está em uso ou é curto demais"; $("#csh").style.color = ok ? "var(--success)" : "var(--danger)"; }, 400); };
     const f1 = () => buildForm($("#cf1"), CONFIG_SCHEMA, p.config, rer => { markDirty(); if (rer) f1(); });
     const f2 = () => buildForm($("#cf2"), MSG_SCHEMA, p.config.mensagensCRM, rer => { markDirty(); if (rer) f2(); });
     f1(); f2();
-    if ($("#cdel")) $("#cdel").onclick = async () => { await deleteProject(p); go(""); };
+    if ($("#cdel")) $("#cdel").onclick = async () => { if (await deleteProject(p)) go(""); };
   },
 };
 

@@ -882,12 +882,16 @@ function createRunner(opts) {
     if (n.type === "start") return follow(n.id, "next");
     if (n.type === "fn") return runFn(n);
     if (!fromBack && S.atual && S.atual !== nodeId) S.hist.push(S.atual);
+    // guarda como o carrinho e as respostas estavam ao chegar nesta página (para o Voltar desfazer as escolhas)
+    S.snaps = S.snaps || {}; S.snaps[nodeId] = U.clone({ carrinho: S.carrinho, escolhas: S.escolhas, cupom: S.cupom, tags: S.tags, vars: S.vars, respostas: S.respostas });
     S.atual = nodeId; persist();
     renderPage(n);
     emit("pagina", { node: n });
   }
   function back() {
     const prev = S.hist.pop(); if (!prev) return;
+    const sn = (S.snaps || {})[prev];
+    if (sn) { Object.assign(S, U.clone(sn)); save({ carrinho: S.carrinho.map(c => c.sku + ":" + c.q), cupom: S.cupom, escolhas: S.escolhas, tags: S.tags, vars: S.vars, respostas: S.respostas }); }
     S.atual = prev; persist(); renderPage(N[prev]);
   }
   function nodeName(n) { return n.type === "page" ? (n.data.nome || "Página") : n.type === "fn" ? (FUNCS[n.data.kind]?.label || "Função") : "Início"; }
@@ -1185,9 +1189,17 @@ function createRunner(opts) {
   // ---- início ----
   function start(resume) {
     let saved = null;
-    if (KEY && resume !== false) try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { }
+    if (KEY && resume !== false) try {
+      saved = JSON.parse(localStorage.getItem(KEY) || "null");
+      // versões antigas guardavam a sessão por versão publicada ("vq:slug:v3"): aproveita a mais recente
+      if (!saved) { const old = Object.keys(localStorage).filter(k => k.startsWith(KEY + ":v")).sort((a, b) => (+b.split(":v").pop()) - (+a.split(":v").pop()))[0]; if (old) { saved = JSON.parse(localStorage.getItem(old) || "null"); localStorage.removeItem(old); } }
+    } catch (e) { }
     if (saved && !saved.finalizado && saved.atual && N[saved.atual] && mode === "live") { S = Object.assign(fresh(), saved); }
-    else { S = fresh(); if (saved && saved.vars) { ["nome", "whatsapp", "email"].forEach(k => { if (saved.vars[k]) S.vars[k] = saved.vars[k]; }); } }
+    else {
+      S = fresh(); if (saved && saved.vars) { ["nome", "whatsapp", "email"].forEach(k => { if (saved.vars[k]) S.vars[k] = saved.vars[k]; }); }
+      // quiz republicado e a página onde ela estava sumiu: recomeça, mas continua sendo a mesma cliente no CRM
+      if (saved && !saved.finalizado && saved.id && mode === "live") S.id = saved.id;
+    }
     S.origem = opts.origem || S.origem || {};
     if (opts.store && mode === "live") opts.store.begin(S);
     persist();
@@ -1306,7 +1318,7 @@ const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.font
     const store = makeStore(P.projectId);
     const runner = createRunner({
       project: P, root, mode: "live", store, origem: origem(),
-      sessionKey: TESTE ? null : "vq:" + slug + ":v" + (P.versao || 1),
+      sessionKey: TESTE ? null : "vq:" + slug, // a sessão sobrevive a uma nova publicação
       onEvent(t, d) {
         if (t === "pixel" && window.fbq && d.ev) { try { fbq(d.custom ? "trackCustom" : "track", d.ev, d.data || {}); } catch (e) { } }
         if (t === "pixel" && window.dataLayer && d.ev) window.dataLayer.push({ event: "quiz_" + d.ev });
