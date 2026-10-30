@@ -1,0 +1,6 @@
+{
+  "functions": [
+    { "source": "../functions", "codebase": "whatsapp", "runtime": "nodejs20" }
+  ],
+  "firestore": { "indexes": "firestore.indexes.json" }
+}

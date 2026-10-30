@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isMember() {
+      return request.auth != null && exists(/databases/$(database)/documents/members/$(request.auth.uid));
+    }
+    function isManager() {
+      return isMember() && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.type == 'manager';
+    }
+    function isAgent() { // gestor ou atendente (expedição não vê conversas)
+      return isMember() && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.type != 'expedicao';
+    }
+    // Configuração: leitura pública (tela de login), escrita só do gestor
+    match /app/{doc} {
+      allow read: if doc == 'config' || isMember();
+      allow write: if isManager() || (doc == 'counter' && isMember());
+    }
+    // Pedidos: só usuários do sistema
+    match /sales/{id} {
+      allow read, write: if isMember();
+    }
+    match /members/{uid} {
+      allow read: if isMember();
+      allow write: if isManager();
+    }
+
+    // ===== Conversas Veraneio (WhatsApp) =====
+    match /wa_conversations/{id} {
+      allow read: if isAgent();
+      // a equipe só mexe na organização; quem grava mensagem/janela é o servidor
+      allow update: if isAgent() && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['assignedTo', 'important', 'status', 'unread', 'tags', 'notes', 'optOut', 'optOutEm', 'name', 'dispensadaEm']);
+      match /messages/{mid} {
+        allow read: if isAgent();
+        allow create: if isAgent() && request.resource.data.dir == 'note' && request.resource.data.byUid == request.auth.uid;
+      }
+    }
+    match /{path=**}/messages/{mid} { allow read: if isAgent(); } // busca em todo o histórico
+    match /wa_lines/{id} { allow read: if isAgent(); }
+    match /wa_campaigns/{id} {
+      allow read: if isAgent();
+      match /dest/{d} { allow read: if isManager(); }
+    }
+    match /wa_settings/{doc} {
+      allow read: if isAgent();
+      allow write: if isManager() || (doc == 'respostas' && isAgent());
+    }
+    match /wa_contacts/{id} { allow read: if isAgent(); }
+    match /wa_groups/{id} { allow read, write: if isAgent(); } // grupos de clientes
+    match /wa_private/{id} { allow read, write: if false; } // tokens da Meta: só o servidor
+    match /wa_index/{id} { allow read, write: if false; }
+    match /yampi_orders/{id} { allow read: if isAgent(); allow write: if false; } // gravado pelo servidor
+
+    // Quiz: a cliente grava o próprio lead pelo link, mas só a equipe lê a lista
+    match /quiz_leads/{id} {
+      allow create, update: if true;
+      allow read, delete: if isMember();
+    }
+    match /quiz_public/{id} { allow read: if true; allow write: if isMember(); }
+    match /quiz_projects/{id} { allow read, write: if isMember(); }
+    match /quiz_folders/{id} { allow read, write: if isMember(); }
+
+    // Outras ferramentas (estoque, quiz…) continuam como estavam — exceto as coleções do WhatsApp
+    match /{col}/{document=**} {
+      allow read, write: if !(col in ['app', 'sales', 'members', 'yampi_orders', 'quiz_leads', 'quiz_public', 'quiz_projects', 'quiz_folders']) && !col.matches('wa_.*');
+    }
+  }
+}
