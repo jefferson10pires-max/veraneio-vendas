@@ -1307,7 +1307,7 @@ const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.font
   }
 
   async function boot() {
-    if (!slug) return off("Quiz não encontrado", "Confira o link que você recebeu.");
+    if (!slug || slug.includes("~")) return off("Quiz não encontrado", "Confira o link que você recebeu."); // "~v3" é cópia guardada no histórico
     if (!db) return off("Sem conexão", "Verifique sua internet e tente de novo.");
     let snap;
     try { snap = await db.collection("quiz_public").doc(slug).get(); }

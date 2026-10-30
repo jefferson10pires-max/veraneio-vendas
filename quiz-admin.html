@@ -54,6 +54,12 @@ select.inp{padding-right:28px}
 .pill.ok{background:color-mix(in srgb,var(--success) 16%,transparent);color:var(--success)}
 .pill.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
 .pill.info{background:color-mix(in srgb,var(--info) 16%,transparent);color:var(--info)}
+.pill.bad{background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)}
+.okbox{background:color-mix(in srgb,var(--success) 12%,transparent);border-radius:8px;padding:10px;font-size:13px}
+.hoje-bar{display:flex;align-items:center;gap:8px;width:100%;margin:0 0 12px;padding:10px 14px;border-radius:10px;border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--text);font:inherit;font-size:14px;cursor:pointer;text-align:left}
+.hoje-bar:hover{background:color-mix(in srgb,var(--warn) 18%,transparent)}
+.mainnav .cnt{display:inline-flex;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--warn);color:#1A1307;font-size:11px;font-weight:700;align-items:center;justify-content:center;margin-left:4px}
+.mainnav .cnt[hidden]{display:none}
 .pill.tag{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
 .new-tag{display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:4px;padding:1px 5px}
 .toggle{position:relative;display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-size:13px}
@@ -257,6 +263,9 @@ main.wrap{padding:24px;max-width:1280px;margin:0 auto}
 .seg button:hover{color:var(--text)}
 .seg button[aria-pressed=true]{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.bar .seg,.statbar .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}.seg button{white-space:nowrap;flex-shrink:0}
+.crm-head{padding:24px 24px 0;margin:0 auto}
+@media (max-width:700px){.crm-head{padding:14px 12px 0}}
 .statbar{padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
 .statbar .nums{display:flex;gap:26px;margin-top:12px;flex-wrap:wrap;font-size:12.5px;color:var(--text-muted)}
 .statbar .nums b{display:block;font-size:20px;color:var(--text);font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
@@ -1815,7 +1824,7 @@ const DB = {
   pub: () => db.collection("quiz_public"),
   async create(data) { const ref = DB.projects().doc(); const now = U.now(); await ref.set(Object.assign({ status: "rascunho", pasta: null, criadoEm: now, atualizadoEm: now, atualizadoPor: me.name }, data)); return ref.id; },
   async save(id, data) { await DB.projects().doc(id).set(Object.assign({ atualizadoEm: U.now() }, data, { atualizadoPor: me.name }), { merge: false }); },
-  async remove(id, slug) { await DB.projects().doc(id).delete(); if (slug) { try { const p = await DB.pub().doc(slug).get(); if (p.exists && p.data().projectId === id) await DB.pub().doc(slug).delete(); } catch (e) { } } },
+  async remove(id, slug) { await DB.projects().doc(id).delete(); if (slug) { try { const p = await DB.pub().doc(slug).get(); if (p.exists && p.data().projectId === id) await DB.pub().doc(slug).delete(); } catch (e) { } } try { const h = await DB.pub().where("projectId", "==", id).get(); for (const d of h.docs) if (d.data().hist) await DB.pub().doc(d.id).delete(); } catch (e) { } },
   async slugFree(slug, id) { const p = await DB.pub().doc(slug).get(); if (p.exists && p.data().projectId !== id) return false; const q = await DB.projects().where("slug", "==", slug).get(); return q.docs.every(d => d.id === id); },
   async upload(file, projectId) {
     if (!storage) throw new Error("Armazenamento indisponível");
@@ -1856,17 +1865,20 @@ auth.onAuthStateChanged(async u => {
   if (!m) { $("#login").classList.remove("hide"); $("#lmsg").textContent = "Este usuário não tem acesso ao sistema."; auth.signOut(); return; }
   me = { uid: u.uid, name: m.name || (m.type === "manager" ? "Jefferson" : "Equipe"), type: m.type, gestor: m.type === "manager" };
   $("#login").classList.add("hide"); $("#app").classList.remove("hide");
+  try { const c = (await db.collection("app").doc("config").get()).data() || {}; ST.team = ["Jefferson"].concat((c.attendants || []).filter(a => a.active !== false).map(a => a.name)).filter(Boolean); } catch (e) { ST.team = [me.name]; }
+  watchHome(); watchAllLeads(); watchSales();
   route();
 });
 
 // ---------- estado global e rotas ----------
 const ST = { projects: [], folders: [], unsubP: null, unsubF: null, folder: "", project: null, pid: null, dirty: false, saving: false, unsubLeads: null, leads: [], leadsPid: null };
-function stopAll() { [ST.unsubP, ST.unsubF, ST.unsubLeads].forEach(f => f && f()); ST.unsubP = ST.unsubF = ST.unsubLeads = null; }
+function stopAll() { [ST.unsubP, ST.unsubF, ST.unsubLeads, ST.unsubAll, ST.unsubSales].forEach(f => f && f()); ST.unsubP = ST.unsubF = ST.unsubLeads = ST.unsubAll = ST.unsubSales = null; ST.allLoaded = false; ST.allLeads = null; ST.comZap = null; }
 window.addEventListener("hashchange", () => route());
 window.addEventListener("beforeunload", e => { if (ST.dirty) { e.preventDefault(); e.returnValue = ""; } });
 async function route() {
   if (!me) return;
   const h = location.hash.replace(/^#\/?/, "").split("/");
+  if (h[0] === "clientes") { if (ST.dirty) await saveNow(); ST.pid = null; ST.project = null; renderGlobalCRM(); return; }
   if (h[0] === "p" && h[1]) {
     if (ST.pid !== h[1]) { if (ST.dirty) await saveNow(); await openProject(h[1]); }
     if (!ST.project) return;
@@ -1874,11 +1886,20 @@ async function route() {
   } else { if (ST.dirty) await saveNow(); ST.pid = null; ST.project = null; renderHome(); }
 }
 const go = path => { location.hash = "#/" + path; };
+const onHome = () => !ST.pid && !location.hash.startsWith("#/clientes");
+const mainNav = cur => `<nav class="tabs mainnav" aria-label="Seções"><a class="tab" href="#/" ${cur === "home" ? 'aria-current="page"' : ""}>Quizzes</a><a class="tab" href="#/clientes" ${cur === "clientes" ? 'aria-current="page"' : ""}>Clientes <span class="cnt" data-parahoje hidden></span></a></nav>`;
+function renderGlobalCRM() {
+  $("#app").innerHTML = topbar(mainNav("clientes")) + `<div class="crm-head wrap" style="max-width:none;padding-bottom:0"><div class="phead" style="margin-bottom:0"><div><h1>Clientes</h1><div class="muted">Todas as clientes de todos os quizzes dos últimos 120 dias. A mesma cliente em vários quizzes vira um cartão só.</div></div><div class="row"><label class="toggle"><input type="checkbox" id="som" ${somLigado() ? "checked" : ""}><span class="sw"></span>Som de cliente nova</label>${"Notification" in window && Notification.permission === "default" ? `<button class="btn sm sec" id="notif">Avisar no computador</button>` : ""}</div></div></div><div id="tabc"></div>`;
+  bindTop(); updParaHoje();
+  $("#som").onchange = e => { try { localStorage.setItem("vq_som", e.target.checked ? "1" : "0"); } catch (x) { } };
+  if ($("#notif")) $("#notif").onclick = async () => { try { await Notification.requestPermission(); } catch (e) { } renderGlobalCRM(); };
+  GCRM.render($("#tabc"));
+}
 
 // ---------- HOME: projetos ----------
 function watchHome() {
-  if (!ST.unsubP) ST.unsubP = DB.projects().onSnapshot(s => { ST.projects = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => String(b.atualizadoEm).localeCompare(String(a.atualizadoEm))); if (!ST.pid) renderHome(); }, e => { $("#app").innerHTML = topbar() + `<main class="wrap"><div class="card">Erro ao ler os projetos: ${esc(e.message)}. Confira se as regras do Firestore foram atualizadas.</div></main>`; });
-  if (!ST.unsubF) ST.unsubF = DB.folders().onSnapshot(s => { ST.folders = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)); if (!ST.pid) renderHome(); }, () => { });
+  if (!ST.unsubP) ST.unsubP = DB.projects().onSnapshot(s => { ST.projects = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => String(b.atualizadoEm).localeCompare(String(a.atualizadoEm))); if (onHome()) renderHome(); else if (location.hash.startsWith("#/clientes")) GCRM.refresh(); }, e => { $("#app").innerHTML = topbar() + `<main class="wrap"><div class="card">Erro ao ler os projetos: ${esc(e.message)}. Confira se as regras do Firestore foram atualizadas.</div></main>`; });
+  if (!ST.unsubF) ST.unsubF = DB.folders().onSnapshot(s => { ST.folders = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (a.ordem || 0) - (b.ordem || 0)); if (onHome()) renderHome(); }, () => { });
 }
 // tema claro/escuro do painel (escuro é o padrão)
 const THEME_KEY = "vq_admin_tema";
@@ -1895,7 +1916,7 @@ function renderHome() {
   const P = ST.projects.filter(p => !ST.folder || p.pasta === ST.folder);
   const loading = !ST.unsubP || (!ST.projects.length && !ST._homeLoaded);
   ST._homeLoaded = true;
-  $("#app").innerHTML = topbar() + `<main class="wrap">
+  $("#app").innerHTML = topbar(mainNav("home")) + `<main class="wrap">
     <div class="phead"><div><h1>Seus quizzes</h1><div class="muted">Crie funis interativos, publique e acompanhe cada cliente.</div></div>
       <div class="row"><button class="btn sec" id="imp">${icon("seta", 16)}Importar</button><button class="btn sec" id="nf">${icon("mais", 16)}Nova pasta</button><button class="btn primary" id="np">${icon("mais", 16)}Novo quiz</button></div></div>
     <div class="folders" role="group" aria-label="Pastas"><button class="chip" aria-pressed="${!ST.folder}" data-f="">Todos (${ST.projects.length})</button>${ST.folders.map(f => `<button class="chip" aria-pressed="${ST.folder === f.id}" data-f="${f.id}">${esc(f.nome)} (${ST.projects.filter(p => p.pasta === f.id).length})</button>`).join("")}${ST.folder ? `<button class="btn xs ghost" id="ff">${icon("x", 14)}Pasta</button>` : ""}</div>
@@ -1909,7 +1930,7 @@ function renderHome() {
       <button class="pcard new" id="np2">${icon("mais", 28)}<span>Novo quiz</span></button></div>
     ${!P.length && !loading ? `<p class="empty">Nenhum quiz ${ST.folder ? "nesta pasta" : "ainda"}. Comece pelo modelo do Kit Veraneio, que já vem com o fluxo atual pronto.</p>` : ""}
   </main>`;
-  bindTop();
+  bindTop(); updParaHoje();
   $$("[data-f]").forEach(b => b.onclick = () => { ST.folder = b.dataset.f; renderHome(); });
   if ($("#ff")) $("#ff").onclick = () => folderMenu($("#ff"), ST.folders.find(f => f.id === ST.folder));
   $("#np").onclick = $("#np2").onclick = newProjectDialog;
@@ -2112,6 +2133,7 @@ async function publish() {
     const cfg = U.clone(p.config);
     const versao = (p.versaoPublicada || 0) + 1;
     await DB.pub().doc(p.slug).set({ projectId: p.id, nome: p.nome, flow: p.flow, tema: p.tema, config: cfg, publicadoEm: U.now(), versao });
+    try { await DB.pub().doc(p.slug + "~v" + versao).set({ hist: true, projectId: p.id, nome: p.nome, flow: p.flow, tema: p.tema, config: cfg, publicadoEm: U.now(), versao, por: me.name }); const old = (await listVersions(p)).slice(10); for (const v of old) await DB.pub().doc(v._id).delete(); } catch (e) { console.warn("histórico", e); }
     if (p.slugPublicado && p.slugPublicado !== p.slug) { try { await DB.pub().doc(p.slugPublicado).delete(); } catch (e) { } }
     Object.assign(p, { status: "publicado", publicadoEm: U.now(), slugPublicado: p.slug, versaoPublicada: versao });
     ST.dirty = true; await saveNow();
@@ -2129,13 +2151,15 @@ async function unpublish() {
 }
 const currentTab = () => (location.hash.split("/")[3] || "fluxo");
 
+async function listVersions(p) { const q = await DB.pub().where("projectId", "==", p.id).get(); return q.docs.map(d => Object.assign({ _id: d.id }, d.data())).filter(v => v.hist).sort((a, b) => b.versao - a.versao); }
+
 // ---------- leads do projeto (tempo real) ----------
 function watchLeads(pid) {
   if (ST.unsubLeads) ST.unsubLeads();
   ST.leads = []; ST.leadsLoaded = false; ST.leadsPid = pid;
   ST.unsubLeads = DB.leads().where("projectId", "==", pid).onSnapshot(s => {
     ST.leads = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm)));
-    ST.leadsLoaded = true;
+    ST.leadsLoaded = true; autoComprou();
     const t = currentTab(); if (["estatisticas", "resultados", "clientes"].includes(t)) TABS[t].refresh && TABS[t].refresh();
   }, e => { ST.leadsErr = e.message; });
 }
@@ -2581,10 +2605,10 @@ function orderedPages(p = ST.project) {
 }
 // "Pergunta", "Pergunta (2)"… para colunas e filtros não ficarem iguais
 function pageNames(pages) { const seen = {}, out = {}; pages.forEach(n => { const b = n.data.nome || "Página"; seen[b] = (seen[b] || 0) + 1; out[n.id] = seen[b] > 1 ? `${b} (${seen[b]})` : b; }); return out; }
-const nodeLabel = (id, p = ST.project) => { if (id === "concluido") return "Finalizou"; const n = p.flow.nodes.find(x => x.id === id); return n ? n.type === "page" ? n.data.nome : n.type === "fn" ? FUNCS[n.data.kind]?.label : "Início" : "—"; };
-function lastPage(l, p = ST.project) { const v = (l.vistas || []).filter(id => { const n = p.flow.nodes.find(x => x.id === id); return n && n.type === "page"; }); return v[v.length - 1] || null; }
+const nodeLabel = (id, p = ST.project) => { if (id === "concluido") return "Finalizou"; if (!p) return "—"; const n = p.flow.nodes.find(x => x.id === id); return n ? n.type === "page" ? n.data.nome : n.type === "fn" ? FUNCS[n.data.kind]?.label : "Início" : "—"; };
+function lastPage(l, p = projOf(l)) { if (!p) return null; const v = (l.vistas || []).filter(id => { const n = p.flow.nodes.find(x => x.id === id); return n && n.type === "page"; }); return v[v.length - 1] || null; }
 const isLive = l => !l.finalizado && Date.now() - new Date(l.atualizadoEm || 0) < 30 * 60000;
-function stageText(l) { if (l.finalizado) return l.destino === "whatsapp" ? "Foi para o WhatsApp" : l.destino === "site" ? "Foi para o carrinho/site" : "Finalizou"; const lp = lastPage(l); return lp ? nodeLabel(lp) : "Abriu o quiz"; }
+function stageText(l) { if (l.finalizado) return l.destino === "whatsapp" ? "Foi para o WhatsApp" : l.destino === "site" ? "Foi para o carrinho/site" : "Finalizou"; const p = projOf(l), lp = lastPage(l, p); return lp ? nodeLabel(lp, p) : "Abriu o quiz"; }
 function badge(l) {
   if (l.finalizado) return `<span class="pill ok">✓ ${esc(stageText(l))}</span>`;
   if (isLive(l)) return `<span class="pill info">● Respondendo · ${esc(stageText(l))}</span>`;
@@ -2639,12 +2663,23 @@ TABS.compartilhar = {
         <div class="grid2"><label class="fld"><span class="lbl">Origem (utm_source)</span><input class="inp" data-u="utm_source" placeholder="instagram, facebook, whatsapp"></label><label class="fld"><span class="lbl">Mídia (utm_medium)</span><input class="inp" data-u="utm_medium" placeholder="anuncio, bio, story"></label><label class="fld"><span class="lbl">Campanha (utm_campaign)</span><input class="inp" data-u="utm_campaign" placeholder="dia-das-maes"></label><label class="fld"><span class="lbl">Conteúdo (utm_content)</span><input class="inp" data-u="utm_content" placeholder="video-1"></label></div>
         <div class="share-link"><span style="flex:1" id="utmL">${esc(url)}</span><button class="btn sm sec" id="utmC">Copiar</button></div></div>
       <div class="card"><h3>Incorporar em outro site</h3><p class="sub">Cole este código numa página (ex.: blog ou landing page).</p><textarea class="inp code" readonly id="emb">&lt;iframe src="${esc(url)}" style="width:100%;max-width:480px;height:780px;border:0" title="${esc(p.nome)}"&gt;&lt;/iframe&gt;</textarea></div>
+      <div class="card"><h3>Versões publicadas</h3><p class="sub">As últimas 10 publicações ficam guardadas. Restaurar traz a versão para o editor; depois é só Publicar.</p><div id="vers"><div class="skel" style="height:60px"></div></div></div>
       <div class="card"><h3>Exportar</h3><p class="sub">Baixe o quiz em arquivo para guardar uma cópia ou importar em outra conta.</p><button class="btn sec" id="exp">${icon("baixo", 16)}Exportar quiz</button></div></div></main>`;
     $$("[data-copy]").forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copiado"); });
     const upd = () => { const u = new URL(url); $$("[data-u]").forEach(i => { if (i.value.trim()) u.searchParams.set(i.dataset.u, i.value.trim()); }); $("#utmL").textContent = u.href; };
     $$("[data-u]").forEach(i => i.oninput = upd);
     $("#utmC").onclick = () => { navigator.clipboard.writeText($("#utmL").textContent); toast("Link copiado"); };
     $("#exp").onclick = () => exportProject(p);
+    listVersions(p).then(vs => {
+      const box = $("#vers"); if (!box) return;
+      box.innerHTML = vs.length ? `<div class="tbl-wrap"><table class="tbl" style="width:100%"><thead><tr><th>Versão</th><th>Publicada em</th><th>Por</th><th>Páginas</th><th></th></tr></thead><tbody>${vs.map(v => `<tr><td><b>${v.versao}</b>${v.versao === p.versaoPublicada ? ' <span class="pill ok">no ar</span>' : ""}</td><td>${fmtDT(v.publicadoEm)}</td><td>${esc(v.por || "—")}</td><td>${(v.flow?.nodes || []).filter(n => n.type === "page").length}</td><td style="text-align:right"><button class="btn xs sec" data-rest="${v.versao}">Restaurar</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted" style="margin:0">Ainda não há versões guardadas. Elas começam a ser guardadas na próxima publicação.</p>`;
+      $$("[data-rest]", box).forEach(b => b.onclick = async () => {
+        const v = vs.find(x => String(x.versao) === b.dataset.rest);
+        if (!await confirmBox("Restaurar versão " + v.versao, `O fluxo e o visual voltam a ser os da versão ${v.versao} (${esc(fmtDT(v.publicadoEm))}). Configurações e endereço não mudam. Dá para desfazer com Ctrl+Z.`, "Restaurar")) return;
+        Object.assign(p, { flow: U.clone(v.flow), tema: U.clone(v.tema) }); normalizeProject(p); markDirty();
+        toast(`Versão ${v.versao} restaurada no editor. Clique em Publicar para colocar no ar.`, 5000); go(`p/${p.id}/fluxo`);
+      });
+    }).catch(e => { const box = $("#vers"); if (box) box.innerHTML = `<p class="muted">Não consegui ler as versões: ${esc(e.message)}</p>`; });
   },
 };
 
@@ -2660,8 +2695,8 @@ TABS.estatisticas = {
     const stats = {}; p.flow.nodes.forEach(n => { const v = L.filter(l => (l.vistas || []).includes(n.id)).length; stats[n.id] = { views: v, ret: total ? Math.round(v / total * 100) : 0 }; });
     const pb = periodBar(() => this.draw());
     const pct = x => total ? Math.round(x / total * 100) + "%" : "—";
-    const head = `<div class="statbar"><div class="bar" style="margin:0">${pb.html}<span style="flex:1"></span><div class="seg" role="group" aria-label="Visualização"><button data-v="fluxo" aria-pressed="${this.view === "fluxo"}">No mapa</button><button data-v="funil" aria-pressed="${this.view === "funil"}">Funil</button><button data-v="ab" aria-pressed="${this.view === "ab"}">Testes A/B</button></div></div>
-      <div class="nums"><span><b>${total}</b>começaram</span><span><b>${contato}</b>deixaram contato · ${pct(contato)}</span><span><b>${fin}</b>finalizaram · ${pct(fin)}</span><span><b>${L.filter(l => l.destino === "site").length}</b>foram ao carrinho</span><span><b>${L.filter(l => l.destino === "whatsapp").length}</b>foram ao WhatsApp</span></div></div>`;
+    const head = `<div class="statbar"><div class="bar" style="margin:0">${pb.html}<span style="flex:1"></span><div class="seg" role="group" aria-label="Visualização"><button data-v="fluxo" aria-pressed="${this.view === "fluxo"}">No mapa</button><button data-v="funil" aria-pressed="${this.view === "funil"}">Funil</button><button data-v="anuncio" aria-pressed="${this.view === "anuncio"}">Por anúncio</button><button data-v="ab" aria-pressed="${this.view === "ab"}">Testes A/B</button></div></div>
+      <div class="nums"><span><b>${total}</b>começaram</span><span><b>${contato}</b>deixaram contato · ${pct(contato)}</span><span><b>${fin}</b>finalizaram · ${pct(fin)}</span><span><b>${L.filter(l => l.destino === "site").length}</b>foram ao carrinho</span><span><b>${L.filter(l => l.destino === "whatsapp").length}</b>foram ao WhatsApp</span><span><b>${L.filter(l => l.compra).length}</b>compraram · ${BRL(L.reduce((a, l) => a + (l.compra ? +l.compra.valor || 0 : 0), 0))}</span></div></div>`;
     if (this.view === "fluxo") {
       host.innerHTML = head + `<div id="cvh"></div>`;
       renderCanvas($("#cvh"), { readonly: true, stats });
@@ -2670,6 +2705,14 @@ TABS.estatisticas = {
       const pages = orderedPages(), nm = pageNames(pages); const mx = Math.max(1, total);
       host.innerHTML = head + `<main class="wrap"><div class="card"><h3>Funil por página</h3><p class="sub">Retenção = das que começaram, quantas viram a página. Clique para ver no CRM quem parou ali.</p>${pages.map((n, i) => { const s = stats[n.id]; const prev = i ? stats[pages[i - 1].id].views : total; const drop = prev ? Math.round((1 - s.views / prev) * 100) : 0; const parou = L.filter(l => !l.finalizado && lastPage(l) === n.id).length; return `<div class="fn-row click" data-n="${n.id}" tabindex="0"><span>${esc(nm[n.id])}</span><div class="trk"><i style="width:${s.views / mx * 100}%"></i><b>${s.views}</b></div><span class="r">${s.ret}%${i && drop > 0 ? ` · <span class="d">−${drop}%</span>` : ""}${parou ? ` · ${parou} parou` : ""}</span></div>`; }).join("")}<div class="fn-row"><b>Finalizou</b><div class="trk"><i style="width:${fin / mx * 100}%;background:var(--success)"></i><b>${fin}</b></div><span class="r">${total ? Math.round(fin / total * 100) : 0}%</span></div></div></main>`;
       $$("[data-n]", host).forEach(r => { const g = () => { TABS.clientes.filter = r.dataset.n; go(`p/${p.id}/clientes`); }; r.onclick = g; r.onkeydown = e => { if (e.key === "Enter") g(); }; });
+    } else if (this.view === "anuncio") {
+      const por = this.por || "utm_campaign", nomes = { utm_campaign: "Campanha", utm_content: "Anúncio (utm_content)", utm_source: "Origem" };
+      const g = new Map(); L.forEach(l => { const o = l.origem || {}; const k = o[por] || (por === "utm_source" && o.fbclid ? "Meta (sem UTM)" : "(sem " + nomes[por].toLowerCase().split(" ")[0] + ")"); if (!g.has(k)) g.set(k, []); g.get(k).push(l); });
+      const rows = [...g.entries()].map(([k, a]) => ({ k, n: a.length, c: a.filter(l => l.whatsapp).length, f: a.filter(l => l.finalizado).length, cp: a.filter(l => l.compra).length, v: a.reduce((s, l) => s + (l.compra ? +l.compra.valor || 0 : 0), 0) })).sort((a, b) => b.v - a.v || b.n - a.n);
+      const pc = (x, t) => t ? Math.round(x / t * 100) + "%" : "—";
+      host.innerHTML = head + `<main class="wrap"><div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><div><h3>Vendas por anúncio</h3><p class="sub">Use links com UTM (aba Compartilhar). "Compraram" vem do app de vendas, pelo telefone.</p></div><div class="seg" role="group" aria-label="Agrupar por">${Object.entries(nomes).map(([k, l]) => `<button data-por="${k}" aria-pressed="${por === k}">${l}</button>`).join("")}</div></div>
+        ${rows.length ? `<div class="tbl-wrap"><table class="tbl" style="width:100%"><thead><tr><th>${esc(nomes[por])}</th><th>Começaram</th><th>Deixaram contato</th><th>Finalizaram</th><th>Compraram</th><th>Vendido</th><th>Por cliente</th></tr></thead><tbody>${rows.map(r => `<tr><td><b>${esc(r.k)}</b></td><td>${r.n}</td><td>${r.c} (${pc(r.c, r.n)})</td><td>${r.f} (${pc(r.f, r.n)})</td><td>${r.cp} (${pc(r.cp, r.n)})</td><td>${BRL(r.v)}</td><td>${r.n ? BRL(r.v / r.n) : "—"}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma cliente no período.</div>`}</div></main>`;
+      $$("[data-por]", host).forEach(b => b.onclick = () => { this.por = b.dataset.por; this.draw(); });
     } else {
       const abs = p.flow.nodes.filter(n => n.type === "fn" && (n.data.kind === "ab" || n.data.kind === "divisao"));
       host.innerHTML = head + `<main class="wrap">${abs.length ? abs.map(n => { const pr = n.data.props; const vers = n.data.kind === "ab" ? [["A", pr.nomeA || "A"], ["B", pr.nomeB || "B"]] : (pr.caminhos || []).map(c => [c.id, c.nome]); const row = ([k, nome]) => { const g = L.filter(l => (l.ab || {})[n.id] === k), f = g.filter(l => l.finalizado).length, c = g.filter(l => l.whatsapp).length; return `<tr><td><b>${esc(nome)}</b></td><td>${g.length}</td><td>${c} (${g.length ? Math.round(c / g.length * 100) : 0}%)</td><td>${f} (${g.length ? Math.round(f / g.length * 100) : 0}%)</td></tr>`; }; return `<div class="card" style="margin-bottom:12px"><h3>${n.data.kind === "ab" ? `Teste A/B · ${+pr.pctA}% / ${100 - +pr.pctA}%` : "Divisão de tráfego · " + vers.length + " caminhos"}</h3><p class="sub">Cada cliente fica sempre na mesma versão.</p><table class="tbl" style="width:100%"><thead><tr><th>Versão</th><th>Entraram</th><th>Deixaram contato</th><th>Finalizaram</th></tr></thead><tbody>${vers.map(row).join("")}</tbody></table></div>`; }).join("") : `<div class="empty">Nenhum teste no mapa. Adicione em Fluxo → Nova função → Teste A/B ou Divisão de tráfego.</div>`}</main>`;
@@ -2723,76 +2766,184 @@ async function deleteLeads(ids) { for (let i = 0; i < ids.length; i += 400) { co
 
 // ---------- CLIENTES (CRM) ----------
 const STATUS = [["novo", "Novo"], ["contato", "Em contato"], ["comprou", "Comprou"], ["perdido", "Perdido"]];
-TABS.clientes = {
-  filter: "", q: "", soContato: true, tag: "",
-  render(host) { this.host = host; this.draw(); },
-  refresh() {
-    if (!this.host || !document.body.contains(this.host) || document.querySelector(".drawer")) return;
-    const f = document.activeElement?.id; this.draw();
-    if (f === "cq") { const n = $("#cq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
-  },
-  match(l) {
-    if (!inPeriod(l)) return false;
-    if (this.soContato && !l.whatsapp) return false;
-    if (this.q) { const s = this.q.toLowerCase(); if (!(String(l.nome || "").toLowerCase().includes(s) || U.digits(l.whatsapp).includes(U.digits(this.q) || "§"))) return false; }
-    if (this.tag && !(l.tags || []).includes(this.tag)) return false;
-    if (this.filter === "parados") return !l.finalizado && !isLive(l);
-    if (this.filter === "fim") return !!l.finalizado;
-    if (this.filter === "carrinho") return (l.carrinho || []).length > 0 && !l.finalizado;
-    if (this.filter) return !l.finalizado && lastPage(l) === this.filter;
-    return true;
-  },
-  draw(keepFocus) {
-    const host = this.host; if (leadsNotReady(host)) return;
-    const p = ST.project, L = ST.leads.filter(l => this.match(l));
-    const pb = periodBar(() => this.draw());
-    const opts = `<option value="">Todas as etapas</option><option value="parados" ${this.filter === "parados" ? "selected" : ""}>Pararam no meio</option><option value="carrinho" ${this.filter === "carrinho" ? "selected" : ""}>Montaram carrinho e não finalizaram</option><option value="fim" ${this.filter === "fim" ? "selected" : ""}>Finalizaram</option>${(() => { const op = orderedPages(), nm = pageNames(op); return op.map(n => `<option value="${n.id}" ${this.filter === n.id ? "selected" : ""}>Parou em: ${esc(nm[n.id])}</option>`).join(""); })()}`;
-    const cols = STATUS.map(([k, nm]) => { const it = L.filter(l => (l.status || "novo") === k); return `<div class="col" data-st="${k}"><h4>${nm}<span>${it.length}</span></h4><div>${it.slice(0, 150).map(l => this.card(l)).join("") || `<p class="muted" style="text-align:center;font-size:12px">—</p>`}${it.length > 150 ? `<p class="muted" style="text-align:center;font-size:12px">+${it.length - 150} (use a busca)</p>` : ""}</div></div>`; }).join("");
-    host.innerHTML = `<main class="wrap" style="max-width:none"><div class="bar">${pb.html}<input class="inp" id="cq" placeholder="Buscar nome ou telefone" value="${esc(this.q)}" style="max-width:220px"><select class="inp" id="cf" style="max-width:280px" aria-label="Etapa">${opts}</select>${(() => { const all = [...new Set(ST.leads.flatMap(l => l.tags || []))].sort(); return all.length ? `<select class="inp" id="ctag" style="max-width:180px" aria-label="Etiqueta"><option value="">Todas as etiquetas</option>${all.map(t => `<option value="${esc(t)}" ${this.tag === t ? "selected" : ""}>#${esc(t)}</option>`).join("")}</select>` : ""; })()}<label class="toggle"><input type="checkbox" id="sc" ${this.soContato ? "checked" : ""}><span class="sw"></span>Só com WhatsApp</label><span style="flex:1"></span><span class="muted">${L.length} cliente(s)</span></div><div class="board">${cols}</div></main>`;
-    pb.bind(host);
-    const cq = $("#cq"); cq.oninput = () => { this.q = cq.value; clearTimeout(cq._t); cq._t = setTimeout(() => { this.draw(); const n = $("#cq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
-    $("#cf").onchange = e => { this.filter = e.target.value; this.draw(); };
-    $("#sc").onchange = e => { this.soContato = e.target.checked; this.draw(); };
-    if ($("#ctag")) $("#ctag").onchange = e => { this.tag = e.target.value; this.draw(); };
-    $$(".lc", host).forEach(c => { c.draggable = true; c.ondragstart = e => e.dataTransfer.setData("text/plain", c.dataset.id); c.onclick = e => { if (e.target.closest("a,select,button")) return; this.open(c.dataset.id); }; c.onkeydown = e => { if (e.key === "Enter" && e.target === c) this.open(c.dataset.id); }; });
-    $$(".col", host).forEach(col => { col.ondragover = e => { e.preventDefault(); col.classList.add("over"); }; col.ondragleave = () => col.classList.remove("over"); col.ondrop = e => { e.preventDefault(); col.classList.remove("over"); const id = e.dataTransfer.getData("text/plain"); if (id) setStatus(id, col.dataset.st); }; });
-    $$(".lc select", host).forEach(s => s.onchange = () => setStatus(s.dataset.id, s.value));
-    $$(".lc a[data-wa]", host).forEach(a => a.addEventListener("click", () => { const l = ST.leads.find(x => x.id === a.dataset.wa); if (l && (l.status || "novo") === "novo") setStatus(l.id, "contato"); }));
-  },
-  card(l) {
-    return `<div class="lc" data-id="${l.id}" tabindex="0"><div class="nm">${esc(l.nome || "Sem nome")}<small>${ago(l.atualizadoEm || l.criadoEm)}</small></div><div class="ph">${esc(U.phoneFmt(l.whatsapp) || "sem WhatsApp")}</div><div style="margin-top:6px">${badge(l)}</div>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="pill tag">#${esc(t)}</span>`).join("")}</div>` : ""}${(l.escolhas || []).length ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(l.escolhas.length)} escolha(s) no carrinho</div>` : ""}<div class="act">${l.whatsapp ? `<a class="btn xs wa" data-wa="${l.id}" href="${esc(waLead(l))}" target="_blank" rel="noopener">${icon("whatsapp", 13)}WhatsApp</a>` : ""}<select class="inp" data-id="${l.id}" style="min-height:26px;padding:2px 6px;font-size:12px;width:auto" aria-label="Status">${STATUS.map(([k, n]) => `<option value="${k}" ${(l.status || "novo") === k ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>`;
-  },
-  open(id) {
-    const l = ST.leads.find(x => x.id === id); if (!l) return; const p = ST.project;
-    const d = document.createElement("div"); d.className = "drawer"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Cliente");
-    const resp = orderedPages().filter(n => (l.respostas || {})[n.id]).map(n => `<dt>${esc(n.data.nome)}</dt><dd>${esc(l.respostas[n.id])}</dd>`).join("");
-    const o = l.origem || {}; const orig = [o.utm_source, o.utm_medium, o.utm_campaign, o.utm_content].filter(Boolean).join(" · ") || (o.fbclid ? "Anúncio Meta" : o.referrer || "Direto");
-    const cartLink = (l.carrinho || []).length ? String(p.config.carrinhoBase || "").replace(/\/?$/, "/") + l.carrinho.join(",") + (l.cupom ? "?promocode=" + encodeURIComponent(l.cupom) : "") : "";
-    d.innerHTML = `<div class="dr"><div class="row" style="justify-content:space-between;align-items:flex-start"><h2>${esc(l.nome || "Sem nome")}</h2><button class="btn sm sec" data-x>Fechar</button></div><div class="muted">${esc(U.phoneFmt(l.whatsapp))}${l.email ? " · " + esc(l.email) : ""}</div><div class="row" style="margin-top:8px;flex-wrap:wrap">${badge(l)}${(l.tags || []).map(t => `<span class="pill tag">#${esc(t)}</span>`).join("")}</div>
-      <div class="row" style="margin-top:14px;flex-wrap:wrap">${l.whatsapp ? `<a class="btn wa" id="dwa" href="${esc(waLead(l))}" target="_blank" rel="noopener">${icon("whatsapp", 16)}Chamar no WhatsApp</a>` : ""}<select class="inp" id="dst" style="width:auto" aria-label="Status">${STATUS.map(([k, n]) => `<option value="${k}" ${(l.status || "novo") === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
-      ${l.whatsapp ? `<div class="sec">Mensagem que vai</div><div style="white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:10px;font-size:13px">${esc(waText(l))}</div>` : ""}
-      <div class="sec">Respostas</div><dl class="kv">${resp || "<dt>—</dt><dd></dd>"}</dl>
-      ${(l.escolhas || []).length ? `<div class="sec">Escolhas de peças</div><ol style="margin:0;padding-left:18px;font-size:13px">${l.escolhas.map(e => `<li>${esc(e)}</li>`).join("")}</ol>` : ""}
-      ${cartLink ? `<div class="sec">Carrinho montado</div><a href="${esc(cartLink)}" target="_blank" rel="noopener" style="font-size:12px;word-break:break-all">${l.carrinho.length} peça(s)${l.cupom ? " · cupom " + esc(l.cupom) : ""} — abrir na Yampi ↗</a><div class="row" style="margin-top:6px"><button class="btn xs sec" data-cc="${esc(cartLink)}">Copiar link do carrinho</button></div>` : ""}
-      <div class="sec">Dados</div><dl class="kv"><dt>Entrou</dt><dd>${fmtDT(l.criadoEm)}</dd><dt>Última ação</dt><dd>${fmtDT(l.atualizadoEm)}</dd><dt>Origem</dt><dd>${esc(orig)}</dd>${l.statusPor ? `<dt>Status por</dt><dd>${esc(l.statusPor)} · ${fmtDT(l.statusEm)}</dd>` : ""}</dl>
-      <div class="sec">Caminho no quiz</div><div class="muted" style="font-size:12px">${(l.vistas || []).map(id => esc(nodeLabel(id))).filter(x => x !== "—").join(" → ")}</div>
-      <div class="sec">Anotações</div><textarea class="inp" id="dn" placeholder="Ex.: pediu para chamar amanhã">${esc(l.notas || "")}</textarea>
-      <div class="row" style="justify-content:space-between;margin-top:8px">${me.gestor ? `<button class="btn sm ghost danger" id="ddel">Excluir cliente</button>` : "<span></span>"}<button class="btn sm primary" id="dsv">Salvar anotação</button></div></div>`;
-    document.body.appendChild(d);
-    const close = () => { d.remove(); document.removeEventListener("keydown", k); this.draw(); };
-    const k = e => { if (e.key === "Escape") close(); };
-    document.addEventListener("keydown", k);
-    d.addEventListener("mousedown", e => { if (e.target === d) close(); });
-    $("[data-x]", d).onclick = close; $("[data-x]", d).focus();
-    $("#dst", d).onchange = e => setStatus(l.id, e.target.value);
-    if ($("#dwa", d)) $("#dwa", d).onclick = () => { if ((l.status || "novo") === "novo") setStatus(l.id, "contato"); };
-    $$("[data-cc]", d).forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.cc); toast("Link copiado"); });
-    $("#dsv", d).onclick = async () => { try { await DB.leads().doc(l.id).update({ notas: $("#dn", d).value.slice(0, 2000) }); toast("Anotação salva"); } catch (e) { toast("Erro: " + e.message); } };
-    if ($("#ddel", d)) $("#ddel", d).onclick = async () => { if (!await confirmBox("Excluir cliente", "Excluir este contato e as respostas dele?", "Excluir", true)) return; await DB.leads().doc(l.id).delete(); close(); toast("Excluído"); };
-  },
-};
+const isoDia = n => new Date(Date.now() + n * 864e5).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+const hojeDia = () => isoDia(0);
+const diaDe = iso => iso ? new Date(iso).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }) : "";
+const fmtDia = d => d ? new Date(d + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) : "";
+const BRL = v => (+v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// o quiz de onde a cliente veio (no CRM geral cada cartão pode ser de um quiz)
+const projOf = l => (ST.project && ST.project.id === l.projectId) ? ST.project : (ST.projects.find(p => p.id === l.projectId) || null);
+const projName = l => (projOf(l) || {}).nome || "Quiz excluído";
+
+// ---------- vendas do app de vendas: marca "Comprou" sozinho ----------
+// chave do telefone: DDD + últimos 8 dígitos (ignora o 55 e o 9 a mais)
+const telKey = t => { let d = U.digits(t); if (d.length > 11 && d.startsWith("55")) d = d.slice(2); return d.length >= 10 ? d.slice(0, 2) + d.slice(-8) : ""; };
+function valorVenda(s) { const its = s.products || []; const sub = +s.subtotal || its.reduce((a, x) => a + (+x.qty || 1) * (+x.unit_price || 0), 0); return Math.max(0, Math.round((sub - (+s.discount || 0)) * 100) / 100); }
+function watchSales() {
+  if (ST.unsubSales) return;
+  ST.unsubSales = db.collection("sales").where("date", ">=", isoDia(-150)).onSnapshot(s => {
+    const m = new Map();
+    s.docs.forEach(d => { const v = d.data() || {}; if (v.deleted || v.status === "cancelado" || !v.date) return; const k = telKey((v.shipping_data || {}).tel || v.phone); if (!k) return; if (!m.has(k)) m.set(k, []); m.get(k).push({ id: d.id, data: v.date, valor: valorVenda(v), canal: v.channel || "", num: v.num || null }); });
+    m.forEach(a => a.sort((x, y) => x.data.localeCompare(y.data)));
+    ST.salesByTel = m; autoComprou(); refreshCRMs();
+  }, () => { });
+}
+const autoFeito = new Set();
+async function autoComprou() {
+  if (!ST.salesByTel || !me) return;
+  const pool = new Map(); [...(ST.allLeads || []), ...(ST.leads || [])].forEach(l => pool.set(l.id, l));
+  for (const l of pool.values()) {
+    if (l.compra || !l.whatsapp || autoFeito.has(l.id)) continue;
+    const vs = ST.salesByTel.get(telKey(l.whatsapp)); if (!vs) continue;
+    const v = vs.find(x => x.data >= diaDe(l.criadoEm)); if (!v) continue; // só compra feita depois do quiz
+    autoFeito.add(l.id);
+    try { await DB.leads().doc(l.id).update({ compra: { venda: v.id, data: v.data, valor: v.valor, canal: v.canal, num: v.num }, status: "comprou", statusEm: U.now(), statusPor: "Automático (app de vendas)" }); }
+    catch (e) { autoFeito.delete(l.id); }
+  }
+}
+
+// ---------- todas as clientes (CRM geral) + aviso de cliente nova ----------
+function watchAllLeads() {
+  if (ST.unsubAll) return;
+  let primeira = true;
+  ST.unsubAll = DB.leads().where("criadoEm", ">=", new Date(Date.now() - 120 * 864e5).toISOString()).onSnapshot(s => {
+    const arr = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => String(b.criadoEm).localeCompare(String(a.criadoEm)));
+    const comZap = ST.comZap || new Set();
+    if (!primeira) arr.filter(l => l.whatsapp && !comZap.has(l.id)).forEach(avisarNova);
+    ST.comZap = new Set(arr.filter(l => l.whatsapp).map(l => l.id));
+    primeira = false; ST.allLeads = arr; ST.allLoaded = true;
+    autoComprou(); refreshCRMs(); updParaHoje();
+  }, e => { ST.allErr = e.message; });
+}
+const somLigado = () => { try { return localStorage.getItem("vq_som") !== "0"; } catch (e) { return true; } };
+function beep() { if (!somLigado()) return; try { const c = new (window.AudioContext || window.webkitAudioContext)(); const o = c.createOscillator(), g = c.createGain(); o.connect(g); g.connect(c.destination); o.frequency.value = 880; g.gain.setValueAtTime(.08, c.currentTime); g.gain.exponentialRampToValueAtTime(.0001, c.currentTime + .35); o.start(); o.stop(c.currentTime + .36); } catch (e) { } }
+function avisarNova(l) {
+  toast(`Cliente nova: ${l.nome || "sem nome"} · ${projName(l)}`, 6000); beep();
+  try { if (document.hidden && "Notification" in window && Notification.permission === "granted") new Notification("Cliente nova no quiz", { body: `${l.nome || "Sem nome"} · ${projName(l)}` }); } catch (e) { }
+}
+const paraHoje = l => !!l.lembrete && l.lembrete <= hojeDia() && !["comprou", "perdido"].includes(l.status || "novo");
+function updParaHoje() { const n = (ST.allLeads || []).filter(paraHoje).length; $$("[data-parahoje]").forEach(el => { el.textContent = n || ""; el.hidden = !n; }); }
+function refreshCRMs() { if (location.hash.startsWith("#/clientes")) GCRM.refresh(); else if (ST.project) { const t = currentTab(); if (["estatisticas", "resultados", "clientes"].includes(t)) TABS[t].refresh && TABS[t].refresh(); } }
+
+// mesma cliente em vários quizzes: junta pelo WhatsApp (fica o cartão mais recente)
+function juntarPorZap(L) {
+  const by = new Map(), out = [];
+  L.forEach(l => { const k = l.whatsapp && telKey(l.whatsapp); if (!k) return out.push(l); if (by.has(k)) by.get(k)._outros.push(l); else { const c = Object.assign({}, l, { _outros: [] }); by.set(k, c); out.push(c); } });
+  return out;
+}
+
+function makeCRM(global) {
+  return {
+    filter: "", q: "", soContato: true, tag: "", quiz: "", resp: "",
+    leads() { return global ? (ST.allLeads || []) : ST.leads; },
+    render(host) { this.host = host; this.draw(); },
+    refresh() {
+      if (!this.host || !document.body.contains(this.host) || document.querySelector(".drawer")) return;
+      const f = document.activeElement?.id; this.draw();
+      if (f === "cq") { const n = $("#cq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }
+    },
+    match(l) {
+      if (this.filter !== "hoje" && !inPeriod(l)) return false;
+      if (this.soContato && !l.whatsapp) return false;
+      if (this.q) { const s = this.q.toLowerCase(); if (!(String(l.nome || "").toLowerCase().includes(s) || U.digits(l.whatsapp).includes(U.digits(this.q) || "§"))) return false; }
+      if (this.tag && !(l.tags || []).includes(this.tag)) return false;
+      if (this.quiz && l.projectId !== this.quiz) return false;
+      if (this.resp === "_sem" ? !!l.responsavel : this.resp && l.responsavel !== this.resp) return false;
+      if (this.filter === "hoje") return paraHoje(l);
+      if (this.filter === "parados") return !l.finalizado && !isLive(l);
+      if (this.filter === "fim") return !!l.finalizado;
+      if (this.filter === "carrinho") return (l.carrinho || []).length > 0 && !l.finalizado;
+      if (this.filter === "compraram") return !!l.compra;
+      if (this.filter) return !l.finalizado && lastPage(l) === this.filter;
+      return true;
+    },
+    notReady(host) {
+      if (!global) return leadsNotReady(host);
+      if (ST.allErr) { host.innerHTML = `<main class="wrap"><div class="card">Não consegui ler as clientes: ${esc(ST.allErr)}</div></main>`; return true; }
+      if (!ST.allLoaded) { host.innerHTML = `<main class="wrap"><div class="skel" style="height:360px"></div></main>`; return true; }
+      return false;
+    },
+    draw() {
+      const host = this.host; if (this.notReady(host)) return;
+      let base = this.leads(); if (global) base = juntarPorZap(base);
+      const L = base.filter(l => this.match(l)), hoje = base.filter(paraHoje).length;
+      const pb = periodBar(() => this.draw());
+      const pagesOpt = global ? "" : (() => { const op = orderedPages(), nm = pageNames(op); return op.map(n => `<option value="${n.id}" ${this.filter === n.id ? "selected" : ""}>Parou em: ${esc(nm[n.id])}</option>`).join(""); })();
+      const opts = `<option value="">Todas as etapas</option><option value="hoje" ${this.filter === "hoje" ? "selected" : ""}>Para hoje (lembretes)</option><option value="parados" ${this.filter === "parados" ? "selected" : ""}>Pararam no meio</option><option value="carrinho" ${this.filter === "carrinho" ? "selected" : ""}>Montaram carrinho e não finalizaram</option><option value="fim" ${this.filter === "fim" ? "selected" : ""}>Finalizaram</option><option value="compraram" ${this.filter === "compraram" ? "selected" : ""}>Compraram (app de vendas)</option>${pagesOpt}`;
+      const tags = [...new Set(this.leads().flatMap(l => l.tags || []))].sort();
+      const quizSel = global ? `<select class="inp" id="cqz" style="max-width:220px" aria-label="Quiz"><option value="">Todos os quizzes</option>${ST.projects.map(p => `<option value="${p.id}" ${this.quiz === p.id ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select>` : "";
+      const respSel = `<select class="inp" id="crs" style="max-width:180px" aria-label="Responsável"><option value="">Todas as responsáveis</option><option value="_sem" ${this.resp === "_sem" ? "selected" : ""}>Sem responsável</option>${(ST.team || []).map(n => `<option ${this.resp === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>`;
+      const cols = STATUS.map(([k, nm]) => { const it = L.filter(l => (l.status || "novo") === k); return `<div class="col" data-st="${k}"><h4>${nm}<span>${it.length}</span></h4><div>${it.slice(0, 150).map(l => this.card(l)).join("") || `<p class="muted" style="text-align:center;font-size:12px">—</p>`}${it.length > 150 ? `<p class="muted" style="text-align:center;font-size:12px">+${it.length - 150} (use a busca)</p>` : ""}</div></div>`; }).join("");
+      const vendido = L.filter(l => l.compra).reduce((a, l) => a + (+l.compra.valor || 0), 0);
+      host.innerHTML = `<main class="wrap" style="max-width:none">${hoje && this.filter !== "hoje" ? `<button class="hoje-bar" id="vhoje">${icon("relogio", 16)}<b>${hoje}</b> cliente(s) para chamar hoje · ver agora</button>` : ""}
+        <div class="bar">${pb.html}<input class="inp" id="cq" placeholder="Buscar nome ou telefone" value="${esc(this.q)}" style="max-width:200px">${quizSel}<select class="inp" id="cf" style="max-width:260px" aria-label="Etapa">${opts}</select>${respSel}${tags.length ? `<select class="inp" id="ctag" style="max-width:170px" aria-label="Etiqueta"><option value="">Todas as etiquetas</option>${tags.map(t => `<option value="${esc(t)}" ${this.tag === t ? "selected" : ""}>#${esc(t)}</option>`).join("")}</select>` : ""}<label class="toggle"><input type="checkbox" id="sc" ${this.soContato ? "checked" : ""}><span class="sw"></span>Só com WhatsApp</label><span style="flex:1"></span><span class="muted">${L.length} cliente(s)${vendido ? ` · ${BRL(vendido)} vendidos` : ""}</span></div><div class="board">${cols}</div></main>`;
+      pb.bind(host);
+      const cq = $("#cq"); cq.oninput = () => { this.q = cq.value; clearTimeout(cq._t); cq._t = setTimeout(() => { this.draw(); const n = $("#cq"); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
+      $("#cf").onchange = e => { this.filter = e.target.value; this.draw(); };
+      $("#crs").onchange = e => { this.resp = e.target.value; this.draw(); };
+      if ($("#cqz")) $("#cqz").onchange = e => { this.quiz = e.target.value; this.draw(); };
+      if ($("#vhoje")) $("#vhoje").onclick = () => { this.filter = "hoje"; this.draw(); };
+      $("#sc").onchange = e => { this.soContato = e.target.checked; this.draw(); };
+      if ($("#ctag")) $("#ctag").onchange = e => { this.tag = e.target.value; this.draw(); };
+      $$(".lc", host).forEach(c => { c.draggable = true; c.ondragstart = e => e.dataTransfer.setData("text/plain", c.dataset.id); c.onclick = e => { if (e.target.closest("a,select,button")) return; this.open(c.dataset.id); }; c.onkeydown = e => { if (e.key === "Enter" && e.target === c) this.open(c.dataset.id); }; });
+      $$(".col", host).forEach(col => { col.ondragover = e => { e.preventDefault(); col.classList.add("over"); }; col.ondragleave = () => col.classList.remove("over"); col.ondrop = e => { e.preventDefault(); col.classList.remove("over"); const id = e.dataTransfer.getData("text/plain"); if (id) setStatus(id, col.dataset.st); }; });
+      $$(".lc select", host).forEach(s => s.onchange = () => setStatus(s.dataset.id, s.value));
+      $$(".lc [data-lem]", host).forEach(b => b.onclick = e => { e.stopPropagation(); lembreteMenu(b, b.dataset.lem); });
+      $$(".lc a[data-wa]", host).forEach(a => a.addEventListener("click", () => { const l = this.leads().find(x => x.id === a.dataset.wa); if (l && (l.status || "novo") === "novo") setStatus(l.id, "contato"); }));
+    },
+    card(l) {
+      const lem = l.lembrete ? `<span class="pill ${l.lembrete < hojeDia() ? "bad" : l.lembrete === hojeDia() ? "warn" : ""}">${icon("relogio", 11)}${l.lembrete === hojeDia() ? "Chamar hoje" : l.lembrete < hojeDia() ? "Atrasado " + fmtDia(l.lembrete) : "Chamar " + fmtDia(l.lembrete)}</span>` : "";
+      return `<div class="lc" data-id="${l.id}" tabindex="0"><div class="nm">${esc(l.nome || "Sem nome")}<small>${ago(l.atualizadoEm || l.criadoEm)}</small></div><div class="ph">${esc(U.phoneFmt(l.whatsapp) || "sem WhatsApp")}</div>${global ? `<div class="muted" style="font-size:11px;margin-top:2px">${esc(projName(l))}${(l._outros || []).length ? ` · fez ${l._outros.length + 1} quizzes` : ""}</div>` : ""}<div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${badge(l)}${l.compra ? `<span class="pill ok">${icon("sacola", 11)}${BRL(l.compra.valor)} · ${fmtDia(l.compra.data)}</span>` : ""}${lem}${l.responsavel ? `<span class="pill">${icon("usuario", 11)}${esc(l.responsavel)}</span>` : ""}</div>${(l.tags || []).length ? `<div class="tags">${l.tags.map(t => `<span class="pill tag">#${esc(t)}</span>`).join("")}</div>` : ""}${(l.escolhas || []).length ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(l.escolhas.length)} escolha(s) no carrinho</div>` : ""}<div class="act">${l.whatsapp ? `<a class="btn xs wa" data-wa="${l.id}" href="${esc(waLead(l))}" target="_blank" rel="noopener">${icon("whatsapp", 13)}WhatsApp</a>` : ""}<button class="btn xs ghost" data-lem="${l.id}" aria-label="Lembrete para ${esc(l.nome || "cliente")}" title="Lembrar de chamar">${icon("relogio", 13)}</button><select class="inp" data-id="${l.id}" style="min-height:26px;padding:2px 6px;font-size:12px;width:auto" aria-label="Status">${STATUS.map(([k, n]) => `<option value="${k}" ${(l.status || "novo") === k ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>`;
+    },
+    open(id) {
+      const all = global ? juntarPorZap(this.leads()) : this.leads();
+      const l = all.find(x => x.id === id) || this.leads().find(x => x.id === id); if (!l) return; const p = projOf(l);
+      const d = document.createElement("div"); d.className = "drawer"; d.setAttribute("role", "dialog"); d.setAttribute("aria-label", "Cliente");
+      const resp = p ? orderedPages(p).filter(n => (l.respostas || {})[n.id]).map(n => `<dt>${esc(n.data.nome)}</dt><dd>${esc(l.respostas[n.id])}</dd>`).join("") : "";
+      const o = l.origem || {}; const orig = [o.utm_source, o.utm_medium, o.utm_campaign, o.utm_content].filter(Boolean).join(" · ") || (o.fbclid ? "Anúncio Meta" : o.referrer || "Direto");
+      const cb = p ? p.config.carrinhoBase : DEFAULT_CONFIG.carrinhoBase;
+      const cartLink = (l.carrinho || []).length ? String(cb || "").replace(/\/?$/, "/") + l.carrinho.join(",") + (l.cupom ? "?promocode=" + encodeURIComponent(l.cupom) : "") : "";
+      d.innerHTML = `<div class="dr"><div class="row" style="justify-content:space-between;align-items:flex-start"><h2>${esc(l.nome || "Sem nome")}</h2><button class="btn sm sec" data-x>Fechar</button></div><div class="muted">${esc(U.phoneFmt(l.whatsapp))}${l.email ? " · " + esc(l.email) : ""}${global ? " · " + esc(projName(l)) : ""}</div><div class="row" style="margin-top:8px;flex-wrap:wrap">${badge(l)}${(l.tags || []).map(t => `<span class="pill tag">#${esc(t)}</span>`).join("")}</div>
+        <div class="row" style="margin-top:14px;flex-wrap:wrap">${l.whatsapp ? `<a class="btn wa" id="dwa" href="${esc(waLead(l))}" target="_blank" rel="noopener">${icon("whatsapp", 16)}Chamar no WhatsApp</a>` : ""}<select class="inp" id="dst" style="width:auto" aria-label="Status">${STATUS.map(([k, n]) => `<option value="${k}" ${(l.status || "novo") === k ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+        <div class="grid2" style="margin-top:12px"><label class="fld"><span class="lbl">Responsável</span><select class="inp" id="drs"><option value="">— ninguém</option>${(ST.team || []).map(n => `<option ${l.responsavel === n ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label><label class="fld"><span class="lbl">Lembrar de chamar em</span><input type="date" class="inp" id="dlem" value="${esc(l.lembrete || "")}"></label></div>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn xs sec" data-ld="1">Amanhã</button><button class="btn xs sec" data-ld="3">Em 3 dias</button><button class="btn xs sec" data-ld="7">Em 7 dias</button>${l.lembrete ? `<button class="btn xs ghost" data-ld="0">Tirar lembrete</button>` : ""}</div>
+        ${l.compra ? `<div class="sec">Compra</div><div class="okbox">${icon("sacola", 16)} Comprou <b>${BRL(l.compra.valor)}</b> em ${fmtDia(l.compra.data)}${l.compra.num ? " · pedido #" + String(l.compra.num).padStart(4, "0") : ""}${l.compra.canal ? " · " + esc(l.compra.canal) : ""}<div class="muted" style="font-size:11px">Encontrado sozinho no app de vendas pelo telefone.</div></div>` : ""}
+        ${l.whatsapp ? `<div class="sec">Mensagem que vai</div><div style="white-space:pre-wrap;background:var(--bg);border-radius:8px;padding:10px;font-size:13px">${esc(waText(l))}</div>` : ""}
+        <div class="sec">Respostas</div><dl class="kv">${resp || "<dt>—</dt><dd></dd>"}</dl>
+        ${(l.escolhas || []).length ? `<div class="sec">Escolhas de peças</div><ol style="margin:0;padding-left:18px;font-size:13px">${l.escolhas.map(e => `<li>${esc(e)}</li>`).join("")}</ol>` : ""}
+        ${cartLink ? `<div class="sec">Carrinho montado</div><a href="${esc(cartLink)}" target="_blank" rel="noopener" style="font-size:12px;word-break:break-all">${l.carrinho.length} peça(s)${l.cupom ? " · cupom " + esc(l.cupom) : ""} — abrir na Yampi ↗</a><div class="row" style="margin-top:6px"><button class="btn xs sec" data-cc="${esc(cartLink)}">Copiar link do carrinho</button></div>` : ""}
+        ${(l._outros || []).length ? `<div class="sec">Outros quizzes desta cliente</div><ul style="margin:0;padding-left:18px;font-size:13px">${l._outros.map(x => `<li>${esc(projName(x))} · ${fmtDT(x.criadoEm)} · ${esc(stageText(x))}</li>`).join("")}</ul>` : ""}
+        <div class="sec">Dados</div><dl class="kv"><dt>Entrou</dt><dd>${fmtDT(l.criadoEm)}</dd><dt>Última ação</dt><dd>${fmtDT(l.atualizadoEm)}</dd><dt>Origem</dt><dd>${esc(orig)}</dd>${l.statusPor ? `<dt>Status por</dt><dd>${esc(l.statusPor)} · ${fmtDT(l.statusEm)}</dd>` : ""}</dl>
+        <div class="sec">Caminho no quiz</div><div class="muted" style="font-size:12px">${p ? (l.vistas || []).map(id => esc(nodeLabel(id, p))).filter(x => x !== "—").join(" → ") : "—"}</div>
+        <div class="sec">Anotações</div><textarea class="inp" id="dn" placeholder="Ex.: pediu para chamar amanhã" aria-label="Anotações">${esc(l.notas || "")}</textarea>
+        <div class="row" style="justify-content:space-between;margin-top:8px">${me.gestor ? `<button class="btn sm ghost danger" id="ddel">Excluir cliente</button>` : "<span></span>"}<button class="btn sm primary" id="dsv">Salvar anotação</button></div></div>`;
+      document.body.appendChild(d);
+      const close = () => { d.remove(); document.removeEventListener("keydown", k); this.draw(); };
+      const k = e => { if (e.key === "Escape") close(); };
+      document.addEventListener("keydown", k);
+      d.addEventListener("mousedown", e => { if (e.target === d) close(); });
+      $("[data-x]", d).onclick = close; $("[data-x]", d).focus();
+      $("#dst", d).onchange = e => setStatus(l.id, e.target.value);
+      $("#drs", d).onchange = e => updLead(l.id, { responsavel: e.target.value || null }, e.target.value ? "Responsável: " + e.target.value : "Sem responsável");
+      $("#dlem", d).onchange = e => setLembrete(l.id, e.target.value || null);
+      $$("[data-ld]", d).forEach(b => b.onclick = () => { const n = +b.dataset.ld; const v = n ? isoDia(n) : null; $("#dlem", d).value = v || ""; setLembrete(l.id, v); });
+      if ($("#dwa", d)) $("#dwa", d).onclick = () => { if ((l.status || "novo") === "novo") setStatus(l.id, "contato"); };
+      $$("[data-cc]", d).forEach(b => b.onclick = () => { navigator.clipboard.writeText(b.dataset.cc); toast("Link copiado"); });
+      $("#dsv", d).onclick = () => updLead(l.id, { notas: $("#dn", d).value.slice(0, 2000) }, "Anotação salva");
+      if ($("#ddel", d)) $("#ddel", d).onclick = async () => { if (!await confirmBox("Excluir cliente", "Excluir este contato e as respostas dele?", "Excluir", true)) return; await DB.leads().doc(l.id).delete(); close(); toast("Excluído"); };
+    },
+  };
+}
+TABS.clientes = makeCRM(false);
+const GCRM = makeCRM(true);
+function lembreteMenu(anchor, id) {
+  const v = n => () => setLembrete(id, isoDia(n));
+  popMenu(anchor, [{ label: "Chamar hoje", icon: "relogio", run: v(0) }, { label: "Amanhã", icon: "relogio", run: v(1) }, { label: "Em 3 dias", icon: "relogio", run: v(3) }, { label: "Em 7 dias", icon: "relogio", run: v(7) }, "-", { label: "Tirar lembrete", icon: "x", run: () => setLembrete(id, null) }]);
+}
+async function updLead(id, patch, msg) { try { await DB.leads().doc(id).update(patch); if (msg) toast(msg); } catch (e) { toast("Erro: " + e.message); } }
+const setLembrete = (id, dia) => updLead(id, { lembrete: dia }, dia ? "Lembrete para " + (dia === hojeDia() ? "hoje" : fmtDia(dia)) : "Lembrete retirado");
 function waText(l) {
-  const m = ST.project.config.mensagensCRM || {};
+  const p = projOf(l); const m = (p && p.config.mensagensCRM) || DEFAULT_CONFIG.mensagensCRM;
   let t = m.parou;
   if (l.finalizado) t = l.destino === "whatsapp" ? m.whatsapp : m.site;
   else if ((l.carrinho || []).length) t = m.carrinho;
