@@ -1261,8 +1261,10 @@ const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.font
       data.atualizadoEm = U.now();
       if (vv.length) data.vistas = firebase.firestore.FieldValue.arrayUnion(...vv);
       try { await db.collection("quiz_leads").doc(S.id).set(data, { merge: true }); retry = 2000; }
-      catch (e) { Object.keys(data).forEach(k => { if (k !== "vistas" && !(k in pend)) pend[k] = data[k]; }); vistas = vv.concat(vistas); timer = setTimeout(flush, retry = Math.min(retry * 2, 30000)); }
+      catch (e) { Object.keys(data).forEach(k => { if (k !== "vistas" && !(k in pend)) pend[k] = data[k]; }); vistas = vv.concat(vistas); timer = setTimeout(flush, retry = Math.min(retry * 2, 15000)); }
     };
+    // a internet voltou: grava na hora, sem esperar a próxima tentativa
+    window.addEventListener("online", () => { retry = 2000; if (Object.keys(pend).length || vistas.length) flush(); });
     return {
       begin(sess) {
         S = sess; if (TESTE || !db) { S.id = S.id || "teste"; return; }
