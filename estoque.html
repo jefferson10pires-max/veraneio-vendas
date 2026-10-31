@@ -516,7 +516,7 @@ try{const v=localStorage.getItem('ve_view');if(v)S.view=v;S.verEquipe=localStora
 function cat(p){return (S.cfg?.categorias||{})[p.categoria]||{valorGrama:1.5,encargos:0.5}}
 function custo(p){
   const c=cat(p),vg=p.valorGrama??c.valorGrama,enc=p.encargos??c.encargos;
-  const metal=(+p.gramas||0)*vg;let total=metal+(+p.custoPeca||0)+enc,completo=!!(+p.custoPeca&&+p.gramas),fonte='calc';
+  const metal=(+p.gramas||0)*vg;let total=metal+(+p.custoPeca||0)+enc,completo=!!(+p.custoPeca&&(+p.gramas||p.semPeso)),fonte='calc';
   const calcTotal=total,calcOk=completo,pref=p.custoFonte||S.cfg?.custoPreferido||'planilha';
   if(+p.custoSite>0&&(!completo||pref==='site')){total=+p.custoSite;completo=true;fonte='site'}
   const dif=calcOk&&+p.custoSite>0&&Math.abs(calcTotal-p.custoSite)>0.05;
@@ -717,9 +717,12 @@ function renderVendas(){
   $('#pedN').textContent=n?`${n} pedidos`:'';
   const semArr=[...sem.entries()].sort((a,b)=>b[1].q-a[1].q);
   $('#semCodN').textContent=semArr.length?`${semArr.length} produtos`:'';
-  $('#semCod').innerHTML=semArr.length?`<div class="tblwrap"><table><tbody>${semArr.slice(0,60).map(([k,o],i)=>`<tr><td>${esc(o.n)}<div class="muted" style="font-size:11px">${o.q} vendida(s)</div></td>
-    <td class="r"><div class="inl" style="justify-content:flex-end"><input id="ap-${i}" data-ap="${esc(k)}" placeholder="Código" aria-label="Código para ${esc(o.n)}" style="width:80px"><button class="btn sm" data-apsave="${i}">Ok</button><button class="btn sm" data-apign="${esc(k)}">Ignorar</button>${G()?`<button class="btn sm" data-kitnovo="${esc(k)}" data-kitnome="${esc(o.n)}">É kit</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`
-    :`<div class="empty">Todos os itens vendidos têm código.</div>`;
+  const nomeAp={};for(const dia of dias)for(const [,pd] of Object.entries(S.dias.get(dia).pedidos||{}))for(const it of pd.itens||[])if(!it.c&&it.n){const k=norm(it.n);if(!nomeAp[k])nomeAp[k]=it.n}
+  const pend=[...new Map(Object.entries(ap).filter(([k,c])=>c&&c!=='-'&&!S.prod.has(c)).map(([k,c])=>[c,nomeAp[k]||''])).entries()];
+  const pendHtml=pend.length?`<div class="notice" style="display:block"><b>Códigos vinculados sem peça cadastrada</b><div class="muted" style="font-size:12px;margin:2px 0 6px">As vendas já contam para esses códigos, mas a peça só entra no estoque e na margem depois de cadastrada.</div>${pend.map(([c,n])=>`<div class="inl" style="justify-content:space-between;padding:4px 0"><span><b class="cod">${esc(c)}</b> ${esc(n)}</span><button class="btn sm pri" data-cadastrar="${esc(c)}" data-nome="${esc(n)}">Cadastrar peça</button></div>`).join('')}</div>`:'';
+  $('#semCod').innerHTML=pendHtml+(semArr.length?`<div class="tblwrap"><table><tbody>${semArr.slice(0,60).map(([k,o],i)=>`<tr><td>${esc(o.n)}<div class="muted" style="font-size:11px">${o.q} vendida(s)</div></td>
+    <td class="r"><div class="inl" style="justify-content:flex-end"><input id="ap-${i}" data-ap="${esc(k)}" data-nome="${esc(o.n)}" placeholder="Código" aria-label="Código para ${esc(o.n)}" style="width:80px"><button class="btn sm" data-apsave="${i}">Ok</button><button class="btn sm" data-apign="${esc(k)}">Ignorar</button>${G()?`<button class="btn sm" data-kitnovo="${esc(k)}" data-kitnome="${esc(o.n)}">É kit</button>`:''}</div></td></tr>`).join('')}</tbody></table></div>`
+    :`<div class="empty">Todos os itens vendidos têm código.</div>`);
   let html='';let shown=0;
   for(const dia of dias){if(shown>=60)break;const peds=Object.entries(S.dias.get(dia).pedidos||{}).sort((a,b)=>(b[1].hora||'')<(a[1].hora||'')?-1:1);
     html+=`<div class="dia">${new Date(dia+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'})}</div>`;
@@ -778,10 +781,10 @@ function salvarCfg(patch){if(!S.db)return Promise.reject();S.cfg={...S.cfg,...pa
 
 /* ---------- editor de peça ---------- */
 let edCod=null;
-function abrirEditor(cod){
-  const novo=!cod;edCod=cod;const p=novo?{codigo:'',nome:'',categoria:$('#fCat').value||Object.keys(S.cfg?.categorias||{})[0]||'',fornecedor:'',gramas:'',custoPeca:''}:S.prod.get(cod);
+function abrirEditor(cod,pre){
+  const novo=!cod;edCod=cod;const p=novo?{codigo:'',nome:'',categoria:$('#fCat').value||Object.keys(S.cfg?.categorias||{})[0]||'',fornecedor:'',gramas:'',custoPeca:'',...(pre||{})}:S.prod.get(cod);
   const e=novo?null:estado(p),v30=novo?{q:0}:vendidoDias(cod,30),v90=novo?{q:0}:vendidoDias(cod,90);
-  const cats=Object.keys(S.cfg?.categorias||{});const f=foto(p);
+  const cats=Object.keys(S.cfg?.categorias||{});if(!cats.includes('Acessórios'))cats.push('Acessórios');const f=foto(p);
   $('#edForm').innerHTML=`
   <div class="edhead"><div><span class="cod">${esc(p.codigo||'Nova peça')}</span><h3>${esc(p.nome||'Cadastrar peça')}</h3></div><button class="btn sm" value="cancel" aria-label="Fechar">Fechar</button></div>
   <div class="ed">
@@ -807,6 +810,7 @@ function abrirEditor(cod){
         <div class="f full"><label for="eNome">Nome</label><input id="eNome" value="${esc(p.nome)}"></div>
         <div class="f"><label for="eForn">Fornecedor</label><input id="eForn" list="dlForn" value="${esc(p.fornecedor||'')}"><datalist id="dlForn">${fornecedores().map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
         <div class="f"><label for="eSite">No site Yampi</label><select id="eSite"><option value="1" ${p.noSite?'selected':''}>Sim</option><option value="0" ${p.noSite?'':'selected'}>Não</option></select></div>
+        <div class="f full"><label class="chk" style="color:var(--ink)"><input type="checkbox" id="eSemPeso" ${p.semPeso?'checked':''}> Peça sem peso de metal (acessório, Nuri, flanela, caixinha…): o custo é só o custo da peça + encargos</label></div>
         <div class="f"><label for="eGr">Gramas</label><input id="eGr" type="number" step="0.01" value="${p.gramas??''}"></div>
         <div class="f"><label for="eCp">Custo da peça (fornecedor) R$</label><input id="eCp" type="number" step="0.01" value="${p.custoPeca??''}"></div>
         <div class="f"><label for="eVg">R$ por grama (vazio = da categoria)</label><input id="eVg" type="number" step="0.01" value="${p.valorGrama??''}"></div>
@@ -831,7 +835,7 @@ function varBox(p){const vs=variacoesDe(p);if(!vs.length&&!p.porVariacao)return 
    </tbody></table></div>${p.porVariacao?`<div class="inl"><input id="evNova" placeholder="Outro tamanho" aria-label="Novo tamanho" style="width:110px"><button type="button" class="btn sm" id="edVarOk">Salvar contagem por tamanho</button></div>`:''}</div>`}
 function lerEditor(){const n=id=>{const v=$(id).value;return v===''?null:+v};
   return {nome:$('#eNome').value.trim(),categoria:$('#eCat').value,fornecedor:$('#eForn').value.trim(),noSite:$('#eSite').value==='1',
-    gramas:n('#eGr')||0,custoPeca:n('#eCp')||0,valorGrama:n('#eVg'),encargos:n('#eEnc'),precoVenda:n('#ePv'),estoqueMin:n('#eMin'),custoFonte:$('#eCF')?.value||null}}
+    gramas:n('#eGr')||0,semPeso:!!$('#eSemPeso')?.checked,custoPeca:n('#eCp')||0,valorGrama:n('#eVg'),encargos:n('#eEnc'),precoVenda:n('#ePv'),estoqueMin:n('#eMin'),custoFonte:$('#eCF')?.value||null}}
 function calcEditor(){if(!$('#edCalc'))return;const p={...(edCod?S.prod.get(edCod):{}),...lerEditor()},c=custo(p),pr=p.precoVenda||(edCod&&precoRef(S.prod.get(edCod)));
   const luc=pr?pr-c.total:null;
   $('#edCalc').innerHTML=`
@@ -845,14 +849,16 @@ function calcEditor(){if(!$('#edCalc'))return;const p={...(edCod?S.prod.get(edCo
    ${pr&&G()?`<div class="l tot"><span>Lucro na venda a ${money(pr)}</span><span class="num" style="color:var(${pr<c.min?'--crit':'--ok'})">${money(luc)} · ${N1.format(luc/pr*100)}%</span></div>
    ${pr<c.min?`<div style="color:var(--crit);font-size:12px">Preço abaixo do mínimo.</div>`:''}`:''}
    ${p.siteUrl?`<div class="l"><span>Página no site</span><a href="${esc(p.siteUrl)}" target="_blank" rel="noopener">abrir</a></div>`:''}
-   ${!c.completo?`<div style="color:var(--warn);font-size:12px">Falta ${!p.gramas?'o peso':''}${!p.gramas&&!p.custoPeca?' e ':''}${!p.custoPeca?'o custo da peça':''} para o custo ficar completo.</div>`:''}`;
+   ${!c.completo?`<div style="color:var(--warn);font-size:12px">Falta ${!p.gramas&&!p.semPeso?'o peso':''}${!p.gramas&&!p.semPeso&&!p.custoPeca?' e ':''}${!p.custoPeca?'o custo da peça':''} para o custo ficar completo.</div>`:''}`;
 }
+function abrirCadastro(c,nome){abrirEditor(null,{nome,categoria:'Acessórios',semPeso:true});const i=$('#eCod');if(i)i.value=c;calcEditor()}
 async function salvarEditor(){
   const d=lerEditor();let cod=edCod;
   if(!cod){cod=$('#eCod').value.trim().toUpperCase();if(!/^[A-Z]{1,4}\d{1,4}$/.test(cod)){toast('Código inválido. Use letras e números, ex.: C450');return}
     if(S.prod.get(cod)?.ativo!==false&&S.prod.has(cod)){toast('Esse código já existe.');return}
     if(!d.nome){toast('Informe o nome da peça.');return}
     d.ativo=true;d.estoque=null;d.contadoEm=null;d.foto=null}
+  if(d.categoria&&!(S.cfg?.categorias||{})[d.categoria]&&G())await salvarCfg({categorias:{...(S.cfg.categorias||{}),[d.categoria]:{valorGrama:0,encargos:0.5,ordem:98}}}).catch(()=>{});
   try{await salvarProduto(cod,d);toast('Peça salva');if(!edCod)abrirEditor(cod);else $('#dlg').close()}catch(e){}
 }
 async function subirFoto(file){
@@ -1150,7 +1156,9 @@ document.addEventListener('click',async ev=>{
   if(t.id==='edDel'){if(t.dataset.ok){await salvarProduto(edCod,{ativo:false}).catch(()=>{});$('#dlg').close();toast('Peça desativada')}else{t.dataset.ok=1;t.textContent='Confirmar desativação'}return}
   if(t.id==='edContOk'){const v=$('#edCont').value;if(v==='')return;await salvarProduto(edCod,{estoque:+v,contadoEm:new Date().toISOString()}).catch(()=>{});toast('Contagem salva');abrirEditor(edCod);return}
   if(t.id==='edEntOk'){const v=+$('#edEnt').value;if(!v)return;const e=estado(S.prod.get(edCod));await salvarProduto(edCod,{estoque:Math.max(0,e.atual??0)+v,contadoEm:new Date().toISOString()}).catch(()=>{});toast(`Entrada de ${v} peças`);abrirEditor(edCod);return}
-  if(t.dataset.apsave!==undefined){const inp=$('#ap-'+t.dataset.apsave),c=inp.value.trim().toUpperCase();if(!c)return;await salvarCfg({apelidos:{...(S.cfg.apelidos||{}),[inp.dataset.ap]:c}}).catch(()=>{});rebuildIdx();render();toast('Código vinculado');return}
+  if(t.dataset.apsave!==undefined){const inp=$('#ap-'+t.dataset.apsave),c=inp.value.trim().toUpperCase();if(!c)return;const nomeOrig=inp.dataset.nome||'';await salvarCfg({apelidos:{...(S.cfg.apelidos||{}),[inp.dataset.ap]:c}}).catch(()=>{});rebuildIdx();render();
+    if(!S.prod.has(c)){toast(`Código ${c} vinculado. Agora cadastre a peça.`);abrirCadastro(c,nomeOrig)}else toast('Código vinculado');return}
+  if(t.dataset.cadastrar){abrirCadastro(t.dataset.cadastrar,t.dataset.nome||'');return}
   if(t.dataset.apign){await salvarCfg({apelidos:{...(S.cfg.apelidos||{}),[t.dataset.apign]:'-'}}).catch(()=>{});render();return}
   if(t.id==='btnCfg'){const cats={...S.cfg.categorias};$$('#tbCats input').forEach(i=>{cats[i.dataset.cat]={...cats[i.dataset.cat],[i.dataset.k]:+i.value}});
     await salvarCfg({categorias:cats,multMin:+$('#cMin').value||2.1,multIdeal:+$('#cIdeal').value||2.6,estoqueMinPadrao:+$('#cEstMin').value||0,diasAlerta:+$('#cDias').value||15,
