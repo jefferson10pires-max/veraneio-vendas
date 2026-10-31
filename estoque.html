@@ -120,6 +120,8 @@ tbody tr:hover{background:var(--sunk)}
 .ctcat{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:9px 4px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;cursor:pointer;color:inherit}
 .ctcat:hover{background:var(--sunk)}
 .ctcat[aria-pressed="true"]{background:var(--sunk);font-weight:600}
+.vermais{display:flex;justify-content:center;padding-top:8px}
+.ctcat .ctest{grid-column:1/-1;font-size:12px;color:var(--muted)}
 .ctcat .bar2{grid-column:1/-1;height:3px;background:var(--sunk);border-radius:2px;overflow:hidden}
 .ctcat .bar2 i{display:block;height:100%;background:var(--ok)}
 .ctcard{display:grid;grid-template-columns:minmax(220px,340px) 1fr;gap:24px;align-items:start}
@@ -336,10 +338,16 @@ img{max-width:100%}[hidden]{display:none!important}
       </div>
     </div>
     <p class="muted" id="perInfo" style="font-size:12px;margin:-4px 0 12px"></p>
+    <div class="bar">
+      <input type="search" id="anQ" placeholder="Filtrar por código ou nome" aria-label="Filtrar peças nas análises">
+      <select id="anCat" aria-label="Categoria nas análises"><option value="">Todas as categorias</option></select>
+      <select id="anForn" aria-label="Fornecedor nas análises"><option value="">Todos os fornecedores</option></select>
+    </div>
     <div class="kpis" id="kpiAn"></div>
     <div class="cols">
       <div class="panel"><header><h3>Mais vendidas</h3><span class="lbl">por quantidade</span></header><div class="rank" id="rkVend"></div></div>
       <div class="panel" data-gestor><header><h3>Maior lucro</h3><span class="lbl">lucro bruto</span></header><div class="rank" id="rkLucro"></div></div>
+      <div class="panel" data-gestor><header><h3>Menor lucro</h3><span class="lbl">por peça vendida</span></header><div class="rank" id="rkMenor"></div></div>
       <div class="panel"><header><h3>Vão esgotar</h3><span class="lbl">próximos 45 dias</span></header><div class="rank" id="rkEsg"></div></div>
       <div class="panel"><header><h3>Paradas</h3><span class="lbl" id="rkParN">sem venda no período</span></header><div class="rank" id="rkPar"></div></div>
     </div>
@@ -580,10 +588,11 @@ function filtrados(){
 }
 function renderKpiPecas(){
   const arr=ativos().map(p=>({p,e:estado(p),c:custo(p)}));
-  let val=0,warn=0,crit=0,none=0,inc=0;
-  for(const {e,c} of arr){if(e.atual>0)val+=e.atual*c.total;if(e.st==='warn')warn++;if(e.st==='crit')crit++;if(e.st==='none')none++;if(!c.completo)inc++}
+  let val=0,warn=0,crit=0,none=0,inc=0,pcs=0,cont=0;
+  for(const {e,c} of arr){if(e.atual!=null){cont++;pcs+=Math.max(0,e.atual)}if(e.atual>0&&c.completo)val+=e.atual*c.total;if(e.st==='warn')warn++;if(e.st==='crit')crit++;if(e.st==='none')none++;if(!c.completo)inc++}
   $('#kpiPecas').innerHTML=`
     <div class="kpi"><div class="lbl">Peças cadastradas</div><div class="v num">${arr.length.toLocaleString('pt-BR')}</div></div>
+    <div class="kpi"><div class="lbl">Peças em estoque</div><div class="v num">${pcs.toLocaleString('pt-BR')}</div><div class="lbl" style="margin-top:2px">de ${cont.toLocaleString('pt-BR')} modelos contados</div></div>
     <div class="kpi"><div class="lbl">Estoque a preço de custo</div><div class="v num">${money(val)}</div></div>
     <button class="kpi warn" data-s="warn"><div class="lbl">Acabando</div><div class="v num">${warn}</div></button>
     <button class="kpi crit" data-s="crit"><div class="lbl">Esgotadas</div><div class="v num">${crit}</div></button>
@@ -632,17 +641,30 @@ function renderAnalises(){
     (dts.length?` · vendas sincronizadas de ${new Date(dts[0]+'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(dts.at(-1)+'T12:00:00').toLocaleDateString('pt-BR')}`:'')+
     (dts.length&&lim<dts[0]?'. Para ver antes disso, sincronize em Vendas escolhendo a data inicial.':'');
   $('#perDe').value=S.perDe||'';$('#perAte').value=S.perAte||'';$('#perN').value=S.perN||'';
+  // filtro das análises
+  const ac=$('#anCat'),av=ac.value;ac.innerHTML='<option value="">Todas as categorias</option>'+Object.entries(S.cfg?.categorias||{}).sort((a,b)=>(a[1].ordem??99)-(b[1].ordem??99)).map(([c])=>`<option ${c===av?'selected':''}>${esc(c)}</option>`).join('');
+  const af=$('#anForn'),fv=af.value;af.innerHTML='<option value="">Todos os fornecedores</option>'+fornecedores().map(c=>`<option ${c===fv?'selected':''}>${esc(c)}</option>`).join('');
+  const fq=norm($('#anQ').value),fc=av,ff=fv;
+  const passa=c=>{const p=S.prod.get(c);if(fc&&p?.categoria!==fc)return false;if(ff&&(p?.fornecedor||'')!==ff)return false;if(fq&&!(norm(c).includes(fq)||norm(p?.nome).includes(fq)))return false;return true};
+  const filtrando=!!(fq||fc||ff);
+  const lim15=(k,arr,n)=>{const all=S.anAll?.[k];return {vis:all?arr:arr.slice(0,n),mais:arr.length>n?`<div class="vermais"><button class="btn sm" data-anall="${k}">${all?'Mostrar menos':`Ver todas (${arr.length})`}</button></div>`:''}};
   let pecas=0,rec=0,cus=0;const por=new Map();
   for(const [c,a] of S.idx){
+    if(!passa(c))continue;
     const p=S.prod.get(c);const ct=p?custo(p):null;
     for(const v of a){if(v.dia<lim||v.dia>ate||!v.p)continue;pecas+=v.q;rec+=v.q*v.p;
       const o=por.get(c)||{q:0,rec:0,cus:0,semCusto:!ct?.completo};o.q+=v.q;o.rec+=v.q*v.p;if(ct?.completo){o.cus+=v.q*ct.total;cus+=v.q*ct.total}por.set(c,o)}
   }
   const lucro=[...por.values()].filter(o=>!o.semCusto).reduce((s,o)=>s+o.rec-o.cus,0);
   const recC=[...por.values()].filter(o=>!o.semCusto).reduce((s,o)=>s+o.rec,0);
+  let compras=0,comprasPc=0;
+  for(const cp of S.compras||[]){if(cp.status!=='recebido'||!cp.recebidoEm)continue;const dia=new Date(cp.recebidoEm).toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});if(dia<lim||dia>ate)continue;
+    for(const x of cp.itens||[]){if(!passa(x.c))continue;const p=S.prod.get(x.c),ct=p?custo(p):null;comprasPc+=+x.q||0;if(ct?.completo)compras+=(+x.q||0)*ct.total}}
   $('#kpiAn').innerHTML=`
-    <div class="kpi"><div class="lbl">Peças vendidas</div><div class="v num">${pecas.toLocaleString('pt-BR')}</div></div>
+    <div class="kpi"><div class="lbl">Peças vendidas${filtrando?' (filtro)':''}</div><div class="v num">${pecas.toLocaleString('pt-BR')}</div></div>
     ${G()?`<div class="kpi"><div class="lbl">Faturado em peças</div><div class="v num">${money(rec)}</div></div>
+    <div class="kpi"><div class="lbl">Gasto em peças vendidas</div><div class="v num">${money(cus)}</div><div class="lbl" style="margin-top:2px">custo das peças que saíram</div></div>
+    ${comprasPc?`<div class="kpi"><div class="lbl">Compras recebidas</div><div class="v num">${money(compras)}</div><div class="lbl" style="margin-top:2px">${comprasPc} peças que chegaram</div></div>`:''}
     <div class="kpi"><div class="lbl">Lucro bruto</div><div class="v num">${money(lucro)}</div></div>
     <div class="kpi"><div class="lbl">Margem</div><div class="v num">${recC?N1.format(lucro/recC*100)+'%':'—'}</div></div>`
     :`<div class="kpi"><div class="lbl">Modelos diferentes vendidos</div><div class="v num">${por.size}</div></div>
@@ -651,26 +673,34 @@ function renderAnalises(){
   const th=c=>{const p=S.prod.get(c);return p?.fotoUrl?`<img class="thumb" loading="lazy" src="${esc(p.fotoUrl)}" alt="">`:`<div class="thumb"></div>`};
   const lista=(arr,val,sub,max)=>arr.length?arr.map((x,i)=>`<div class="rk" data-cod="${esc(x.c)}"><span class="n">${i+1}</span>${th(x.c)}
       <div class="t"><div><span class="cod">${esc(x.c)}</span> ${esc(nome(x.c))}</div><small>${sub(x)}</small><div class="meter"><i style="width:${max?Math.max(3,val(x)/max*100):0}%"></i></div></div>
-      <div class="v num">${x.vt}<small>${x.vs||''}</small></div></div>`).join(''):`<div class="empty">Sem vendas no período. Sincronize as vendas para ver o ranking.</div>`;
-  const vend=[...por].map(([c,o])=>({c,...o})).sort((a,b)=>b.q-a.q).slice(0,15);
-  vend.forEach(x=>{x.vt=x.q+' pç';x.vs=G()?money(x.rec):''});
-  $('#rkVend').innerHTML=lista(vend,x=>x.q,x=>`${N1.format(x.q/d)} por dia`,vend[0]?.q);
-  const luc=[...por].map(([c,o])=>({c,...o,l:o.rec-o.cus})).filter(x=>!x.semCusto).sort((a,b)=>b.l-a.l).slice(0,15);
-  luc.forEach(x=>{x.vt=money(x.l);x.vs=x.rec?N1.format(x.l/x.rec*100)+'% margem':''});
-  if(G())$('#rkLucro').innerHTML=lista(luc,x=>x.l,x=>`${x.q} pç · lucro por peça ${money(x.l/x.q)}`,luc[0]?.l);
-  const esg=ativos().map(p=>({p,e:estado(p)})).filter(x=>x.e.atual!=null&&(x.e.st==='crit'||x.e.st==='warn'||(x.e.dias!=null&&x.e.dias<=45)))
-    .sort((a,b)=>(a.e.atual<=0?-1:a.e.dias??999)-(b.e.atual<=0?-1:b.e.dias??999)).slice(0,25)
+      <div class="v num">${x.vt}<small>${x.vs||''}</small></div></div>`).join(''):`<div class="empty">${filtrando?'Nenhuma venda com esse filtro no período.':'Sem vendas no período. Sincronize as vendas para ver o ranking.'}</div>`;
+  const vendAll=[...por].map(([c,o])=>({c,...o})).sort((a,b)=>b.q-a.q);
+  vendAll.forEach(x=>{x.vt=x.q+' pç';x.vs=G()?money(x.rec):''});
+  const v1=lim15('vend',vendAll,15);
+  $('#rkVend').innerHTML=lista(v1.vis,x=>x.q,x=>`${N1.format(x.q/d)} por dia`,vendAll[0]?.q)+v1.mais;
+  const lucAll=[...por].map(([c,o])=>({c,...o,l:o.rec-o.cus})).filter(x=>!x.semCusto);
+  lucAll.forEach(x=>{x.vt=money(x.l);x.vs=x.rec?N1.format(x.l/x.rec*100)+'% margem':''});
+  const lucDesc=[...lucAll].sort((a,b)=>b.l-a.l),lucAsc=[...lucAll].sort((a,b)=>(a.l/a.q)-(b.l/b.q)||a.l-b.l);
+  const maxL=Math.max(1,...lucAll.map(x=>Math.abs(x.l)));
+  if(G()){const l1=lim15('lucro',lucDesc,15),l2=lim15('menor',lucAsc,15);
+    $('#rkLucro').innerHTML=lista(l1.vis,x=>x.l,x=>`${x.q} pç · lucro por peça ${money(x.l/x.q)}`,lucDesc[0]?.l)+l1.mais;
+    $('#rkMenor').innerHTML=lista(l2.vis,x=>Math.max(0,x.rec?x.l/x.rec:0)*maxL,x=>`${x.q} pç · lucro por peça ${money(x.l/x.q)}`,maxL)+l2.mais;}
+  const esgAll=ativos().filter(p=>passa(p.codigo)).map(p=>({p,e:estado(p)})).filter(x=>x.e.atual!=null&&(x.e.st==='crit'||x.e.st==='warn'||(x.e.dias!=null&&x.e.dias<=45)))
+    .sort((a,b)=>(a.e.atual<=0?-1:a.e.dias??999)-(b.e.atual<=0?-1:b.e.dias??999));
+  const e1=lim15('esg',esgAll,25);
+  const esg=e1.vis
     .map(({p,e})=>{const rep=Math.max(0,Math.ceil(e.media*30-Math.max(0,e.atual)));return {c:p.codigo,e,
       vt:e.atual<=0?'Esgotada':e.dias!=null?`${Math.round(e.dias)} dias`:`${e.atual} pç`,
       vs:e.atual<=0?'':e.fim?`até ${fmtData(e.fim)}`:'sem vendas'}});
-  const par=ativos().filter(p=>!por.has(p.codigo)).map(p=>{const e=estado(p),c=custo(p);return {p,e,val:e.atual>0&&c.completo?e.atual*c.total:0}})
+  const par=ativos().filter(p=>passa(p.codigo)&&!por.has(p.codigo)).map(p=>{const e=estado(p),c=custo(p);return {p,e,val:e.atual>0&&c.completo?e.atual*c.total:0}})
     .sort((a,b)=>b.val-a.val||((b.e.atual??-1)-(a.e.atual??-1))||a.p.codigo.localeCompare(b.p.codigo));
   const valPar=par.reduce((s,x)=>s+x.val,0);
   $('#rkParN').textContent=`${par.length} sem venda`+(G()&&valPar?` · ${money(valPar)} parado`:'');
-  $('#rkPar').innerHTML=par.length?lista(par.slice(0,20).map(x=>({c:x.p.codigo,x,vt:x.e.atual!=null?Math.max(0,x.e.atual)+' pç':'sem contagem',vs:G()&&x.val?money(x.val):''})),
+  const p1=lim15('par',par,20);
+  $('#rkPar').innerHTML=par.length?lista(p1.vis.map(x=>({c:x.p.codigo,x,vt:x.e.atual!=null?Math.max(0,x.e.atual)+' pç':'sem contagem',vs:G()&&x.val?money(x.val):''})),
     y=>y.x.val,y=>{const u=S.idx.get(y.c);return u&&u.length?`última venda ${fmtData(u[u.length-1].dia)}`:'nenhuma venda registrada'},par[0]?.val)
-    :`<div class="empty">Todas as peças venderam no período.</div>`;
-  $('#rkEsg').innerHTML=esg.length?lista(esg,x=>x.e.dias==null?0:Math.max(0,45-x.e.dias),x=>`${Math.max(0,x.e.atual)} em estoque · vende ${N1.format(x.e.media)}/dia${x.e.media?` · repor ~${Math.max(0,Math.ceil(x.e.media*30-Math.max(0,x.e.atual)))} p/ 30 dias`:''}`,45)
+    +p1.mais:`<div class="empty">${filtrando?'Nenhuma peça parada com esse filtro.':'Todas as peças venderam no período.'}</div>`;
+  $('#rkEsg').innerHTML=esg.length?lista(esg,x=>x.e.dias==null?0:Math.max(0,45-x.e.dias),x=>`${Math.max(0,x.e.atual)} em estoque · vende ${N1.format(x.e.media)}/dia${x.e.media?` · repor ~${Math.max(0,Math.ceil(x.e.media*30-Math.max(0,x.e.atual)))} p/ 30 dias`:''}`,45)+e1.mais
     :`<div class="empty">Nada para esgotar nos próximos 45 dias entre as peças com contagem. Peças sem contagem de estoque não entram na projeção.</div>`;
 }
 
@@ -925,10 +955,12 @@ function ctLista(){const f=S.ct.filtro,cat=S.ct.cat;
 }
 function renderContagem(){
   const ini=S.cfg?.inventario?.inicio,todas=ativos(),feitas=todas.filter(contada).length;
-  $('#ctResumo').textContent=`${feitas} de ${todas.length} peças contadas`+(ini?` desde ${new Date(ini).toLocaleDateString('pt-BR')}`:'')+(feitas?` · ${Math.round(feitas/todas.length*100)}%`:'');
+  const totEst=todas.reduce((s,p)=>{const a=estado(p).atual;return s+(a>0?a:0)},0);
+  $('#ctResumo').textContent=`${totEst.toLocaleString('pt-BR')} peças em estoque · ${feitas} de ${todas.length} modelos contados`+(ini?` desde ${new Date(ini).toLocaleDateString('pt-BR')}`:'')+(feitas?` · ${Math.round(feitas/todas.length*100)}%`:'');
   $('#ctFiltro').value=S.ct.filtro;
   const cats=Object.entries(S.cfg?.categorias||{}).sort((a,b)=>(a[1].ordem??99)-(b[1].ordem??99)).map(x=>x[0]);
-  const linha=(nome,val,arr)=>{const n=arr.length,f=arr.filter(contada).length;return `<button class="ctcat" data-ctcat="${esc(val)}" aria-pressed="${S.ct.cat===val}"><span>${esc(nome)}</span><span class="num muted">${f}/${n}</span><span class="bar2"><i style="width:${n?f/n*100:0}%"></i></span></button>`};
+  const est=arr=>{let q=0,v=0;for(const p of arr){const e=estado(p);if(e.atual>0){q+=e.atual;const c=custo(p);if(c.completo)v+=e.atual*c.total}}return {q,v}};
+  const linha=(nome,val,arr)=>{const n=arr.length,f=arr.filter(contada).length,t=est(arr);return `<button class="ctcat" data-ctcat="${esc(val)}" aria-pressed="${S.ct.cat===val}"><span>${esc(nome)}</span><span class="num muted">${f}/${n}</span><span class="ctest num">${t.q.toLocaleString('pt-BR')} pç em estoque${G()&&t.v?' · '+money(t.v):''}</span><span class="bar2"><i style="width:${n?f/n*100:0}%"></i></span></button>`};
   $('#ctCats').innerHTML=linha('Todas as categorias','',todas)+cats.map(c=>linha(c,c,todas.filter(p=>p.categoria===c))).filter(Boolean).join('');
   const lista=ctLista();
   let p=S.ct.cod&&S.prod.get(S.ct.cod);
@@ -1083,6 +1115,7 @@ document.addEventListener('click',async ev=>{
   if(t.closest('#fPer')&&t.dataset.d){S.per=+t.dataset.d;S.perN=null;S.perDe=S.perAte=null;$$('#fPer .chip').forEach(b=>b.setAttribute('aria-pressed',b===t));renderAnalises();return}
   if(t.id==='btnImpCat'){importarCatalogo();return}
   if(t.id==='btnSair'){FB.sair();return}
+  if(t.dataset.anall){S.anAll={...(S.anAll||{}),[t.dataset.anall]:!S.anAll?.[t.dataset.anall]};renderAnalises();return}
   if(t.id==='migOk'){importarMigracao();return}
   if(t.dataset.ctcat!==undefined){S.ct.cat=t.dataset.ctcat;S.ct.cod=null;renderContagem();return}
   if(t.id==='ctSalvar'){ctSalvar();return}
@@ -1122,6 +1155,8 @@ document.addEventListener('click',async ev=>{
   if(t.dataset.cod&&(t.classList.contains('card')||t.classList.contains('rk')||t.tagName==='TR')){if(ev.target.closest('input'))return;if(S.prod.has(t.dataset.cod))abrirEditor(t.dataset.cod);return}
 });
 $('#edForm').addEventListener('submit',ev=>{if(ev.submitter?.value!=='cancel')ev.preventDefault()});
+$('#anQ').addEventListener('input',()=>{clearTimeout(rT);rT=setTimeout(renderAnalises,150)});
+['#anCat','#anForn'].forEach(x=>$(x).addEventListener('change',renderAnalises));
 $('#q').addEventListener('input',()=>{S.limite=120;clearTimeout(rT);rT=setTimeout(renderPecas,150)});
 ['#fCat','#fForn','#fOrd'].forEach(s=>$(s).addEventListener('change',()=>{S.limite=120;renderPecas()}));
 document.addEventListener('change',async ev=>{const el=ev.target;
@@ -1168,7 +1203,7 @@ render();
   FB.fs.collection('sales').where('date','>=',addDias(hojeISO(),-180)).onSnapshot(snap=>{zap=snap.docs.map(d=>({id:d.id,...d.data()}));juntar()},e=>banner('Não consegui ler as vendas do app de vendas: '+(e.message||e),'crit'));
   db.doc('config/sync').onSnapshot(s=>{S.sync=s.exists?s.data():null;renderSyncInfo()},()=>{});
   db.doc('config/job').onSnapshot(s=>{const j=s.exists?s.data():null;if(!j||j.status!=='rodando')return;const l=(j.log||[]).slice(-1)[0];if(l){if(j.acao==='sincronizar')$('#syncLog').textContent=l+'\n'+$('#syncLog').textContent;else $('#impLog').textContent=l+'\n'+$('#impLog').textContent}},()=>{});
-  db.collection('compras').limit(500).onSnapshot(snap=>{S.compras=snap.docs.map(d=>d.data());if(S.tab==='compras')renderSoon()},()=>{});
+  db.collection('compras').limit(500).onSnapshot(snap=>{S.compras=snap.docs.map(d=>d.data());if(S.tab==='compras'||S.tab==='analises')renderSoon()},()=>{});
   claude.use('assets').then(a=>{S.assets=a});
   claude.use('user').then(async u=>{if(!u)return;try{S.gestor=(await u.isOwner())||(await u.canEdit())}catch(e){S.gestor=false}renderSoon();talvezAutoSync()});
 
