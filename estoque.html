@@ -574,7 +574,7 @@ function filtrados(){
     vendidas:(a,b)=>vendidoDias(b.p.codigo,30).q-vendidoDias(a.p.codigo,30).q||cmpCod(a,b),
     estoque:(a,b)=>(a.e.atual??1e9)-(b.e.atual??1e9),
     dias:(a,b)=>(a.e.dias??1e9)-(b.e.dias??1e9),
-    margem:(a,b)=>{const m=x=>{const pr=precoRef(x.p);return pr&&x.c.total?(pr-x.c.total)/pr:-1};return m(b)-m(a)}};
+    margem:(a,b)=>{const m=x=>{const pr=precoRef(x.p);return pr&&x.c.completo?(pr-x.c.total)/pr:-1};return m(b)-m(a)}};
   arr.sort(sorts[ord]||cmpCod);
   return arr;
 }
