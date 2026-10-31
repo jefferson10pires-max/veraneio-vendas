@@ -348,6 +348,7 @@ img{max-width:100%}[hidden]{display:none!important}
       <div class="panel"><header><h3>Mais vendidas</h3><span class="lbl">por quantidade</span></header><div class="rank" id="rkVend"></div></div>
       <div class="panel" data-gestor><header><h3>Maior lucro</h3><span class="lbl">lucro bruto</span></header><div class="rank" id="rkLucro"></div></div>
       <div class="panel" data-gestor><header><h3>Menor lucro</h3><span class="lbl">por peça vendida</span></header><div class="rank" id="rkMenor"></div></div>
+      <div class="panel" data-gestor><header><h3>Menores margens</h3><span class="lbl">% sobre o preço pago</span></header><div class="rank" id="rkMarg"></div></div>
       <div class="panel"><header><h3>Vão esgotar</h3><span class="lbl">próximos 45 dias</span></header><div class="rank" id="rkEsg"></div></div>
       <div class="panel"><header><h3>Paradas</h3><span class="lbl" id="rkParN">sem venda no período</span></header><div class="rank" id="rkPar"></div></div>
     </div>
@@ -684,6 +685,8 @@ function renderAnalises(){
   const maxL=Math.max(1,...lucAll.map(x=>Math.abs(x.l)));
   if(G()){const l1=lim15('lucro',lucDesc,15),l2=lim15('menor',lucAsc,15);
     $('#rkLucro').innerHTML=lista(l1.vis,x=>x.l,x=>`${x.q} pç · lucro por peça ${money(x.l/x.q)}`,lucDesc[0]?.l)+l1.mais;
+    const margAll=lucAll.filter(x=>x.rec>0).sort((a,b)=>(a.l/a.rec)-(b.l/b.rec)||b.q-a.q),l3=lim15('marg',margAll,15);
+    $('#rkMarg').innerHTML=lista(l3.vis.map(x=>({...x,vt:N1.format(x.l/x.rec*100)+'%',vs:money(x.l/x.q)+' por peça'})),x=>Math.max(0,x.l/x.rec*100),x=>`${x.q} pç · paga ${money(x.rec/x.q)} · custo ${money(x.cus/x.q)}`,100)+l3.mais;
     $('#rkMenor').innerHTML=lista(l2.vis,x=>Math.max(0,x.rec?x.l/x.rec:0)*maxL,x=>`${x.q} pç · lucro por peça ${money(x.l/x.q)}`,maxL)+l2.mais;}
   const esgAll=ativos().filter(p=>passa(p.codigo)).map(p=>({p,e:estado(p)})).filter(x=>x.e.atual!=null&&(x.e.st==='crit'||x.e.st==='warn'||(x.e.dias!=null&&x.e.dias<=45)))
     .sort((a,b)=>(a.e.atual<=0?-1:a.e.dias??999)-(b.e.atual<=0?-1:b.e.dias??999));
