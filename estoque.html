@@ -400,9 +400,9 @@ img{max-width:100%}[hidden]{display:none!important}
         <div style="margin-top:8px"><button class="btn sm" id="kitNovo">+ Cadastrar kit</button></div>
       </div>
       <div class="panel" data-gestor>
-        <header><h3>Custo e sincronização</h3></header>
+        <header><h3>Regra do custo</h3></header>
         <div class="fields">
-          <div class="f full"><label for="cCustoPref">Quando o custo da planilha e o do site forem diferentes, usar</label><select id="cCustoPref"><option value="planilha">Custo da planilha (peso × grama + peça)</option><option value="site">Custo cadastrado no site</option></select></div>
+          <p class="muted" style="margin:0;font-size:13px;grid-column:1/-1">Custo de cada peça: peso × valor da grama + custo da peça + encargos. O custo cadastrado no site só é usado quando a peça não tem peso ou custo da peça preenchido.</p>
 
         </div>
       </div>
@@ -517,8 +517,9 @@ function cat(p){return (S.cfg?.categorias||{})[p.categoria]||{valorGrama:1.5,enc
 function custo(p){
   const c=cat(p),vg=p.valorGrama??c.valorGrama,enc=p.encargos??c.encargos;
   const metal=(+p.gramas||0)*vg;let total=metal+(+p.custoPeca||0)+enc,completo=!!(+p.custoPeca&&(+p.gramas||p.semPeso)),fonte='calc';
-  const calcTotal=total,calcOk=completo,pref=p.custoFonte||S.cfg?.custoPreferido||'planilha';
-  if(+p.custoSite>0&&(!completo||pref==='site')){total=+p.custoSite;completo=true;fonte='site'}
+  const calcTotal=total,calcOk=completo;
+  // Regra: o cálculo (peso × grama + peça + encargos) sempre vale quando está completo; o custo do site só entra quando falta peso ou custo da peça
+  if(+p.custoSite>0&&!completo){total=+p.custoSite;completo=true;fonte='site'}
   const dif=calcOk&&+p.custoSite>0&&Math.abs(calcTotal-p.custoSite)>0.05;
   return {vg,enc,metal,total,min:total*(S.cfg?.multMin||2.1),ideal:total*(S.cfg?.multIdeal||2.6),completo,fonte,calcTotal,calcOk,dif};
 }
@@ -742,7 +743,7 @@ function renderAjustes(){
     <td class="r"><input class="qty num" type="number" step="0.05" id="cen-${i}" data-cat="${esc(n)}" data-k="encargos" value="${c.encargos}" aria-label="Encargos ${esc(n)}"></td>
     <td class="r num">${cnt.get(n)||0}</td></tr>`).join('');
   $('#cMin').value=cfg.multMin??2.1;$('#cIdeal').value=cfg.multIdeal??2.6;$('#cEstMin').value=cfg.estoqueMinPadrao??2;$('#cDias').value=cfg.diasAlerta??15;
-  $('#cCustoPref').value=cfg.custoPreferido||'planilha';
+
   const kits=Object.entries(cfg.kits||{});$('#kitN').textContent=kits.length?kits.length+' cadastrados':'';
   $('#kitLista').innerHTML=kits.length?`<div class="tblwrap"><table><tbody>${kits.map(([k,v])=>`<tr><td>${esc(v.nome)}<div class="muted" style="font-size:12px">${v.itens.map(x=>esc(x.c)+'×'+x.q).join(', ')}</div></td><td class="r"><button class="btn sm" data-kitedit="${esc(k)}">Editar</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="muted" style="font-size:13px">Nenhum kit cadastrado.</div>`;
   $('#cIgn').value=(cfg.ignorarCanais||[]).join(', ');$('#cForn').value=(cfg.fornecedores||[]).join('\n');
@@ -816,7 +817,7 @@ function abrirEditor(cod,pre){
         <div class="f"><label for="eVg">R$ por grama (vazio = da categoria)</label><input id="eVg" type="number" step="0.01" value="${p.valorGrama??''}"></div>
         <div class="f"><label for="eEnc">Encargos R$ (vazio = da categoria)</label><input id="eEnc" type="number" step="0.05" value="${p.encargos??''}"></div>
         <div class="f"><label for="ePv">Preço de venda R$</label><input id="ePv" type="number" step="0.01" value="${p.precoVenda??''}"></div>
-        <div class="f"><label for="eCF">Custo usado</label><select id="eCF"><option value="">Padrão do app</option><option value="planilha" ${p.custoFonte==='planilha'?'selected':''}>Planilha</option><option value="site" ${p.custoFonte==='site'?'selected':''}>Site</option></select></div>
+        
         <div class="f"><label for="eMin">Estoque mínimo</label><input id="eMin" type="number" step="1" value="${p.estoqueMin??''}" placeholder="${S.cfg?.estoqueMinPadrao??2}"></div>
       </div>
       <div class="calc" id="edCalc"></div>
@@ -835,7 +836,7 @@ function varBox(p){const vs=variacoesDe(p);if(!vs.length&&!p.porVariacao)return 
    </tbody></table></div>${p.porVariacao?`<div class="inl"><input id="evNova" placeholder="Outro tamanho" aria-label="Novo tamanho" style="width:110px"><button type="button" class="btn sm" id="edVarOk">Salvar contagem por tamanho</button></div>`:''}</div>`}
 function lerEditor(){const n=id=>{const v=$(id).value;return v===''?null:+v};
   return {nome:$('#eNome').value.trim(),categoria:$('#eCat').value,fornecedor:$('#eForn').value.trim(),noSite:$('#eSite').value==='1',
-    gramas:n('#eGr')||0,semPeso:!!$('#eSemPeso')?.checked,custoPeca:n('#eCp')||0,valorGrama:n('#eVg'),encargos:n('#eEnc'),precoVenda:n('#ePv'),estoqueMin:n('#eMin'),custoFonte:$('#eCF')?.value||null}}
+    gramas:n('#eGr')||0,semPeso:!!$('#eSemPeso')?.checked,custoPeca:n('#eCp')||0,valorGrama:n('#eVg'),encargos:n('#eEnc'),precoVenda:n('#ePv'),estoqueMin:n('#eMin')}}
 function calcEditor(){if(!$('#edCalc'))return;const p={...(edCod?S.prod.get(edCod):{}),...lerEditor()},c=custo(p),pr=p.precoVenda||(edCod&&precoRef(S.prod.get(edCod)));
   const luc=pr?pr-c.total:null;
   $('#edCalc').innerHTML=`
@@ -1162,7 +1163,7 @@ document.addEventListener('click',async ev=>{
   if(t.dataset.apign){await salvarCfg({apelidos:{...(S.cfg.apelidos||{}),[t.dataset.apign]:'-'}}).catch(()=>{});render();return}
   if(t.id==='btnCfg'){const cats={...S.cfg.categorias};$$('#tbCats input').forEach(i=>{cats[i.dataset.cat]={...cats[i.dataset.cat],[i.dataset.k]:+i.value}});
     await salvarCfg({categorias:cats,multMin:+$('#cMin').value||2.1,multIdeal:+$('#cIdeal').value||2.6,estoqueMinPadrao:+$('#cEstMin').value||0,diasAlerta:+$('#cDias').value||15,
-      custoPreferido:$('#cCustoPref').value,ignorarCanais:$('#cIgn').value.split(',').map(s=>s.trim()).filter(Boolean),fornecedores:$('#cForn').value.split('\n').map(s=>s.trim()).filter(Boolean)}).catch(()=>{});toast('Ajustes salvos');return}
+      ignorarCanais:$('#cIgn').value.split(',').map(s=>s.trim()).filter(Boolean),fornecedores:$('#cForn').value.split('\n').map(s=>s.trim()).filter(Boolean)}).catch(()=>{});toast('Ajustes salvos');return}
   if(t.dataset.cod&&(t.classList.contains('card')||t.classList.contains('rk')||t.tagName==='TR')){if(ev.target.closest('input'))return;if(S.prod.has(t.dataset.cod))abrirEditor(t.dataset.cod);return}
 });
 $('#edForm').addEventListener('submit',ev=>{if(ev.submitter?.value!=='cancel')ev.preventDefault()});
@@ -1177,7 +1178,6 @@ document.addEventListener('change',async ev=>{const el=ev.target;
   if(el.id==='cpDias'||el.id==='cpSoUrg'){renderCompras();return}
   if(el.dataset.cpq){S.cpQtd[el.dataset.cpq]=Math.max(0,+el.value||0);return}
   if(el.dataset.forn){const v=el.value.trim();await salvarProduto(el.dataset.forn,{fornecedor:v}).catch(()=>{});toast(`${el.dataset.forn}: fornecedor ${v||'removido'}`);return}
-  if(el.id==='cCustoPref'){await salvarCfg({custoPreferido:el.value}).catch(()=>{});toast('Custo padrão atualizado');return}
   if(el.id==='cAuto'){await salvarCfg({autoSync:el.checked}).catch(()=>{});return}
   if(el.id==='ePorVar'){await salvarProduto(edCod,{porVariacao:el.checked}).catch(()=>{});abrirEditor(edCod);return}
   if(el.dataset.cnt){if(el.value==='')return;await salvarProduto(el.dataset.cnt,{estoque:+el.value,contadoEm:new Date().toISOString()}).catch(()=>{});toast(`${el.dataset.cnt}: contagem ${el.value} salva`);return}
