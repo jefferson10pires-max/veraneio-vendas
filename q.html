@@ -58,6 +58,15 @@ body{min-height:100dvh}
 /* mídia */
 .q-frame .b-img{display:flex;justify-content:center}
 .q-frame .b-img img{display:block;max-width:100%;height:auto;background:var(--surface-2)}
+.q-frame .b-img-in{position:relative;max-width:100%}
+.q-frame .b-img-sobre{position:absolute;list-style:none;margin:0;padding:10px 12px;display:flex;flex-direction:column;gap:6px;max-width:58%;background:rgba(250,248,245,.86);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border:1px solid rgba(17,17,17,.06);border-radius:12px;color:var(--text);font-size:13px;line-height:1.3;box-shadow:0 6px 18px rgba(17,17,17,.08)}
+.q-frame .b-img-sobre.p-esq{top:12px;left:12px}
+.q-frame .b-img-sobre.p-dir{top:12px;right:12px}
+.q-frame .b-img-sobre.p-base{left:12px;right:12px;bottom:12px;max-width:none}
+.q-frame .b-img-sobre.p-topo{top:10px;left:10px;right:10px;max-width:none;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;font-size:12.5px;padding:10px 12px}
+.q-frame .b-img-sobre li{display:flex;gap:7px;align-items:flex-start}
+.q-frame .b-img-sobre li .ic{color:var(--accent);flex:none;margin-top:1px}
+@media (min-width:420px){.q-frame .b-img-sobre{font-size:14px;padding:12px 14px}.q-frame .b-img-sobre.p-topo{font-size:13.5px}}
 .q-frame .b-img img.clk{cursor:pointer;transition:transform .15s}
 .q-frame .b-img img.clk:active{transform:scale(.98)}
 .q-frame .b-img img.clk:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
@@ -469,9 +478,18 @@ const BLOCKS = {
   imagem: {
     label: "Imagem", cat: "mid", icon: "imagem",
     def: () => ({ url: "", alt: "", largura: 100, raio: 16, clicavel: false, animacao: "fade" }),
-    schema: [{ key: "url", label: "Imagem", type: "image" }, { key: "alt", label: "Descrição (acessibilidade)", type: "text" }, { key: "largura", label: "Largura (%)", type: "number", min: 10, max: 100 }, { key: "raio", label: "Cantos arredondados (px)", type: "number", min: 0, max: 40 }, { key: "clicavel", label: "Imagem clicável (vira uma saída no fluxo)", type: "toggle" }, ANIM],
+    schema: [{ key: "url", label: "Imagem", type: "image" }, { key: "alt", label: "Descrição (acessibilidade)", type: "text" }, { key: "largura", label: "Largura (%)", type: "number", min: 10, max: 100 }, { key: "raio", label: "Cantos arredondados (px)", type: "number", min: 0, max: 40 }, { key: "clicavel", label: "Imagem clicável (vira uma saída no fluxo)", type: "toggle" },
+      { key: "sobre", label: "Lista escrita em cima da imagem", type: "items", itemLabel: "texto", fields: [{ key: "texto", label: "Texto", type: "text" }] },
+      { key: "sobrePos", label: "Onde fica a lista", type: "select", options: [["topo", "No alto, em duas colunas"], ["esq", "No alto, à esquerda"], ["dir", "No alto, à direita"], ["base", "Embaixo"]], show: p => (p.sobre || []).some(i => i.texto) }, ANIM],
     outputs: (p, b) => p.clicavel ? [{ id: b.id, label: "Clique na imagem" }] : [],
-    render: (p, ctx, b) => p.url ? `<div class="b-img${anim(p)}"><img src="${U.esc(p.url)}" alt="${U.esc(p.alt)}" style="width:${+p.largura || 100}%;border-radius:${+p.raio || 0}px"${p.clicavel ? ` ${outAttr(b.id)} role="button" tabindex="0" class="clk"` : ""} loading="eager"></div>` : (ctx.mode === "edit" ? `<div class="b-vazio">${icon("imagem", 28)}<span>Escolha uma imagem</span></div>` : ""),
+    render: (p, ctx, b) => {
+      if (!p.url) return ctx.mode === "edit" ? `<div class="b-vazio">${icon("imagem", 28)}<span>Escolha uma imagem</span></div>` : "";
+      const img = `<img src="${U.esc(p.url)}" alt="${U.esc(p.alt)}" style="width:100%;border-radius:${+p.raio || 0}px"${p.clicavel ? ` ${outAttr(b.id)} role="button" tabindex="0" class="clk"` : ""} loading="eager">`;
+      const itens = (p.sobre || []).filter(i => i.texto);
+      // lista por cima da foto: texto de verdade (nítido, lido pelo leitor de tela), num cartão translúcido para ter contraste
+      const sobre = itens.length ? `<ul class="b-img-sobre p-${p.sobrePos || "esq"}">${itens.map(i => `<li>${icon("check", 15)}<span>${U.rich(i.texto, ctx.vars)}</span></li>`).join("")}</ul>` : "";
+      return `<div class="b-img${anim(p)}"><div class="b-img-in" style="width:${+p.largura || 100}%">${img}${sobre}</div></div>`;
+    },
   },
   carrossel: {
     label: "Carrossel", cat: "mid", icon: "imagem",
