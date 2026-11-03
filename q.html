@@ -154,6 +154,16 @@ body{min-height:100dvh}
 .q-frame .b-opt.m-imgEsq img{width:64px;height:64px}
 .q-frame .b-opt.m-imgCima,.q-frame .b-opt.m-imagem{flex-direction:column;align-items:stretch;text-align:center;padding:8px}
 .q-frame .b-opt.m-imgCima img,.q-frame .b-opt.m-imagem img{width:100%;aspect-ratio:4/5}
+.q-frame .b-opt.m-colagem{flex-direction:column;align-items:stretch;text-align:center;padding:8px;gap:8px}
+.q-frame .b-opt.m-colagem .t{align-items:center;padding:2px 4px 4px;font-weight:600}
+.q-frame .b-opt.m-colagem .mk{position:absolute;top:0;right:0;margin:14px;background:var(--surface);z-index:1}
+.q-frame .colg{display:grid;gap:4px;grid-template-columns:repeat(6,1fr);border-radius:calc(var(--q-radius) - 4px);overflow:hidden}
+.q-frame .colg .cf{position:relative;grid-column:span 2;display:block;aspect-ratio:1/1;background:var(--surface-2)}
+.q-frame .colg .cf img{width:100%;height:100%;object-fit:cover;border-radius:0;display:block}
+.q-frame .colg .cf em{position:absolute;left:0;right:0;bottom:0;padding:14px 6px 5px;font-style:normal;font-size:11px;line-height:1.2;color:#fff;text-align:left;background:linear-gradient(transparent,rgba(0,0,0,.55))}
+.q-frame .colg.n1 .cf{grid-column:span 6;aspect-ratio:4/3}
+.q-frame .colg.n2 .cf,.q-frame .colg.n4 .cf,.q-frame .colg.n5 .cf:nth-child(-n+2){grid-column:span 3}
+.q-frame .colg.n0{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--text-muted);font-size:13px;background:var(--surface-2)}
 .q-frame .b-opt.m-imgCima .t{align-items:center;padding:2px 4px 4px;font-weight:500}
 .q-frame .b-opt .mk{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);flex:none}
 .q-frame .b-opt .mk.sq{border-radius:6px}
@@ -548,9 +558,9 @@ const BLOCKS = {
     label: "Pergunta (quiz)", cat: "acao", icon: "lista",
     def: () => ({ variavel: "", modelo: "texto", colunas: 1, multipla: false, botaoMultipla: "Continuar", marcador: true, opcoes: [{ id: U.uid("o"), titulo: "Opção 1", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }, { id: U.uid("o"), titulo: "Opção 2", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }], fundo: "", borda: "", cor: "", animacao: "fade" }),
     schema: [
-      { key: "opcoes", label: "Opções", type: "items", itemLabel: "titulo", newItem: () => ({ id: U.uid("o"), titulo: "Nova opção", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }), fields: [{ key: "titulo", label: "Texto", type: "text" }, { key: "subtitulo", label: "Subtexto", type: "text" }, { key: "imagem", label: "Imagem", type: "image" }, { key: "emoji", label: "Emoji", type: "text" }, { key: "valor", label: "Valor salvo (opcional, senão salva o texto)", type: "text" }, { key: "pontos", label: "Pontos (soma em {{variavel}}_pontos)", type: "number" }] },
+      { key: "opcoes", label: "Opções", type: "items", itemLabel: "titulo", newItem: () => ({ id: U.uid("o"), titulo: "Nova opção", subtitulo: "", imagem: "", emoji: "", valor: "", pontos: 0 }), fields: [{ key: "titulo", label: "Texto", type: "text" }, { key: "subtitulo", label: "Subtexto", type: "text" }, { key: "imagem", label: "Imagem", type: "image" }, { key: "emoji", label: "Emoji", type: "text" }, { key: "valor", label: "Valor salvo (opcional, senão salva o texto)", type: "text" }, { key: "pontos", label: "Pontos (soma em {{variavel}}_pontos)", type: "number" }, { key: "fotos", label: "Fotos da colagem (modelo Colagem)", type: "items", itemLabel: "legenda", max: 6, newItem: () => ({ url: "", legenda: "" }), fields: [{ key: "url", label: "Foto", type: "image" }, { key: "legenda", label: "Nome da peça", type: "text" }] }] },
       { key: "variavel", label: "Salvar resposta na variável", type: "var" },
-      { key: "modelo", label: "Modelo", type: "select", options: [["texto", "Só texto"], ["emoji", "Texto + emoji"], ["imgEsq", "Imagem à esquerda"], ["imgCima", "Imagem em cima"], ["imagem", "Só imagem"]] },
+      { key: "modelo", label: "Modelo", type: "select", options: [["texto", "Só texto"], ["emoji", "Texto + emoji"], ["imgEsq", "Imagem à esquerda"], ["imgCima", "Imagem em cima"], ["imagem", "Só imagem"], ["colagem", "Colagem de fotos (várias peças)"]] },
       { key: "colunas", label: "Colunas", type: "select", options: [[1, "1"], [2, "2"], [3, "3"]] },
       { key: "marcador", label: "Mostrar marcador de seleção", type: "toggle" },
       { key: "centralizar", label: "Texto das opções centralizado", type: "toggle" },
@@ -563,7 +573,8 @@ const BLOCKS = {
     render: (p, ctx, b) => {
       const st = U.css({ background: p.fundo, "border-color": p.borda, color: p.cor });
       const opts = (p.opcoes || []).map(o => {
-        const img = o.imagem && ["imgEsq", "imgCima", "imagem"].includes(p.modelo) ? `<img src="${U.esc(o.imagem)}" alt="">` : "";
+        const fts = (o.fotos || []).filter(f => f.url).slice(0, 6);
+        const img = p.modelo === "colagem" ? (fts.length ? `<span class="colg n${fts.length}">${fts.map(f => `<span class="cf"><img src="${U.esc(f.url)}" alt="${f.legenda ? "" : "Peça"}" loading="lazy">${f.legenda ? `<em>${U.esc(f.legenda)}</em>` : ""}</span>`).join("")}</span>` : (ctx.mode === "edit" ? `<span class="colg n0">Adicione as fotos desta opção</span>` : "")) : o.imagem && ["imgEsq", "imgCima", "imagem"].includes(p.modelo) ? `<img src="${U.esc(o.imagem)}" alt="">` : "";
         const emo = p.modelo === "emoji" && o.emoji ? `<span class="emo">${U.esc(o.emoji)}</span>` : "";
         const txt = p.modelo === "imagem" ? "" : `<span class="t"><span>${U.rich(o.titulo, ctx.vars)}</span>${o.subtitulo ? `<small>${U.esc(o.subtitulo)}</small>` : ""}</span>`;
         return `<button class="b-opt m-${p.modelo}${p.centralizar ? " ctr" : ""}${p.bordaGrossa ? " bb" : ""}${p.tamanhoTexto && p.tamanhoTexto !== "md" ? " ts-" + p.tamanhoTexto : ""}" ${p.multipla ? `data-multi="${U.esc(o.id)}"` : outAttr(o.id)} data-opt="${U.esc(o.id)}" style="${st}">${img}${emo}${txt}${p.marcador ? `<span class="mk${p.multipla ? " sq" : ""}"></span>` : ""}</button>`;
