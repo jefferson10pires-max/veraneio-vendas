@@ -1791,7 +1791,9 @@ const fmtDT = iso => iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit
 const slugify = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 // enquanto digita: aceita o hífen no fim (senão "kit-" vira "kit" e não dá para digitar "kit-maes")
 const slugTyping = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+/, "").slice(0, 40);
-const PLAYER_URL = slug => new URL("q.html?p=" + encodeURIComponent(slug), location.href).href;
+// link que as clientes recebem (sem nome pessoal): veraneiosemijoias.web.app/slug; no teste local continua q.html?p=
+const PUBLIC_BASE = "https://veraneiosemijoias.web.app/";
+const PLAYER_URL = slug => /^(localhost|127\.)/.test(location.hostname) ? new URL("q.html?p=" + encodeURIComponent(slug), location.href).href : PUBLIC_BASE + encodeURIComponent(slug);
 
 // ---------- modal / menu / confirmação ----------
 function modal({ title, body, foot, wide, onClose }) {
@@ -3000,7 +3002,7 @@ TABS.config = {
   render(host) {
     const p = ST.project;
     host.innerHTML = `<main class="wrap"><div class="stack" style="max-width:820px">
-      <div class="card"><h3>Básico</h3><p class="sub">Nome interno e endereço público.</p><label class="fld"><span class="lbl">Nome do quiz</span><input class="inp" id="cn" value="${esc(p.nome)}" maxlength="80"></label><label class="fld"><span class="lbl">Endereço</span><div class="row"><span class="muted" style="font-size:12px;white-space:nowrap">…/q.html?p=</span><input class="inp" id="cs" value="${esc(p.slug || "")}" maxlength="40" autocapitalize="off" spellcheck="false"></div><span class="hint" id="csh">Letras minúsculas, números e hífen. Ao mudar, publique de novo.</span></label></div>
+      <div class="card"><h3>Básico</h3><p class="sub">Nome interno e endereço público.</p><label class="fld"><span class="lbl">Nome do quiz</span><input class="inp" id="cn" value="${esc(p.nome)}" maxlength="80"></label><label class="fld"><span class="lbl">Endereço</span><div class="row"><span class="muted" style="font-size:12px;white-space:nowrap">veraneiosemijoias.web.app/</span><input class="inp" id="cs" value="${esc(p.slug || "")}" maxlength="40" autocapitalize="off" spellcheck="false"></div><span class="hint" id="csh">Letras minúsculas, números e hífen. Ao mudar, publique de novo.</span></label></div>
       <div class="card"><h3>Integrações e página</h3><p class="sub">Pixel, WhatsApp, Yampi e SEO.</p><div id="cf1"></div></div>
       <div class="card"><h3>Mensagens do CRM</h3><p class="sub">Texto do botão WhatsApp na aba Clientes, conforme onde a cliente parou. Use {{primeiroNome}}, {{etapa}}, {{escolhas}} ou qualquer variável.</p><div id="cf2"></div></div>
       ${me.gestor ? `<div class="card danger"><h3>Zona de perigo</h3><p class="sub">Excluir o quiz tira o link do ar. Os contatos ficam guardados.</p><button class="btn danger fill" id="cdel">Excluir quiz</button></div>` : ""}</div></main>`;

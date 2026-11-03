@@ -1269,7 +1269,9 @@ const fontHref = t => "https://fonts.googleapis.com/css2?" + [...new Set([t.font
   const FB = { apiKey: "AIzaSyAz-JLZaqTKIs6RmMUOxBwr2C86Tvbi11w", authDomain: "veraneio-vendas.firebaseapp.com", projectId: "veraneio-vendas", storageBucket: "veraneio-vendas.firebasestorage.app", messagingSenderId: "584612640383", appId: "1:584612640383:web:5578a9ca673323ac8e314a" };
   const root = document.getElementById("q");
   const qs = new URLSearchParams(location.search);
-  const slug = (qs.get("p") || location.hash.replace("#", "") || "").toLowerCase();
+  // endereço do quiz: ?p=slug, #slug ou o próprio caminho (quiz.veraneiojoias.com.br/kit-revenda)
+  const daRota = decodeURIComponent(location.pathname.split("/").filter(Boolean).filter(x => !/\.html?$/i.test(x)).pop() || "");
+  const slug = (qs.get("p") || location.hash.replace("#", "") || (/^[a-z0-9-]+$/i.test(daRota) && !/^veraneio-vendas$/i.test(daRota) ? daRota : "") || "").toLowerCase();
   const TESTE = qs.has("teste");
   let db = null;
   try { firebase.initializeApp(FB); db = firebase.firestore(); } catch (e) { }
