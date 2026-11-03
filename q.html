@@ -425,7 +425,7 @@ const BLOCKS = {
     label: "Cabeçalho", cat: "cab", icon: "cabecalho",
     def: () => ({ logo: true, logoUrl: "", tamanhoLogo: 36, voltar: true }),
     schema: [{ key: "logo", label: "Mostrar logo", type: "toggle" }, { key: "logoUrl", label: "Logo diferente do tema (opcional)", type: "image" }, { key: "tamanhoLogo", label: "Altura do logo (px)", type: "number", min: 16, max: 120 }, { key: "voltar", label: "Botão voltar", type: "toggle" }],
-    render: (p, ctx) => `<div class="b-cab">${p.voltar ? `<button class="b-cab-back" data-back aria-label="Voltar"${ctx.canBack ? "" : " hidden"}>${icon("voltar", 22)}</button>` : ""}${p.logo && (p.logoUrl || ctx.tema.logo) ? `<img src="${U.esc(p.logoUrl || ctx.tema.logo)}" alt="${U.esc(ctx.nome || "Logo")}" style="height:${+p.tamanhoLogo || 36}px">` : ""}</div>`,
+    render: (p, ctx) => `<div class="b-cab">${p.voltar ? `<button class="b-cab-back" data-back aria-label="Voltar"${ctx.canBack ? "" : " hidden"}>${icon("voltar", 22)}</button>` : ""}${p.logo && (p.logoUrl || ctx.tema.logo) ? `<img src="${U.esc(p.logoUrl || ctx.tema.logo)}" alt="${U.esc(ctx.marca || "Logo")}" style="height:${+p.tamanhoLogo || 36}px">` : ""}</div>`,
   },
   progresso: {
     label: "Progresso", cat: "cab", icon: "progresso",
@@ -1013,7 +1013,7 @@ function createRunner(opts) {
     clearTimers();
     root.querySelectorAll("audio,video").forEach(m => { try { m.pause(); } catch (e) { } });
     document.querySelectorAll(".q-lightbox").forEach(x => x.remove());
-    const ctx = { vars: derived(), mode: "live", tema: project.tema || {}, nome: project.nome, canBack: S.hist.length > 0, prevProgress: lastPageProgress, k: n.id.slice(-4) };
+    const ctx = { vars: derived(), mode: "live", tema: project.tema || {}, nome: project.nome, marca: (String((project.config || {}).tituloSite || "").split(/\s[·|–-]\s/)[0].trim() || "Logo"), canBack: S.hist.length > 0, prevProgress: lastPageProgress, k: n.id.slice(-4) };
     const blocos = n.data.blocos || [];
     const html = blocos.map(b => { const B = BLOCKS[b.type]; if (!B) return ""; try { return `<section class="blk" data-bid="${b.id}" id="b-${b.id}">${B.render(b.props || {}, ctx, b)}</section>`; } catch (e) { console.warn(e); return ""; } }).join("");
     root.innerHTML = `<div class="pg">${html}</div>`;
