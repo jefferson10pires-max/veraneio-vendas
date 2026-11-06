@@ -361,7 +361,7 @@ async function tAparencia(){
     <div class="field"><span class="flabel">Cor da marca</span><div class="swatches" id="sws">${COLORS.map(c=>`<button class="sw" type="button" style="background:${c}" data-col="${c}" aria-label="Cor ${c}" aria-pressed="${c===L.cor}"></button>`).join("")}<input class="sw-custom" type="color" id="colPick" value="${esc(L.cor||"#9b4d5f")}" aria-label="Outra cor"></div></div>
     <span class="saved" id="saved" aria-live="polite"></span></div>
 
-  <div class="box"><h2>Banners</h2><p class="lead">Passam sozinhos no topo da loja. Envie a imagem do celular (quadrada, 1080 × 1080). A versão para computador (1920 × 720) é opcional. Até 4 banners.</p>
+  <div class="box"><h2>Banners</h2><p class="lead">Passam sozinhos no topo da loja. Envie a imagem do celular (ideal quadrada, 1080 × 1080, ou em pé, 1080 × 1350). A imagem não é cortada. A versão para computador (1920 × 720) é opcional. Até 4 banners.</p>
     <div style="display:flex;flex-direction:column;gap:10px">${b.map((x,i)=>`<div class="bitem">
       <div class="bimgs"><figure class="m"><img src="${esc(x.m)}" alt="Banner ${i+1} celular"><figcaption>Celular</figcaption></figure>
         <figure class="d">${x.d?`<img src="${esc(x.d)}" alt="Banner ${i+1} computador">`:`<label class="ph">+ Versão computador<input type="file" accept="image/*" data-desk="${i}" aria-label="Enviar versão computador"></label>`}<figcaption>Computador ${x.d?"":"(opcional)"}</figcaption></figure></div>
@@ -382,7 +382,7 @@ async function tAparencia(){
   $("logoDel")&&($("logoDel").onclick=async()=>{await updateDoc(doc(db,"lojas",U.uid),{logo:null});L.logo=null;tAparencia();reLogo()});
   const salvarBanners=async()=>{const tam=JSON.stringify(BAN).length;if(tam>950000)throw new Error("grande");await setDoc(doc(db,"banners",U.uid),{itens:BAN,em:serverTimestamp()});tAparencia()};
   $("bNew")&&($("bNew").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("bMsg").textContent="Enviando banner…";
-    try{const m=await paraDataURL(f,1080,1080,"cover",.8,150000);BAN=[...BAN,{m,d:null}];await salvarBanners();toast("Banner adicionado")}
+    try{const m=await paraDataURL(f,1080,1350,"fit",.8,160000);BAN=[...BAN,{m,d:null}];await salvarBanners();toast("Banner adicionado")}
     catch(err){console.error(err);BAN=BAN.filter(x=>x.m);$("bMsg").textContent="Não coube mais esse banner. Remova um ou use uma imagem mais simples."}});
   $("main").onchange=async e=>{const i=e.target.dataset.desk;if(i===undefined)return;const f=e.target.files[0];if(!f)return;toast("Enviando…");
     const antes=BAN[i].d;try{const d=await paraDataURL(f,1600,600,"cover",.78,130000);BAN[i]={...BAN[i],d};await salvarBanners()}catch(err){BAN[i].d=antes;toast("Não coube essa imagem. Tente remover um banner.")}};
@@ -395,8 +395,8 @@ async function tAparencia(){
 async function paraDataURL(file,w,h,modo,q,max){
   const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
   const c=document.createElement("canvas"),x=c.getContext("2d");
-  let k=modo==="contain"?Math.min(w/img.width,h/img.height,1):Math.max(w/img.width,h/img.height);
-  if(modo==="contain"){c.width=Math.round(img.width*k);c.height=Math.round(img.height*k)}else{c.width=w;c.height=h}
+  let k=modo==="cover"?Math.max(w/img.width,h/img.height):Math.min(w/img.width,h/img.height,1);
+  if(modo!=="cover"){c.width=Math.round(img.width*k);c.height=Math.round(img.height*k)}else{c.width=w;c.height=h}
   const png=modo==="contain"&&/png|webp/.test(file.type);
   if(!png){x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height)}
   const dw=img.width*k,dh=img.height*k;x.drawImage(img,(c.width-dw)/2,(c.height-dh)/2,dw,dh);URL.revokeObjectURL(img.src);

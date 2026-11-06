@@ -129,6 +129,18 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .card .name{margin-top:6px;font-size:14px;line-height:1.14;color:#000;min-height:2.3em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .card .price{margin-top:19px;font-size:17px;font-weight:700;color:#000;line-height:normal}
 .card .inst{font-size:11.8px;color:var(--muted);margin-top:2px;line-height:1.1}
+.vars{margin-top:22px;display:flex;flex-direction:column;gap:10px}
+.vars .vl{font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:#222}
+.vars .vl b{text-transform:none;letter-spacing:0}
+.vops{display:flex;flex-wrap:wrap;gap:8px}
+.vop{min-width:46px;height:42px;padding:0 14px;border:.8px solid var(--line);border-radius:var(--radius);background:#fff;font-weight:600;font-size:14px;cursor:pointer}
+.vop[aria-checked="true"]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.vars .verr{color:var(--danger);font-size:13px}
+.vars.erro .vops{animation:tremer .3s}
+@keyframes tremer{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.line .op{font-size:12.5px;color:var(--muted)}
+.mais{display:flex;justify-content:center;padding:6px 0 10px}
+.mais button{height:44px;padding:0 28px;border:.8px solid var(--line);border-radius:var(--radius);background:#fff;font-weight:600;font-size:14px;cursor:pointer}
 .nores{grid-column:1/-1;text-align:center;padding:30px 0 60px;color:var(--muted)}
 
 /* ---------- rodapé ---------- */
@@ -270,9 +282,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
     </div>
   </header>
 
-  <section class="bn" id="bn" aria-label="Destaques"><div class="bn-track noscroll" id="bnTrack"></div><div class="dots" id="bnDots"></div></section>
+  <section class="bn" id="bn" aria-label="Destaques"><div class="bn-track noscroll" id="bnTrack" tabindex="0" aria-label="Banners da loja"></div><div class="dots" id="bnDots"></div></section>
 
-  <section class="hl wrap"><div class="hl-track noscroll" id="hl"></div></section>
+  <section class="hl wrap"><div class="hl-track noscroll" id="hl" tabindex="0" aria-label="Vantagens da loja"></div></section>
 
   <main class="wrap" id="main"></main>
 
@@ -369,7 +381,8 @@ const I={
 
 /* ---------- estado ---------- */
 let L=null,UID=null,ITENS=[],fb=null;
-const ui={cat:"Todas",q:"",sort:"pop"};
+const POR_PAGINA=24;
+const ui={cat:"Todas",q:"",sort:"pop",lim:POR_PAGINA};
 const K=k=>`vrn-${slug||"demo"}-${k}`;
 let cart=store.get(K("sacola"))||{};
 let leadId=store.get(K("lead"))||null;
@@ -428,7 +441,7 @@ function barraInfo(){
 function instOf(v){const n=Number(L.parcelas)||1;return n>1?`${n}x de ${brl(v/n)} sem juros`:`1x de ${brl(v)}`}
 
 /* ---------- página ---------- */
-const cats=()=>[...new Set(ITENS.map(p=>p.cat).filter(Boolean))];
+const cats=()=>[...new Set(ITENS.map(p=>p.cat).filter(c=>c&&!/^(novidades|lan[çc]amentos|ofertas)$/i.test(c.trim())))];
 function render(){
   $("announce").textContent=L.aviso||"";$("annBox").hidden=!L.aviso;
   $("homeLink").innerHTML=logoHTML();$("fLogo").innerHTML=logoHTML();
@@ -478,17 +491,23 @@ function renderNav(){
   const all=["Todas",...cats(),...(ITENS.some(p=>p.novo)?["Novidades"]:[])];
   $("dnav").innerHTML=all.map(c=>`<button type="button" data-cat="${esc(c)}" aria-current="${ui.cat===c}">${c==="Todas"?"Todos os produtos":esc(c)}${I.chev}</button>`).join("");
 }
-function ordenar(l){const s=ui.sort;return l.sort((a,b)=>s==="asc"?a.preco-b.preco:s==="desc"?b.preco-a.preco:s==="az"?a.nome.localeCompare(b.nome,"pt"):s==="new"?(b.novo?1:0)-(a.novo?1:0):(a.ordem??999)-(b.ordem??999))}
+function ordenar(l){const s=ui.sort;return l.sort((a,b)=>s==="asc"?a.preco-b.preco:s==="desc"?b.preco-a.preco:s==="az"?a.nome.localeCompare(b.nome,"pt"):s==="new"?(b.novo?1:0)-(a.novo?1:0):(a.ordem??999)-(b.ordem??999)||(a.rank??1e6)-(b.rank??1e6))}
 function filtrada(){
   let l=ITENS.slice();
-  if(ui.cat==="Novidades")l=l.filter(p=>p.novo);else if(ui.cat!=="Todas")l=l.filter(p=>p.cat===ui.cat);
+  if(ui.cat==="Novidades")l=l.filter(p=>p.novo||/^novidades$/i.test(p.cat||""));else if(ui.cat!=="Todas")l=l.filter(p=>p.cat===ui.cat);
   if(ui.q){const q=norm(ui.q);l=l.filter(p=>norm(`${p.nome} ${p.cat} ${p.banho}`).includes(q))}
   return ordenar(l);
 }
+/* miniaturas pelo CDN de imagens da Yampi (bem mais leves que a foto original) */
+function foto(u,tam){return /^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${tam}x${tam}/filters:background_color(white):upscale()/${u}`:u}
+window.vrnFoto=(img)=>{const p=byId(img.dataset.pid);const n=Number(img.dataset.i||0)+1;
+  if(p&&p.fotos&&p.fotos[n]){img.dataset.i=n;img.src=foto(p.fotos[n],img.dataset.t||400);return}
+  img.onerror=null;img.outerHTML=`<div class="ph">${art(p?p.cat:"")}</div>`};
+const imgTag=(p,tam,extra="")=>`<img src="${esc(foto(p.fotos[0],tam))}" alt="" data-pid="${esc(p.id)}" data-t="${tam}" onerror="vrnFoto(this)" ${extra}>`;
 function cardHTML(p,eager){
   return `<article class="card">
-    <div class="img"><button type="button" data-open="${esc(p.id)}" aria-label="Ver ${esc(p.nome)}" style="all:unset;display:block;width:100%;height:100%;cursor:pointer">${p.fotos&&p.fotos[0]?`<img src="${esc(p.fotos[0])}" alt="" ${eager?"":'loading="lazy"'}>`:`<div class="ph">${art(p.cat)}</div>`}</button>
-      <button class="buybtn" type="button" data-add="${esc(p.id)}" aria-label="Adicionar ${esc(p.nome)} ao carrinho">${I.cartPlus}</button></div>
+    <div class="img"><button type="button" data-open="${esc(p.id)}" aria-label="Ver ${esc(p.nome)}" style="all:unset;display:block;width:100%;height:100%;cursor:pointer">${p.fotos&&p.fotos[0]?imgTag(p,400,eager?"":'loading="lazy"'):`<div class="ph">${art(p.cat)}</div>`}</button>
+      <button class="buybtn" type="button" ${p.var?`data-open="${esc(p.id)}"`:`data-add="${esc(p.id)}"`} aria-label="Adicionar ${esc(p.nome)} ao carrinho">${I.cartPlus}</button></div>
     ${p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`}
     <div class="name" data-open="${esc(p.id)}">${esc(p.nome)}</div>
     <div class="price num">${brl(p.preco)}</div><div class="inst num">${instOf(p.preco)}</div>
@@ -498,9 +517,9 @@ function renderMain(){
   const filtro=ui.cat!=="Todas"||ui.q;
   let h="";
   if(!filtro){
-    const mais=ordenar(ITENS.slice()).slice(0,8),novos=ITENS.filter(p=>p.novo).slice(0,8);
-    if(ITENS.length>4)h+=`<section class="coll"><div class="coll-head"><h2>Mais Vendidos</h2><button type="button" data-cat="Todas" data-scroll="cat">Ver todos</button></div><div class="car noscroll">${mais.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
-    if(novos.length>=2)h+=`<section class="coll"><div class="coll-head"><h2>Lançamentos</h2><button type="button" data-cat="Novidades">Ver todos</button></div><div class="car noscroll">${novos.map(p=>cardHTML(p)).join("")}</div></section>`;
+    const mais=ITENS.slice().sort((a,b)=>(a.rank??1e6)-(b.rank??1e6)||(a.ordem??999)-(b.ordem??999)).slice(0,8),novos=ITENS.filter(p=>p.novo).slice(0,8);
+    if(ITENS.length>4)h+=`<section class="coll"><div class="coll-head"><h2>Mais Vendidos</h2><button type="button" data-cat="Todas" data-scroll="cat">Ver todos</button></div><div class="car noscroll" tabindex="0" aria-label="Mais vendidos">${mais.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
+    if(novos.length>=2)h+=`<section class="coll"><div class="coll-head"><h2>Lançamentos</h2><button type="button" data-cat="Novidades">Ver todos</button></div><div class="car noscroll" tabindex="0" aria-label="Lançamentos">${novos.map(p=>cardHTML(p)).join("")}</div></section>`;
   }
   const l=filtrada();
   const titulo=ui.q?"Resultado da busca":ui.cat==="Todas"?"Catálogo Completo":ui.cat;
@@ -508,10 +527,14 @@ function renderMain(){
       ${filtro?`<button type="button" data-cat="Todas" data-clear>Ver todos os produtos</button>`:""}<span class="sub">${l.length} ${l.length===1?"produto":"produtos"}${ui.q?` para “${esc(ui.q)}”`:""}</span></div>
     <div class="tools"><button class="chipcat" type="button" id="catBtn">${ui.cat==="Todas"?"Categorias":esc(ui.cat)}${I.chev.replace('width="14"','width="12"')}</button>
       <select id="sort" aria-label="Ordenar"><option value="pop">Mais vendidos</option><option value="new">Lançamentos</option><option value="asc">Menor preço</option><option value="desc">Maior preço</option><option value="az">A a Z</option></select></div>
-    <div class="grid">${l.length?l.map((p,i)=>cardHTML(p,!filtro?false:i<4)).join(""):`<div class="nores">Nenhum produto encontrado.</div>`}</div></section>`;
+    <div class="grid" id="grid">${l.length?l.slice(0,ui.lim).map((p,i)=>cardHTML(p,!filtro?false:i<4)).join(""):`<div class="nores">Nenhum produto encontrado.</div>`}</div>
+    ${l.length>ui.lim?`<div class="mais"><button type="button" id="maisBtn">Carregar mais (${l.length-ui.lim})</button></div>`:""}</section>`;
   $("main").innerHTML=h;
   $("sort").value=ui.sort;
-  $("sort").onchange=e=>{ui.sort=e.target.value;renderMain();scrollToEl("cat")};
+  $("sort").onchange=e=>{ui.sort=e.target.value;ui.lim=POR_PAGINA;renderMain();scrollToEl("cat")};
+  const mb=$("maisBtn");if(mb)mb.onclick=()=>{const n=ui.lim;ui.lim+=POR_PAGINA;const l2=filtrada();
+    $("grid").insertAdjacentHTML("beforeend",l2.slice(n,ui.lim).map(p=>cardHTML(p)).join(""));
+    if(l2.length>ui.lim)mb.textContent=`Carregar mais (${l2.length-ui.lim})`;else mb.parentElement.remove()};
   $("catBtn").onclick=()=>openSheet("drawer");
 }
 function scrollToEl(id){const el=$(id);if(!el)return;const y=el.getBoundingClientRect().top+scrollY-$("hdr").offsetHeight-8;scrollTo({top:y,behavior:"smooth"})}
@@ -533,14 +556,17 @@ addEventListener("popstate",()=>{if(openStack.length){openStack.forEach(id=>$(id
 
 function abrirProduto(id){
   const p=byId(id);if(!p)return;registrarView(p.id);
-  let q=1;const fotos=(p.fotos&&p.fotos.length)?p.fotos:[null];
-  $("pBody").innerHTML=`<div class="galwrap"><div class="gal noscroll" id="gal">${fotos.map(f=>`<div>${f?`<img src="${esc(f)}" alt="${esc(p.nome)}">`:`<div class="ph">${art(p.cat)}</div>`}</div>`).join("")}</div>
+  let q=1,op=null;const fotos=(p.fotos&&p.fotos.length)?p.fotos:[null];
+  $("pBody").innerHTML=`<div class="galwrap"><div class="gal noscroll" id="gal" tabindex="0" aria-label="Fotos da peça">${fotos.map((f,i)=>`<div>${f?`<img src="${esc(foto(f,800))}" alt="${esc(p.nome)}" onerror="this.onerror=null;this.outerHTML='<div class=ph>${esc(art(p.cat)).replace(/"/g,"&quot;")}</div>'" ${i?'loading="lazy"':""}>`:`<div class="ph">${art(p.cat)}</div>`}</div>`).join("")}</div>
       ${fotos[0]?`<span class="gcount num" id="gcount">1/${fotos.length}</span>`:""}</div>
     <div class="pinfo">
       ${p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`}
       <h2 id="pTitle">${esc(p.nome)}</h2>
       <div class="pprice num">${brl(p.preco)}</div>
       <div class="pinst num">${instOf(p.preco)}</div>
+      ${p.var?`<div class="vars" id="vars"><div class="vl" id="vLabel">${esc(p.var.nome)}: <b id="vSel">escolha</b></div>
+        <div class="vops" role="radiogroup" aria-label="${esc(p.var.nome)}">${p.var.ops.map(o=>`<button type="button" class="vop" role="radio" aria-checked="false" aria-label="${esc(o)}" data-op="${esc(o)}">${esc(o)}</button>`).join("")}</div>
+        <span class="verr" id="vErr" aria-live="polite"></span></div>`:""}
       <div class="qtywrap">
         <div class="qty"><button type="button" data-pq="-1" aria-label="Diminuir">${I.minus}</button><span class="num" id="pq">1</span><button type="button" data-pq="1" aria-label="Aumentar">${I.plus}</button></div>
         <button class="btnp" type="button" data-padd>Adicionar ao carrinho</button>
@@ -554,28 +580,34 @@ function abrirProduto(id){
       <div class="pdesc"><h4>Descrição</h4><p>${esc(p.desc||"Semijoia com acabamento de alta durabilidade e garantia de 1 ano no banho.")}${p.banho?`\n\nBanho: ${esc(p.banho)}`:""}</p></div>
     </div>`;
   const body=$("pBody");
-  body.onclick=e=>{const b=e.target.closest("[data-pq],[data-padd]");if(!b)return;
-    if(b.dataset.pq!==undefined){q=Math.max(1,q+Number(b.dataset.pq));$("pq").textContent=q}
-    else{addCart(p.id,q);closeSheets();toast(`${q>1?q+" peças adicionadas":"Produto adicionado"} ao carrinho`,true)}};
+  body.onclick=e=>{const b=e.target.closest("[data-pq],[data-padd],[data-op]");if(!b)return;
+    if(b.dataset.op!==undefined){op=b.dataset.op;body.querySelectorAll(".vop").forEach(x=>x.setAttribute("aria-checked",x===b));$("vSel").textContent=op;$("vErr").textContent="";$("vars").classList.remove("erro")}
+    else if(b.dataset.pq!==undefined){q=Math.max(1,q+Number(b.dataset.pq));$("pq").textContent=q}
+    else{
+      if(p.var&&!op){const v=$("vars");v.classList.remove("erro");void v.offsetWidth;v.classList.add("erro");$("vErr").textContent=`Escolha o ${p.var.nome.toLowerCase().replace(/s$/,"")} antes de adicionar.`;v.scrollIntoView({behavior:"smooth",block:"center"});return}
+      addCart(chave(p.id,op),q);closeSheets();toast(`${q>1?q+" peças adicionadas":"Produto adicionado"} ao carrinho`,true)}};
   const g=$("gal");if(g&&$("gcount"))g.addEventListener("scroll",()=>{$("gcount").textContent=`${Math.round(g.scrollLeft/Math.max(1,g.clientWidth))+1}/${fotos.length}`},{passive:true});
   body.scrollTop=0;openSheet("pSheet");
 }
 
 /* ---------- carrinho ---------- */
-const cartItems=()=>Object.entries(cart).map(([id,q])=>({p:byId(id),q})).filter(x=>x.p&&x.q>0);
+/* chave do carrinho: "id" ou "id|tamanho" */
+const chave=(id,op)=>op?`${id}|${op}`:String(id);
+const abreChave=k=>{const i=k.indexOf("|");return i<0?{id:k,op:null}:{id:k.slice(0,i),op:k.slice(i+1)}};
+const cartItems=()=>Object.entries(cart).map(([k,q])=>{const {id,op}=abreChave(k);return {k,p:byId(id),op,q}}).filter(x=>x.p&&x.q>0);
 const cartTotal=()=>cartItems().reduce((s,x)=>s+x.p.preco*x.q,0);
-function saveCart(){Object.keys(cart).forEach(k=>{if(!cart[k]||!byId(k))delete cart[k]});store.set(K("sacola"),cart)}
+function saveCart(){Object.keys(cart).forEach(k=>{if(!cart[k]||!byId(abreChave(k).id))delete cart[k]});store.set(K("sacola"),cart)}
 function addCart(id,n=1){cart[id]=(cart[id]||0)+n;saveCart();renderCart();syncLead()}
 const buyerOk=()=>buyer.nome.trim().length>=2&&digits(buyer.tel).length>=10;
 function renderCart(){
   saveCart();
   const it=cartItems(),tot=cartTotal(),n=it.reduce((s,x)=>s+x.q,0);
   $("badge").textContent=n;
-  $("lines").innerHTML=it.length?it.map(({p,q})=>`<div class="line">
-      <div class="mini">${p.fotos&&p.fotos[0]?`<img src="${esc(p.fotos[0])}" alt="">`:art(p.cat)}</div>
-      <div class="nm">${esc(p.nome)}</div>
+  $("lines").innerHTML=it.length?it.map(({k,p,op,q})=>`<div class="line">
+      <div class="mini">${p.fotos&&p.fotos[0]?imgTag(p,160):art(p.cat)}</div>
+      <div class="nm">${esc(p.nome)}${op?`<div class="op">${esc(p.var?p.var.nome:"Opção")}: ${esc(op)}</div>`:""}</div>
       <div class="pr num">${brl(p.preco*q)}</div>
-      <div class="row"><span class="qty"><button type="button" data-q="-1" data-id="${esc(p.id)}" aria-label="Diminuir">${I.minus}</button><span class="num">${q}</span><button type="button" data-q="1" data-id="${esc(p.id)}" aria-label="Aumentar">${I.plus}</button></span><button class="rm" type="button" data-rm="${esc(p.id)}">Remover</button></div>
+      <div class="row"><span class="qty"><button type="button" data-q="-1" data-id="${esc(k)}" aria-label="Diminuir">${I.minus}</button><span class="num">${q}</span><button type="button" data-q="1" data-id="${esc(k)}" aria-label="Aumentar">${I.plus}</button></span><button class="rm" type="button" data-rm="${esc(k)}">Remover</button></div>
     </div>`).join("")
     :`<div class="empty">Seu carrinho está vazio.<button class="btnp" type="button" data-close>Ver produtos</button></div>`;
   $("cFoot").hidden=!it.length;
@@ -586,7 +618,7 @@ function renderCart(){
   $("finish").href=(it.length&&buyerOk()&&L.whats)?`https://wa.me/${waNum(L.whats)}?text=${encodeURIComponent(msgPedido())}`:"#";
 }
 function msgPedido(){
-  const l=cartItems().map(({p,q})=>`• ${q}x ${p.nome}${p.banho?` (banho ${p.banho})`:""} — ${brl(p.preco*q)}`);
+  const l=cartItems().map(({p,op,q})=>`• ${q}x ${p.nome}${op?` — ${p.var?p.var.nome:"Opção"}: ${op}`:""}${p.banho?` (banho ${p.banho})`:""} — ${brl(p.preco*q)}`);
   return `Olá, ${L.nome}! Quero fazer este pedido:\n\n${l.join("\n")}\n\nTotal: ${brl(cartTotal())}\nNome: ${buyer.nome.trim()}\nWhatsApp: ${buyer.tel.trim()}`;
 }
 /* o carrinho vira "abandonado" no painel assim que a cliente informa nome + WhatsApp */
@@ -598,7 +630,7 @@ function syncLead(final){
     const it=cartItems();if(!it.length||!buyerOk())return;
     const {db,doc,collection,addDoc,updateDoc,serverTimestamp}=fb;
     const data={nome:buyer.nome.trim().slice(0,100),tel:buyer.tel.trim().slice(0,30),
-      itens:it.slice(0,80).map(({p,q})=>({id:String(p.id),nome:p.nome,q,preco:p.preco})),total:Math.round(cartTotal()*100)/100,
+      itens:it.slice(0,80).map(({p,op,q})=>({id:String(p.id),nome:op?`${p.nome} (${op})`:p.nome,q,preco:p.preco})),total:Math.round(cartTotal()*100)/100,
       status:final?"enviado":"abandonado",ts:serverTimestamp()};
     const criar=async()=>{
       const r=await addDoc(collection(db,"lojas",UID,"leads"),{...data,status:"abandonado",uid:UID});
@@ -615,9 +647,9 @@ function maskTel(v){const d=digits(v).slice(0,11);return d.length>6?`(${d.slice(
 /* ---------- eventos ---------- */
 document.addEventListener("click",e=>{
   const t=e.target.closest("[data-cat],[data-open],[data-add],[data-q],[data-rm],[data-close],[data-go]");if(!t)return;
-  if(t.dataset.cat!==undefined){ui.cat=t.dataset.cat;ui.q="";$("q").value="";closeSheets();renderNav();renderMain();scrollToEl("cat")}
+  if(t.dataset.cat!==undefined){ui.cat=t.dataset.cat;ui.q="";ui.lim=POR_PAGINA;$("q").value="";closeSheets();renderNav();renderMain();scrollToEl("cat")}
   else if(t.dataset.open)abrirProduto(t.dataset.open);
-  else if(t.dataset.add){addCart(t.dataset.add);t.classList.add("done");setTimeout(()=>t.classList.remove("done"),1100);toast("Produto adicionado ao carrinho",true)}
+  else if(t.dataset.add){const pa=byId(t.dataset.add);if(pa&&pa.var)return abrirProduto(pa.id);addCart(t.dataset.add);t.classList.add("done");setTimeout(()=>t.classList.remove("done"),1100);toast("Produto adicionado ao carrinho",true)}
   else if(t.dataset.q){const id=t.dataset.id;cart[id]=Math.max(0,(cart[id]||0)+Number(t.dataset.q));renderCart();syncLead()}
   else if(t.dataset.rm){delete cart[t.dataset.rm];renderCart();syncLead()}
   else if(t.dataset.close!==undefined)closeSheets();
@@ -630,7 +662,7 @@ $("bagBtn").onclick=abrirCarrinho;$("toastBtn").onclick=abrirCarrinho;
 $("menuBtn").onclick=()=>openSheet("drawer");
 $("homeLink").onclick=e=>{e.preventDefault();ui.cat="Todas";ui.q="";$("q").value="";renderNav();renderMain();scrollTo({top:0,behavior:"smooth"})};
 let qT=null;
-$("q").oninput=e=>{clearTimeout(qT);qT=setTimeout(()=>{ui.q=e.target.value.trim();if(ui.q)ui.cat="Todas";renderNav();renderMain()},250)};
+$("q").oninput=e=>{clearTimeout(qT);qT=setTimeout(()=>{ui.q=e.target.value.trim();ui.lim=POR_PAGINA;if(ui.q)ui.cat="Todas";renderNav();renderMain()},250)};
 $("sForm").onsubmit=e=>{e.preventDefault();ui.q=$("q").value.trim();if(ui.q)ui.cat="Todas";renderMain();$("q").blur();scrollToEl("cat")};
 $("bNome").value=buyer.nome;$("bTel").value=buyer.tel;
 $("bNome").oninput=e=>{buyer.nome=e.target.value;store.set(K("cliente"),buyer);e.target.removeAttribute("aria-invalid");$("coErr").textContent="";renderCart();syncLead()};
@@ -664,6 +696,7 @@ function estado(titulo,texto){$("loading").hidden=true;$("stateMsg").hidden=fals
 
 /* ---------- modo demonstração ---------- */
 function demoData(){
+  if(window.__VRN_DEMO)return window.__VRN_DEMO; // dados injetados pelos testes automáticos
   const P=[["Pulseira De Berloque Fecho Quadrado","Pulseiras","Ródio branco",57.9,0],["Colar Ponto de Luz Pequeno","Colares","Ouro 18k",37.9,1],["Brinco Gota Cristal","Brincos","Ouro 18k",59.9,1],
     ["Argola Torcida Média","Brincos","Ouro 18k",49.9,0],["Choker Elos Cartier","Colares","Ouro 18k",89.9,0],["Anel Solitário Zircônia","Anéis","Ouro 18k",45.9,1],
     ["Anel Aparador Cravejado","Anéis","Ródio branco",39.9,0],["Pulseira Riviera","Pulseiras","Ouro 18k",119.9,0],["Colar Fio Baiano","Colares","Ouro 18k",69.9,0],

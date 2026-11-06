@@ -1,0 +1,12 @@
+{
+  "name": "veraneio-lojas",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "serve": "node e2e/servidor.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.56.1"
+  }
+}

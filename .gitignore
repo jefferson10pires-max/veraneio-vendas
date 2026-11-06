@@ -1,3 +1,5 @@
 node_modules/
 .firebase/
 *.log
+test-results/
+playwright-report/

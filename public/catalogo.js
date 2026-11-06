@@ -44,6 +44,7 @@ export async function publicarLoja(F, db, uid, precos, atacado) {
     id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
     fotos: (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
     preco: precoFinal(p.preco, pr, p.id),
+    ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
   }));
   const ps = partes(itens), velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
   const b = F.writeBatch(db);
@@ -59,6 +60,8 @@ export function paraAtacado(p) {
     id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "",
     desc: String(p.desc || "").slice(0, 220), fotos: (p.fotos || []).slice(0, 4),
     novo: !!p.novo, ordem: p.ordem ?? 999, preco: Number(p.preco) || 0,
+    ...(p.var && p.var.ops && p.var.ops.length ? { var: p.var } : {}),
+    ...(p.rank != null ? { rank: p.rank } : {}),
   };
 }
 export const ativoNaLoja = (p) => p.ativo !== false && !p.esgotado && Number(p.preco) > 0;
@@ -92,12 +95,22 @@ function mapear(p, catNome) {
     if (u && !fotos.includes(u)) fotos.push(u);
     if (fotos.length >= 4) break;
   }
+  // variações (tamanho, letra, signo…): só as que estão à venda na Yampi
+  const skus = lista(p.skus);
+  let variacao = null;
+  if (p.has_variations && skus.length > 1) {
+    const ok = skus.filter((k) => !k.blocked_sale && (k.variations || []).length);
+    const nome = ((skus.find((k) => (k.variations || []).length) || {}).variations || []).map((v) => v.name).join(" / ") || "Opção";
+    const ops = [...new Set(ok.map((k) => k.variations.map((v) => String(v.value).trim()).join(" / ")))].filter(Boolean);
+    if (ops.length) variacao = { nome, ops: ops.slice(0, 60) };
+  }
   const cats = lista(p.categories).map((c) => c.name).filter((n) => !/^(novidades|ofertas|lan[çc]amentos|mais vendidos)$/i.test(String(n).trim()));
   return {
     yampiId: String(p.id), slug: p.slug || "", nome: String(p.name || "").trim(),
     cat: catNome || cats[0] || "", preco: Math.round(preco * 100) / 100, fotos,
     desc: semHtml(p.description), banhoSugerido: banho(`${p.name} ${cats.join(" ")}`),
-    bloqueado: !!p.blocked_sale,
+    bloqueado: !!p.blocked_sale || (!!p.has_variations && skus.length > 1 && !variacao),
+    var: variacao,
   };
 }
 
@@ -115,7 +128,7 @@ export async function buscarYampi(categorias, progresso = () => {}) {
       await new Promise((r) => setTimeout(r, 1500 * t));
     }
   };
-  const produtos = new Map(), novidades = new Set();
+  const produtos = new Map(), novidades = new Set(), ranks = new Map();
   const todas = [...categorias, "novidades"];
   for (let ci = 0; ci < todas.length; ci++) {
     const slug = todas[ci];
@@ -123,13 +136,17 @@ export async function buscarYampi(categorias, progresso = () => {}) {
     const pages = (c && c.data && c.data.total_pages) || 1;
     for (let page = 1; page <= pages; page++) {
       progresso(`Buscando ${slug} (${ci + 1}/${todas.length}) · página ${page}/${pages} · ${produtos.size} peças`);
-      const j = await get(`search/products?context=category&slug=${encodeURIComponent(slug)}&limit=100&page=${page}&include=skus,images,categories`);
+      const j = await get(`search/products?context=category&slug=${encodeURIComponent(slug)}&limit=100&page=${page}&sort_by=best_sellers&include=skus,images,categories`);
       const nome = (j.meta && j.meta.name) || "";
+      let pos = (page - 1) * 100;
       for (const p of lista(j)) {
+        pos++;
+        if (slug !== "novidades") { const r = ranks.get(String(p.id)); if (r == null || pos < r) ranks.set(String(p.id), pos); }
         if (slug === "novidades") { novidades.add(String(p.id)); if (produtos.has(String(p.id))) continue; }
         if (!produtos.has(String(p.id))) produtos.set(String(p.id), mapear(p, slug === "novidades" ? "" : nome));
       }
     }
   }
+  for (const [id, r] of ranks) { const m = produtos.get(id); if (m) m.rank = r; }
   return { produtos, novidades };
 }

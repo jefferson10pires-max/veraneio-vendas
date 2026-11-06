@@ -462,7 +462,8 @@ async function importarYampi(){
     let novos=0,atual=0,desat=0,ops=0,batch=writeBatch(db);
     const flush=async()=>{if(ops){await batch.commit();batch=writeBatch(db);ops=0}};
     for(const [yid,m] of Y){
-      const ex=porYampi[yid],id=ex?ex.id:"y"+yid,{banhoSugerido,bloqueado,...dados}=m;
+      const ex=porYampi[yid],id=ex?ex.id:"y"+yid,{banhoSugerido,bloqueado,var:vr,...dados}=m;
+      dados.var=vr||null;dados.rank=m.rank??null;
       const docData={...dados,ativo:!bloqueado&&m.preco>0,origem:"yampi",sincronizadoEm:serverTimestamp()};
       if(!ex){Object.assign(docData,{banho:banhoSugerido,novo:novidades.has(yid),esgotado:false,ordem:999});novos++}
       else{if(!ex.banho)docData.banho=banhoSugerido;atual++}
