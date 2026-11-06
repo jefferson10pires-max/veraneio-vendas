@@ -26,3 +26,10 @@ Teste de 05/11/2026, no celular (375 px e Pixel 7), em duas frentes:
 ## A conferir (não reproduzido)
 - Carrinho abandonado e pedido enviado gravando no painel da revendedora. Não testei na loja real para não criar cliente falsa no painel da Kailane.
 - Link da loja compartilhado no WhatsApp não mostra a prévia com nome e logo da loja. A página é montada no navegador, e o WhatsApp não executa esse código.
+
+## Novidades de 05/11 (pedido do Jefferson)
+- **Pronta entrega:** categoria fixa no menu da loja, logo depois de "Todos os produtos", e carrossel no início. As peças ganham o selo verde "Pronta entrega" e a mensagem do WhatsApp avisa "✅ pronta entrega". No painel, em **Peças**, cada peça tem a chave "Pronta entrega" e há o filtro "★ Só pronta entrega". Testes F06.
+- **Atualizar peças da Yampi:** traz peças novas, preços, tamanhos e fotos, e tira das lojas o que não está mais à venda ou visível no site. Roda sozinho ao abrir o ADM quando a última atualização tem mais de 12 h. Se a Yampi devolver bem menos peças que o normal, não altera nada. Agora também lê Semi joias OURO, Piercing, Porta-joias, Peças para iniciantes e Ofertas.
+- **Baixar foto:** botão abaixo da foto na ficha da peça. Gera um JPEG pelo wsrv.nl. No celular abre "Salvar imagem / Compartilhar"; no computador baixa o arquivo. Se falhar, abre a foto para salvar segurando o dedo. Testes F07.
+
+Testes automáticos: 25 de 25 passando.

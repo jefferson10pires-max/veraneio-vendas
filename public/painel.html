@@ -142,6 +142,12 @@ a{color:inherit}
 .pr .vals{grid-column:2/-1;display:flex;gap:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
 .pr .vals b{color:var(--ink);font-weight:600}
 .pr .vals .profit b{color:var(--ok)}
+.pe{grid-column:2/-1;display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;width:max-content;padding:4px 10px 4px 4px;border-radius:999px;border:1px solid var(--line)}
+.pe input{appearance:none;width:34px;height:20px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;margin:0;transition:background .15s}
+.pe input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.pe input:checked{background:var(--ok)}.pe input:checked::after{transform:translateX(14px)}
+.pe:has(input:checked){border-color:var(--ok);color:var(--ok);font-weight:600}
+.pecount{display:inline-block;background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok);border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:600}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .stat{background:var(--soft);border-radius:12px;padding:10px 12px;min-width:0}
 .stat span{display:block;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
@@ -255,7 +261,7 @@ function aplicarCor(){const c=/^#[0-9a-f]{6}$/i.test(L.cor||"")?L.cor:"#043034";
 const logoHTML=()=>L.logo?`<img alt="" src="${esc(L.logo)}">`:esc(initials(L.nome));
 
 /* ---------- estrutura ---------- */
-const TABS=[["inicio","Início",I.home],["pedidos","Pedidos",I.bag],["aparencia","Aparência",I.brush],["precos","Preços",I.percent],["conta","Loja",I.gear]];
+const TABS=[["inicio","Início",I.home],["pedidos","Pedidos",I.bag],["aparencia","Aparência",I.brush],["precos","Peças",I.percent],["conta","Loja",I.gear]];
 function shell(){
   document.title=`${L.nome} · Painel`;
   app.innerHTML=`<header class="top px"><div class="who"><span class="logo" id="tLogo">${logoHTML()}</span><div style="min-width:0"><small>Painel da loja</small><b id="tName">${esc(L.nome)}</b></div></div>
@@ -413,14 +419,15 @@ async function tPrecos(){
   loading();
   try{await carregarProds()}catch(e){$("main").innerHTML=`<div class="note">Não foi possível carregar os produtos.</div>`;return}
   const cats=[...new Set(PRODS.map(p=>p.cat).filter(Boolean))];
-  $("main").innerHTML=`<div class="box"><h2>Margem e preços</h2><p class="lead">A sua margem entra sempre em cima do preço de atacado Veraneio. As clientes veem o preço novo assim que aparecer “Salvo”.</p>
+  $("main").innerHTML=`<div class="box"><h2>Peças e preços</h2><p class="lead">A sua margem entra sempre em cima do preço de atacado Veraneio. As clientes veem o preço novo assim que aparecer “Salvo”.</p>
     <div class="stats"><div class="stat"><span>Margem</span><b class="num" id="sM"></b></div><div class="stat"><span>Preço médio</span><b class="num" id="sP"></b></div><div class="stat"><span>Lucro/peça</span><b class="num profit" id="sL"></b></div></div>
     <div class="field"><label for="fM">Margem padrão (todas as peças)</label><div class="slider-row"><input type="range" id="fM" min="0" max="300" step="5" value="${PR.margem}"><output class="num" id="oM"></output></div></div>
     <div class="field"><span class="flabel">Arredondar preço</span><div class="seg" id="seg">${[["none","Exato"],["90","Final ,90"],["int","Inteiro"]].map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${PR.arred===v}">${l}</button>`).join("")}</div></div>
     <span class="saved" id="saved" aria-live="polite"></span></div>
-  <div class="box"><h3>Margem por peça</h3>
+  <div class="box"><h3>Peças · margem e pronta entrega</h3>
+    <p class="lead" style="margin:0">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos. Elas ganham o selo e a categoria “Pronta entrega” na loja. As outras continuam à venda sob encomenda. <span class="pecount" id="peCount"></span></p>
     <div class="tools"><label class="sbox"><span class="sr">Pesquisar peça</span>${I.search}<input id="mq" type="search" placeholder="Pesquisar peça" value="${esc(ui.mq)}"></label>
-      <select id="mcat" aria-label="Categoria">${["Todas",...cats].map(c=>`<option ${ui.mcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+      <select id="mcat" aria-label="Categoria">${["Todas","★ Só pronta entrega",...cats].map(c=>`<option ${ui.mcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
     <div class="plist" id="plist"></div>
     <div class="row"><span class="hint" style="flex:1">Deixe em branco para usar a margem padrão.</span><button class="btn btn-ghost btn-sm" type="button" id="clr">Usar padrão em todas</button></div></div>`;
   $("fM").oninput=e=>{PR.margem=Number(e.target.value);salvarPrecos();atualizar()};
@@ -428,22 +435,26 @@ async function tPrecos(){
   $("mq").oninput=e=>{ui.mq=e.target.value;ui.lim=40;linhas()};
   $("mcat").onchange=e=>{ui.mcat=e.target.value;ui.lim=40;linhas()};
   $("clr").onclick=()=>{PR.over={};salvarPrecos();linhas()};
+  $("plist").onchange=e=>{const id=e.target.dataset.pe;if(!id)return;const set=new Set(PR.pronta||[]);
+    e.target.checked?set.add(id):set.delete(id);PR.pronta=[...set];contarPE();salvarPrecos()};
   $("plist").oninput=e=>{const id=e.target.dataset.id;if(!id)return;const v=e.target.value;PR.over=PR.over||{};
     if(v==="")delete PR.over[id];else PR.over[id]=Math.max(0,Math.min(500,Number(v)));salvarPrecos();atualizar()};
   linhas();
 }
 function linhas(){
-  const q=norm(ui.mq),todos=PRODS.filter(p=>(ui.mcat==="Todas"||p.cat===ui.mcat)&&(!q||norm(p.nome).includes(q)));
+  const pe=new Set(PR.pronta||[]),q=norm(ui.mq),todos=PRODS.filter(p=>(ui.mcat==="Todas"||(ui.mcat==="★ Só pronta entrega"?pe.has(p.id):p.cat===ui.mcat))&&(!q||norm(p.nome).includes(q)));
   ui.lim=ui.lim||40;const l=todos.slice(0,ui.lim);
   $("plist").innerHTML=(l.length?l.map(p=>{const o=(PR.over||{})[p.id];return `<div class="pr">
     <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(p.fotos[0])}" alt="" loading="lazy">`:""}</div>
     <div class="nm">${esc(p.nome)}<small>${esc(p.cat||"")}</small></div>
     <label class="mgw"><input class="mg num" type="number" inputmode="numeric" min="0" max="500" step="5" data-id="${esc(p.id)}" id="mg-${esc(p.id)}" value="${o??""}" aria-label="Margem ${esc(p.nome)}">%</label>
-    <div class="vals"><span>Atacado <b class="num">${brl(p.preco)}</b></span><span>Loja <b class="num" id="pv-${esc(p.id)}"></b></span><span class="profit">Lucro <b class="num" id="lv-${esc(p.id)}"></b></span></div></div>`}).join("")
-    :`<p class="hint">Nenhuma peça encontrada.</p>`)+(todos.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${todos.length-l.length})</button>`:"");
+    <div class="vals"><span>Atacado <b class="num">${brl(p.preco)}</b></span><span>Loja <b class="num" id="pv-${esc(p.id)}"></b></span><span class="profit">Lucro <b class="num" id="lv-${esc(p.id)}"></b></span></div>
+    <label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)?"checked":""} aria-label="Pronta entrega: ${esc(p.nome)}">Pronta entrega</label></div>`}).join("")
+    :`<p class="hint">${ui.mcat==="★ Só pronta entrega"?"Nenhuma peça marcada como pronta entrega ainda.":"Nenhuma peça encontrada."}</p>`)+(todos.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${todos.length-l.length})</button>`:"");
   const m=$("mais");if(m)m.onclick=()=>{ui.lim+=60;linhas()};
-  atualizar();
+  contarPE();atualizar();
 }
+function contarPE(){const ids=new Set(PRODS.map(p=>p.id)),n=(PR.pronta||[]).filter(i=>ids.has(i)).length;const el=$("peCount");if(el)el.textContent=`${n} ${n===1?"peça":"peças"} a pronta entrega`}
 function atualizar(){
   $("oM").textContent=PR.margem+"%";$("sM").textContent=PR.margem+"%";
   PRODS.forEach(p=>{const pv=$("pv-"+p.id);if(!pv)return;const v=precoFinal(p.preco,PR,p.id);pv.textContent=brl(v);$("lv-"+p.id).textContent=brl(v-p.preco);
@@ -451,7 +462,7 @@ function atualizar(){
   if(PRODS.length){$("sP").textContent=brl(PRODS.reduce((s,p)=>s+precoFinal(p.preco,PR,p.id),0)/PRODS.length);$("sL").textContent=brl(PRODS.reduce((s,p)=>s+precoFinal(p.preco,PR,p.id)-p.preco,0)/PRODS.length)}
 }
 function salvarPrecos(){clearTimeout(saveT.p);saveT.p=setTimeout(async()=>{
-  try{await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},atualizadoEm:serverTimestamp()});
+  try{await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},pronta:PR.pronta||[],atualizadoEm:serverTimestamp()});
     const el=$("saved");if(el)el.textContent="Atualizando a loja…";
     await carregarProds();await C.publicarLoja(F,db,U.uid,PR,PRODS);flash()}catch(e){console.error(e);toast("Não foi possível salvar os preços.")}},1200)}
 

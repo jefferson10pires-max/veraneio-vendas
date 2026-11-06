@@ -177,6 +177,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .gal .ph{width:100%;height:100%;display:grid;place-items:center;background:var(--soft);color:var(--brand)}
 .gal .ph svg{width:44%;height:44%}
 .galwrap{position:relative}
+.flag.pe{background:#e7f4ec;color:#1d6b3f;font-weight:600}
+.flag.pe::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#2c9a5a;margin-right:6px;vertical-align:1px}
+.dlfoto{display:flex;justify-content:center;padding:12px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px))}
+.dlfoto button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border:.8px solid var(--line);border-radius:var(--radius);background:#fff;font-weight:600;font-size:13.5px;cursor:pointer;color:#222}
+.dlfoto button svg{width:18px;height:18px}
+.dlfoto button[disabled]{opacity:.6;cursor:wait}
+#dnav button.pe{color:#1d6b3f;font-weight:700}
+.line .tagpe{display:inline-block;margin-top:3px;font-size:11px;font-weight:600;color:#1d6b3f;background:#e7f4ec;border-radius:999px;padding:1px 8px}
 .gcount{position:absolute;top:16px;right:16px;background:rgba(0,0,0,.55);color:#fff;font-size:13px;font-weight:700;padding:5px 12px;border-radius:30px}
 .pinfo{padding:28px max(16px,env(safe-area-inset-right,0px)) 30px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:0}
 .pinfo .flag{align-self:flex-start;font-size:13px;padding:6px 10px}
@@ -372,6 +380,7 @@ const I={
  shield:sv('<path d="M18 4l12 4.5v8.5c0 7-5.2 12.3-12 14-6.8-1.7-12-7-12-14V8.5z"/><path d="m12.5 17.5 4 4 7-8"/>'),
  chat:sv('<path d="M6 30l2-6.2A12 12 0 1 1 12.2 28z"/><path d="M13 15h10M13 20h6"/>'),
  cartPlus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 4h2.4l2.2 10.5h10.6l2-7.5H11"/><circle cx="8.5" cy="19" r="1.4"/><circle cx="15.7" cy="19" r="1.4"/><path d="M5 4.5V1.5M3.5 3h3" transform="translate(0 0)"/></svg>',
+ down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M4 19h16"/></svg>',
  minus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14"/></svg>',
  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 12h14M12 5v14"/></svg>',
  chev:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>',
@@ -488,16 +497,18 @@ function renderBanners(){
 $("bnTrack").addEventListener("scroll",()=>{const t=$("bnTrack"),i=Math.round(t.scrollLeft/Math.max(1,t.clientWidth));[...$("bnDots").children].forEach((d,k)=>d.classList.toggle("on",k===i))},{passive:true});
 
 function renderNav(){
-  const all=["Todas",...cats(),...(ITENS.some(p=>p.novo)?["Novidades"]:[])];
-  $("dnav").innerHTML=all.map(c=>`<button type="button" data-cat="${esc(c)}" aria-current="${ui.cat===c}">${c==="Todas"?"Todos os produtos":esc(c)}${I.chev}</button>`).join("");
+  const all=["Todas","Pronta entrega",...cats(),...(ITENS.some(p=>p.novo)?["Novidades"]:[])];
+  $("dnav").innerHTML=all.map(c=>`<button type="button" data-cat="${esc(c)}" aria-current="${ui.cat===c}" ${c==="Pronta entrega"?'class="pe"':""}>${c==="Todas"?"Todos os produtos":esc(c)}${c==="Pronta entrega"?` <span class="num">(${ITENS.filter(p=>p.pronta).length})</span>`:""}${I.chev}</button>`).join("");
 }
 function ordenar(l){const s=ui.sort;return l.sort((a,b)=>s==="asc"?a.preco-b.preco:s==="desc"?b.preco-a.preco:s==="az"?a.nome.localeCompare(b.nome,"pt"):s==="new"?(b.novo?1:0)-(a.novo?1:0):(a.ordem??999)-(b.ordem??999)||(a.rank??1e6)-(b.rank??1e6))}
 function filtrada(){
   let l=ITENS.slice();
-  if(ui.cat==="Novidades")l=l.filter(p=>p.novo||/^novidades$/i.test(p.cat||""));else if(ui.cat!=="Todas")l=l.filter(p=>p.cat===ui.cat);
+  if(ui.cat==="Pronta entrega")l=l.filter(p=>p.pronta);
+  else if(ui.cat==="Novidades")l=l.filter(p=>p.novo||/^novidades$/i.test(p.cat||""));else if(ui.cat!=="Todas")l=l.filter(p=>p.cat===ui.cat);
   if(ui.q){const q=norm(ui.q);l=l.filter(p=>norm(`${p.nome} ${p.cat} ${p.banho}`).includes(q))}
   return ordenar(l);
 }
+const selo=p=>p.pronta?`<span class="flag pe">Pronta entrega</span>`:p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`;
 /* miniaturas pelo CDN de imagens da Yampi (bem mais leves que a foto original) */
 function foto(u,tam){return /^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${tam}x${tam}/filters:background_color(white):upscale()/${u}`:u}
 window.vrnFoto=(img)=>{const p=byId(img.dataset.pid);const n=Number(img.dataset.i||0)+1;
@@ -508,7 +519,7 @@ function cardHTML(p,eager){
   return `<article class="card">
     <div class="img"><button type="button" data-open="${esc(p.id)}" aria-label="Ver ${esc(p.nome)}" style="all:unset;display:block;width:100%;height:100%;cursor:pointer">${p.fotos&&p.fotos[0]?imgTag(p,400,eager?"":'loading="lazy"'):`<div class="ph">${art(p.cat)}</div>`}</button>
       <button class="buybtn" type="button" ${p.var?`data-open="${esc(p.id)}"`:`data-add="${esc(p.id)}"`} aria-label="Adicionar ${esc(p.nome)} ao carrinho">${I.cartPlus}</button></div>
-    ${p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`}
+    ${selo(p)}
     <div class="name" data-open="${esc(p.id)}">${esc(p.nome)}</div>
     <div class="price num">${brl(p.preco)}</div><div class="inst num">${instOf(p.preco)}</div>
   </article>`;
@@ -518,6 +529,8 @@ function renderMain(){
   let h="";
   if(!filtro){
     const mais=ITENS.slice().sort((a,b)=>(a.rank??1e6)-(b.rank??1e6)||(a.ordem??999)-(b.ordem??999)).slice(0,8),novos=ITENS.filter(p=>p.novo).slice(0,8);
+    const pe=ITENS.filter(p=>p.pronta).sort((a,b)=>(a.rank??1e6)-(b.rank??1e6)).slice(0,12);
+    if(pe.length)h+=`<section class="coll"><div class="coll-head"><h2>Pronta entrega</h2><button type="button" data-cat="Pronta entrega">Ver todas (${ITENS.filter(p=>p.pronta).length})</button></div><div class="car noscroll" tabindex="0" aria-label="Pronta entrega">${pe.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
     if(ITENS.length>4)h+=`<section class="coll"><div class="coll-head"><h2>Mais Vendidos</h2><button type="button" data-cat="Todas" data-scroll="cat">Ver todos</button></div><div class="car noscroll" tabindex="0" aria-label="Mais vendidos">${mais.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
     if(novos.length>=2)h+=`<section class="coll"><div class="coll-head"><h2>Lançamentos</h2><button type="button" data-cat="Novidades">Ver todos</button></div><div class="car noscroll" tabindex="0" aria-label="Lançamentos">${novos.map(p=>cardHTML(p)).join("")}</div></section>`;
   }
@@ -527,7 +540,7 @@ function renderMain(){
       ${filtro?`<button type="button" data-cat="Todas" data-clear>Ver todos os produtos</button>`:""}<span class="sub">${l.length} ${l.length===1?"produto":"produtos"}${ui.q?` para “${esc(ui.q)}”`:""}</span></div>
     <div class="tools"><button class="chipcat" type="button" id="catBtn">${ui.cat==="Todas"?"Categorias":esc(ui.cat)}${I.chev.replace('width="14"','width="12"')}</button>
       <select id="sort" aria-label="Ordenar"><option value="pop">Mais vendidos</option><option value="new">Lançamentos</option><option value="asc">Menor preço</option><option value="desc">Maior preço</option><option value="az">A a Z</option></select></div>
-    <div class="grid" id="grid">${l.length?l.slice(0,ui.lim).map((p,i)=>cardHTML(p,!filtro?false:i<4)).join(""):`<div class="nores">Nenhum produto encontrado.</div>`}</div>
+    <div class="grid" id="grid">${l.length?l.slice(0,ui.lim).map((p,i)=>cardHTML(p,!filtro?false:i<4)).join(""):`<div class="nores">${ui.cat==="Pronta entrega"&&!ui.q?"No momento não há peças a pronta entrega.<br>Todas as peças do catálogo podem ser encomendadas.":"Nenhum produto encontrado."}</div>`}</div>
     ${l.length>ui.lim?`<div class="mais"><button type="button" id="maisBtn">Carregar mais (${l.length-ui.lim})</button></div>`:""}</section>`;
   $("main").innerHTML=h;
   $("sort").value=ui.sort;
@@ -559,8 +572,9 @@ function abrirProduto(id){
   let q=1,op=null;const fotos=(p.fotos&&p.fotos.length)?p.fotos:[null];
   $("pBody").innerHTML=`<div class="galwrap"><div class="gal noscroll" id="gal" tabindex="0" aria-label="Fotos da peça">${fotos.map((f,i)=>`<div>${f?`<img src="${esc(foto(f,800))}" alt="${esc(p.nome)}" onerror="this.onerror=null;this.outerHTML='<div class=ph>${esc(art(p.cat)).replace(/"/g,"&quot;")}</div>'" ${i?'loading="lazy"':""}>`:`<div class="ph">${art(p.cat)}</div>`}</div>`).join("")}</div>
       ${fotos[0]?`<span class="gcount num" id="gcount">1/${fotos.length}</span>`:""}</div>
+    ${fotos[0]?`<div class="dlfoto"><button type="button" id="dlFoto">${I.down}Baixar foto</button></div>`:""}
     <div class="pinfo">
-      ${p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`}
+      ${selo(p)}
       <h2 id="pTitle">${esc(p.nome)}</h2>
       <div class="pprice num">${brl(p.preco)}</div>
       <div class="pinst num">${instOf(p.preco)}</div>
@@ -587,7 +601,31 @@ function abrirProduto(id){
       if(p.var&&!op){const v=$("vars");v.classList.remove("erro");void v.offsetWidth;v.classList.add("erro");$("vErr").textContent=`Escolha o ${p.var.nome.toLowerCase().replace(/s$/,"")} antes de adicionar.`;v.scrollIntoView({behavior:"smooth",block:"center"});return}
       addCart(chave(p.id,op),q);closeSheets();toast(`${q>1?q+" peças adicionadas":"Produto adicionado"} ao carrinho`,true)}};
   const g=$("gal");if(g&&$("gcount"))g.addEventListener("scroll",()=>{$("gcount").textContent=`${Math.round(g.scrollLeft/Math.max(1,g.clientWidth))+1}/${fotos.length}`},{passive:true});
+  const dl=$("dlFoto");if(dl)dl.onclick=()=>{const g=$("gal"),i=g?Math.round(g.scrollLeft/Math.max(1,g.clientWidth)):0;baixarFoto(fotos[i]||fotos[0],p.nome+(fotos.length>1?`-${i+1}`:""),dl)};
   body.scrollTop=0;openSheet("pSheet");
+}
+
+/* ---------- baixar foto ----------
+   As fotos da Yampi não permitem download direto de outro site, então passam pelo
+   wsrv.nl (serviço gratuito e aberto de imagens), que entrega um JPEG.
+   No celular abre "Salvar imagem / Compartilhar"; no computador baixa o arquivo.
+   Se algo falhar, abre a foto numa aba para salvar segurando o dedo nela. */
+async function baixarFoto(url,nome,btn){
+  const arq=(norm(nome).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"foto")+".jpg";
+  const txt=btn.innerHTML;btn.disabled=true;btn.innerHTML=`${I.down}Preparando…`;
+  try{
+    const r=await fetch(`https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&q=92&w=1600&we`);
+    if(!r.ok)throw new Error("foto");
+    const blob=await r.blob(),file=new File([blob],arq,{type:"image/jpeg"});
+    const toque=matchMedia("(pointer:coarse)").matches;
+    if(toque&&navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file]})}catch(e){if(e.name!=="AbortError")throw e}
+    }else{
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=arq;document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast("Foto baixada");
+    }
+  }catch(e){window.open(url,"_blank","noopener");toast("Abrimos a foto: segure o dedo nela e escolha “Salvar imagem”.")}
+  finally{btn.disabled=false;btn.innerHTML=txt}
 }
 
 /* ---------- carrinho ---------- */
@@ -605,7 +643,7 @@ function renderCart(){
   $("badge").textContent=n;
   $("lines").innerHTML=it.length?it.map(({k,p,op,q})=>`<div class="line">
       <div class="mini">${p.fotos&&p.fotos[0]?imgTag(p,160):art(p.cat)}</div>
-      <div class="nm">${esc(p.nome)}${op?`<div class="op">${esc(p.var?p.var.nome:"Opção")}: ${esc(op)}</div>`:""}</div>
+      <div class="nm">${esc(p.nome)}${op?`<div class="op">${esc(p.var?p.var.nome:"Opção")}: ${esc(op)}</div>`:""}${p.pronta?`<span class="tagpe">Pronta entrega</span>`:""}</div>
       <div class="pr num">${brl(p.preco*q)}</div>
       <div class="row"><span class="qty"><button type="button" data-q="-1" data-id="${esc(k)}" aria-label="Diminuir">${I.minus}</button><span class="num">${q}</span><button type="button" data-q="1" data-id="${esc(k)}" aria-label="Aumentar">${I.plus}</button></span><button class="rm" type="button" data-rm="${esc(k)}">Remover</button></div>
     </div>`).join("")
@@ -618,7 +656,7 @@ function renderCart(){
   $("finish").href=(it.length&&buyerOk()&&L.whats)?`https://wa.me/${waNum(L.whats)}?text=${encodeURIComponent(msgPedido())}`:"#";
 }
 function msgPedido(){
-  const l=cartItems().map(({p,op,q})=>`• ${q}x ${p.nome}${op?` — ${p.var?p.var.nome:"Opção"}: ${op}`:""}${p.banho?` (banho ${p.banho})`:""} — ${brl(p.preco*q)}`);
+  const l=cartItems().map(({p,op,q})=>`• ${q}x ${p.nome}${op?` — ${p.var?p.var.nome:"Opção"}: ${op}`:""}${p.banho?` (banho ${p.banho})`:""} — ${brl(p.preco*q)}${p.pronta?" ✅ pronta entrega":""}`);
   return `Olá, ${L.nome}! Quero fazer este pedido:\n\n${l.join("\n")}\n\nTotal: ${brl(cartTotal())}\nNome: ${buyer.nome.trim()}\nWhatsApp: ${buyer.tel.trim()}`;
 }
 /* o carrinho vira "abandonado" no painel assim que a cliente informa nome + WhatsApp */

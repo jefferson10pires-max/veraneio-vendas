@@ -39,12 +39,14 @@ export async function gravarAtacado(F, db, itens) {
 
 /** monta e publica o catálogo público de uma loja (dona ou ADM) */
 export async function publicarLoja(F, db, uid, precos, atacado) {
-  const pr = { margem: 100, arred: "90", over: {}, ...(precos || {}) };
+  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ...(precos || {}) };
+  const pe = new Set(pr.pronta || []);
   const itens = atacado.map((p) => ({
     id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
     fotos: (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
     preco: precoFinal(p.preco, pr, p.id),
     ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
+    ...(pe.has(p.id) ? { pronta: true } : {}),
   }));
   const ps = partes(itens), velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
   const b = F.writeBatch(db);
@@ -71,6 +73,7 @@ export const YAMPI_ALIAS = "veraneio";
 export const YAMPI_CATEGORIAS = [
   "aneis", "brincos", "colares", "pulseiras", "bracelete", "tornozeleiras",
   "pingentes", "berloques", "conjuntos", "pecas-masculinas", "personalizados", "kits",
+  "semi-joias-ouro", "porta-joias", "novidades/piercing", "pecas-para-iniciantes", "ofertas",
 ];
 
 const semHtml = (s) => String(s || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+>/g, "")
@@ -132,11 +135,11 @@ export async function buscarYampi(categorias, progresso = () => {}) {
   const todas = [...categorias, "novidades"];
   for (let ci = 0; ci < todas.length; ci++) {
     const slug = todas[ci];
-    const c = await get(`search/products/count?context=category&slug=${encodeURIComponent(slug)}&limit=100`).catch(() => null);
+    const c = await get(`search/products/count?context=category&slug=${encodeURI(slug)}&limit=100`).catch(() => null);
     const pages = (c && c.data && c.data.total_pages) || 1;
     for (let page = 1; page <= pages; page++) {
       progresso(`Buscando ${slug} (${ci + 1}/${todas.length}) · página ${page}/${pages} · ${produtos.size} peças`);
-      const j = await get(`search/products?context=category&slug=${encodeURIComponent(slug)}&limit=100&page=${page}&sort_by=best_sellers&include=skus,images,categories`);
+      const j = await get(`search/products?context=category&slug=${encodeURI(slug)}&limit=100&page=${page}&sort_by=best_sellers&include=skus,images,categories`);
       const nome = (j.meta && j.meta.name) || "";
       let pos = (page - 1) * 100;
       for (const p of lista(j)) {

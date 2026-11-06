@@ -20,6 +20,7 @@ function loja(extra: any = {}) {
 const base: Item[] = [
   { id: "a1", nome: "Anel Solitário A01", cat: "Anéis", preco: 39.9, fotos: [FOTO_OK], var: { nome: "Tamanhos", ops: ["12", "14", "16"] } },
   { id: "b1", nome: "Brinco Gota Cristal", cat: "Brincos", preco: 59.9, fotos: [FOTO_OK], novo: true },
+  { id: "b2", nome: "Argola Pronta", cat: "Brincos", preco: 30, fotos: ["https://images.yampi.me/assets/stores/veraneio/uploads/images/argola-large.jpg"], pronta: true } as any,
   { id: "c1", nome: "Colar Ponto de Luz", cat: "Colares", preco: 89.9, fotos: [FOTO_QUEBRADA, FOTO_OK] },
   { id: "c2", nome: "Colar Novidade Real", cat: "Novidades", preco: 49.9, fotos: [FOTO_OK], novo: true },
   { id: "p1", nome: "Pulseira Riviera 💎 Edição Especial de Fim de Ano com Nome Bem Comprido", cat: "Pulseiras", preco: 119.9, fotos: [FOTO_OK] },
@@ -67,7 +68,7 @@ test.describe("F02 navegar e buscar", () => {
     await page.getByRole("button", { name: "Abrir menu" }).click();
     await page.locator("#dnav").getByRole("button", { name: /^Brincos/ }).click();
     await expect(page.locator("#cat h2")).toHaveText("Brincos");
-    await expect(page.locator("#cat .card")).toHaveCount(1);
+    await expect(page.locator("#cat .card")).toHaveCount(2);
   });
   test("F02-E1 'Novidades' aparece uma vez só no menu", async ({ page }) => {
     await abrir(page);
@@ -205,4 +206,49 @@ test.describe("A11y", () => {
       expect(graves).toEqual([]);
     });
   }
+});
+
+test.describe("F06 pronta entrega", () => {
+  test("F06-H1 categoria fixa no menu, selo e aviso na mensagem", async ({ page }) => {
+    await abrir(page);
+    await expect(page.locator(".coll h2", { hasText: "Pronta entrega" })).toBeVisible();
+    await page.getByRole("button", { name: "Abrir menu" }).click();
+    await page.locator("#dnav").getByRole("button", { name: /^Pronta entrega/ }).click();
+    await expect(page.locator("#cat .card")).toHaveCount(1);
+    await expect(page.locator("#cat .card .flag")).toHaveText("Pronta entrega");
+    await page.locator("#cat .card").getByRole("button", { name: /adicionar/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    await page.locator("#bNome").fill("Ana");
+    await page.locator("#bTel").fill("22988887777");
+    const msg = new URL((await page.locator("#finish").getAttribute("href"))!).searchParams.get("text")!;
+    expect(msg).toContain("Argola Pronta");
+    expect(msg).toContain("pronta entrega");
+  });
+  test("F06-E1 sem peças a pronta entrega a categoria continua no menu com aviso", async ({ page }) => {
+    await abrir(page, base.filter((p: any) => !p.pronta));
+    await page.getByRole("button", { name: "Abrir menu" }).click();
+    await page.locator("#dnav").getByRole("button", { name: /^Pronta entrega/ }).click();
+    await expect(page.getByText("No momento não há peças a pronta entrega")).toBeVisible();
+  });
+});
+
+test.describe("F07 baixar foto", () => {
+  test.use({ hasTouch: false, isMobile: false, viewport: { width: 1280, height: 800 } });
+  test("F07-H1 baixa a foto da peça em JPEG", async ({ page }) => {
+    await page.route(/wsrv\.nl/, (r) => r.fulfill({ status: 200, contentType: "image/jpeg", body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) }));
+    await abrir(page);
+    await card(page, "Argola Pronta").locator(".name").click();
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Baixar foto" }).click()]);
+    expect(dl.suggestedFilename()).toBe("argola-pronta.jpg");
+  });
+  test("F07-N1 se o serviço de foto falhar, abre a foto para salvar", async ({ page, context }) => {
+    await context.route(/wsrv\.nl/, (r) => r.fulfill({ status: 500, body: "erro" }));
+    await context.route(/^https:\/\/images\.yampi\.me\//, (r) => r.fulfill({ status: 200, contentType: "image/jpeg", body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) }));
+    await abrir(page);
+    await card(page, "Argola Pronta").locator(".name").click();
+    await page.evaluate(() => { (window as any).__abriu = []; window.open = ((u: string) => { (window as any).__abriu.push(u); return null; }) as any; });
+    await page.getByRole("button", { name: "Baixar foto" }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).__abriu)).toEqual([expect.stringContaining("argola-large.jpg")]);
+    await expect(page.locator("#toast")).toContainText("Salvar imagem");
+  });
 });
