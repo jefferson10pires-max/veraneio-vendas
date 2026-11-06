@@ -12,16 +12,7 @@
     ],
     "headers": [
       {
-        "source": "/config.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      },
-      {
-        "source": "**/*.html",
+        "source": "**",
         "headers": [
           {
             "key": "Cache-Control",
