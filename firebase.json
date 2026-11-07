@@ -36,7 +36,7 @@
           "destination": "/loja.html"
         }
       ],
-      "site": "vitrine-semijoias"
+      "site": "vitrine-de-semijoias"
     },
     {
       "site": "site-revendedoras-veraneio",
@@ -44,7 +44,7 @@
       "redirects": [
         {
           "source": "/:path*",
-          "destination": "https://vitrine-semijoias.web.app/:path",
+          "destination": "https://vitrine-de-semijoias.web.app/:path",
           "type": 302
         }
       ]
