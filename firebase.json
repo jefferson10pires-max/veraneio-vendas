@@ -3,37 +3,51 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "hosting": {
-    "public": "public",
-    "cleanUrls": true,
-    "ignore": [
-      "firebase.json",
-      "**/.*"
-    ],
-    "headers": [
-      {
-        "source": "**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
-        ]
-      }
-    ],
-    "rewrites": [
-      {
-        "source": "/painel",
-        "destination": "/painel.html"
-      },
-      {
-        "source": "/adm",
-        "destination": "/adm.html"
-      },
-      {
-        "source": "**",
-        "destination": "/loja.html"
-      }
-    ]
-  }
+  "hosting": [
+    {
+      "public": "public",
+      "cleanUrls": true,
+      "ignore": [
+        "firebase.json",
+        "**/.*"
+      ],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "/painel",
+          "destination": "/painel.html"
+        },
+        {
+          "source": "/adm",
+          "destination": "/adm.html"
+        },
+        {
+          "source": "**",
+          "destination": "/loja.html"
+        }
+      ],
+      "site": "vitrine-semijoias"
+    },
+    {
+      "site": "site-revendedoras-veraneio",
+      "public": "redirecionar",
+      "redirects": [
+        {
+          "source": "/:path*",
+          "destination": "https://vitrine-semijoias.web.app/:path",
+          "type": 302
+        }
+      ]
+    }
+  ]
 }
