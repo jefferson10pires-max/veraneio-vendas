@@ -39,9 +39,10 @@ export async function gravarAtacado(F, db, itens) {
 
 /** monta e publica o catálogo público de uma loja (dona ou ADM) */
 export async function publicarLoja(F, db, uid, precos, atacado) {
-  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ...(precos || {}) };
-  const pe = new Set(pr.pronta || []);
-  const itens = atacado.map((p) => ({
+  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ocultas: [], ...(precos || {}) };
+  const pe = new Set(pr.pronta || []), oc = new Set(pr.ocultas || []);
+  // peças que a revendedora tirou do site não entram no catálogo público
+  const itens = atacado.filter((p) => !oc.has(p.id)).map((p) => ({
     id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
     fotos: (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
     preco: precoFinal(p.preco, pr, p.id),

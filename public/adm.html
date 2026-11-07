@@ -232,7 +232,9 @@ const app=$("app");
 if(!CFG.apiKey){app.innerHTML=`<div class="center px"><div><h2>Falta configurar o Firebase</h2><p class="hint">Preencha o arquivo config.js com os dados do projeto.</p></div></div>`;throw new Error("sem config")}
 
 const [{initializeApp},A,F,C]=await Promise.all([import(SDK+"firebase-app.js"),import(SDK+"firebase-auth.js"),import(SDK+"firebase-firestore.js"),import("/catalogo.js")]);
-const fbApp=initializeApp(CFG),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
+/* app com nome próprio: a sessão do ADM fica separada da sessão do painel da revendedora no mesmo navegador */
+const fbApp=initializeApp(CFG,"adm"),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
+const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
 const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction}=F;
 /* segunda instância só para criar o login da revendedora sem deslogar o ADM */
 const auth2=A.getAuth(initializeApp(CFG,"criar-revendedora"));
@@ -259,10 +261,11 @@ const I={home:sv('<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>'),users:sv('<circle 
 const BANHOS=["Ouro 18k","Ródio branco","Ródio negro","Ouro rosé","Prata"];
 
 let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={};
-const ui={tab:location.hash.replace("#","")||"geral",q:"",st:"todas",pq:"",pcat:"Todas",pend:false};
+const ui={tab:"geral",q:"",st:"todas",pq:"",pcat:"Todas",pend:false};
 
 /* ---------- login ---------- */
-function telaLogin(msg=""){
+let msgLogin="";
+function telaLogin(msg=msgLogin){msgLogin="";
   app.innerHTML=`<div class="login px"><form class="box" id="lf" novalidate><span class="vmark">V</span><h2>Painel ADM</h2><p class="lead">Acesso restrito à equipe Veraneio.</p>
     <div class="field"><label for="lE">E-mail</label><input id="lE" type="email" autocomplete="username" inputmode="email"></div>
     <div class="field"><label for="lS">Senha</label><input id="lS" type="password" autocomplete="current-password"></div>
@@ -272,8 +275,8 @@ function telaLogin(msg=""){
 }
 A.onAuthStateChanged(auth,async u=>{
   if(!u)return telaLogin();
-  const a=await getDoc(doc(db,"admins",u.uid)).catch(()=>null);
-  if(!a||!a.exists()){await A.signOut(auth);return telaLogin("Esta conta não tem acesso ao ADM.")}
+  let a;try{a=await getDoc(doc(db,"admins",u.uid))}catch(e){app.innerHTML=`<div class="center px"><div style="display:flex;flex-direction:column;gap:12px;align-items:center"><h2 style="margin:0">Não foi possível abrir o ADM</h2><p class="hint" style="margin:0">Confira a internet.</p><button class="btn btn-brand" type="button" onclick="location.reload()">Tentar de novo</button></div></div>`;return}
+  if(!a.exists()){msgLogin="Esta conta não tem acesso ao ADM. Use o login de administrador.";return A.signOut(auth)}
   shell();
 });
 
@@ -287,7 +290,7 @@ function shell(){
   $("nav").onclick=e=>{const b=e.target.closest("[data-tab]");if(b)ir(b.dataset.tab)};
   ir(ui.tab);
 }
-async function ir(t){if(!TABS.some(x=>x[0]===t))t="geral";ui.tab=t;history.replaceState(null,"","#"+t);
+async function ir(t){if(!TABS.some(x=>x[0]===t))t="geral";ui.tab=t;if(location.hash)history.replaceState(null,"",location.pathname);
   $("nav").querySelectorAll("button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===t));scrollTo(0,0);
   if(!loaded){$("main").innerHTML=`<div class="skel"></div><div class="skel"></div>`;try{await carregar()}catch(e){console.error(e);$("main").innerHTML=`<div class="note">Não foi possível carregar os dados. ${esc(e.message||"")}</div>`;return}}
   ({geral:tGeral,revendedoras:tRes,produtos:tProd})[t]();
@@ -442,7 +445,7 @@ function tProd(){
       <select id="pc" aria-label="Categoria">${["Todas",...cats].map(c=>`<option ${ui.pcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
     <div class="hint">${l.length} de ${PRODS.length} produtos · ${PRODS.filter(p=>p.ativo!==false).length} ativos</div>
     <div id="pl">${l.length?l.slice(0,ui.plim||80).map(p=>`<div class="prow" data-ed="${esc(p.id)}" role="button" tabindex="0">
-      <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(p.fotos[0])}" alt="" loading="lazy">`:"sem foto"}</div>
+      <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:"sem foto"}</div>
       <div class="nm">${esc(p.nome)}<small>${esc([p.cat,p.banho].filter(Boolean).join(" · "))}</small></div><div class="pv num">${brl(p.preco)}</div>
       <div class="tags">${p.ativo===false?'<span class="tg off">Inativo</span>':""}${p.novo?'<span class="tg new">Novo</span>':""}${p.esgotado?'<span class="tg off">Esgotado</span>':""}${p.yampiId?'<span class="tg">Yampi</span>':""}</div></div>`).join("")
       :`<div class="note">${PRODS.length?"Nenhum produto encontrado.":"Nenhum produto ainda. Toque em “Atualizar peças da Yampi”."}</div>`}</div>
@@ -476,7 +479,7 @@ async function importarYampi(forcar){
     for(const [yid,m] of Y){
       const ex=porYampi[yid],id=ex?ex.id:"y"+yid,{banhoSugerido,bloqueado,var:vr,...dados}=m;
       dados.var=vr||null;dados.rank=m.rank??null;
-      const ativo=!bloqueado&&m.preco>0;
+      const ativo=!bloqueado&&m.preco>0&&!(ex&&ex.desligadoAdm);
       const docData={...dados,ativo,origem:"yampi",sincronizadoEm:serverTimestamp()};
       if(ex&&ex.ativo!==false&&!ativo)desat++;
       if(!ex){Object.assign(docData,{banho:banhoSugerido,novo:novidades.has(yid),esgotado:false,ordem:999});novos++}
@@ -538,7 +541,7 @@ function formProd(id){
     if(!$("pN").value.trim()||!(preco>0)){$("pErr").textContent="Preencha o nome e o preço de atacado.";return}
     const ord=$("pO").value===""?999:Number($("pO").value);
     const data={nome:$("pN").value.trim(),cat:$("pC").value.trim(),banho:$("pB").value.trim(),preco,desc:$("pD").value.trim(),ordem:ord,
-      ativo:$("pA").checked,novo:$("pNv").checked,esgotado:$("pE").checked,fotos:p.fotos,atualizadoEm:serverTimestamp()};
+      ativo:$("pA").checked,desligadoAdm:!$("pA").checked,novo:$("pNv").checked,esgotado:$("pE").checked,fotos:p.fotos,atualizadoEm:serverTimestamp()};
     $("pBtn").disabled=true;
     try{await setDoc(doc(db,"produtos",p.id),data,{merge:true});
       const i=PRODS.findIndex(x=>x.id===p.id),novo={id:p.id,...data};if(i>=0)PRODS[i]={...PRODS[i],...novo};else PRODS.push(novo);
