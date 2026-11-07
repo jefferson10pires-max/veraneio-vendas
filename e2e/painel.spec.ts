@@ -207,7 +207,7 @@ test.describe("P04 modo de trabalho", () => {
     expect(ids()).toEqual(["y1"]);
     expect(d["lojas/u1"].modo).toBe("pronta");
     expect(d["precos/u1"].modo).toBe("pronta");
-    await expect(page.locator("#modoHint")).toContainText("1 peça");
+    await expect(page.locator("#modoHint")).toContainText("só a 1 peça marcada");
     await expect(page.getByRole("switch", { name: "No site: Peça 1", exact: true })).toHaveCount(0);
     // marcar outra peça (mesmo que antes estivesse fora do site) coloca ela na loja
     await page.getByPlaceholder("Pesquisar peça").fill("Peça 7");

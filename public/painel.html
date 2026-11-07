@@ -499,7 +499,7 @@ function massa(){
 function pecas(){
   segPecas();massa();
   const so=modo()==="pronta",nPE=(PR.pronta||[]).filter(i=>PRODS.some(p=>p.id===i)&&!(PR.ocultas||[]).includes(i)).length;
-  $("modoHint").innerHTML=so?(nPE?`Sua loja mostra só as <b>${nPE}</b> ${nPE===1?"peça":"peças"} marcadas como pronta entrega.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`)
+  $("modoHint").innerHTML=so?(nPE?(nPE===1?`Sua loja mostra só a <b>1</b> peça marcada como pronta entrega.`:`Sua loja mostra só as <b>${nPE}</b> peças marcadas como pronta entrega.`):`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`)
     :"Sua loja mostra o catálogo Veraneio inteiro. As peças a pronta entrega ganham o selo verde e uma categoria própria.";
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),todos=filtradas();ui.plim=ui.plim||40;const l=todos.slice(0,ui.plim);
   const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="fora"?"Todas as peças estão no seu site.":"Nenhuma peça encontrada.";
