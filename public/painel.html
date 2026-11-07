@@ -330,7 +330,7 @@ async function tInicio(){
       <div class="kpi ${ab.length?"alert":""}"><span>Abandonados</span><b class="num">${ab.length}</b><small>${brl(ab.reduce((s,l)=>s+(l.total||0),0))} para recuperar</small></div>
       <div class="kpi"><span>Acessos no mês</span><b class="num">${vis(30)}</b><small>visitas na loja</small></div>
     </div>${ab.length?`<button class="btn btn-ghost btn-sm" type="button" data-tab-go="pedidos">Ver carrinhos abandonados</button>`:""}</div>
-    <div class="box"><h3>Peças da loja</h3><div class="kpis"><div class="kpi"><span>No site</span><b class="num">${noSite}</b><small>de ${PRODS.length} peças</small></div><div class="kpi"><span>Pronta entrega</span><b class="num">${nPE}</b><small>com selo verde</small></div></div>
+    <div class="box"><h3>Peças da loja · ${PR.modo==="pronta"?"só pronta entrega":"catálogo todo"}</h3><div class="kpis"><div class="kpi"><span>No site</span><b class="num">${PR.modo==="pronta"?nPE:noSite}</b><small>de ${PRODS.length} peças</small></div><div class="kpi"><span>Pronta entrega</span><b class="num">${nPE}</b><small>com selo verde</small></div></div>
       <button class="btn btn-ghost btn-sm" type="button" data-tab-go2="pecas">${I.tag}Escolher pronta entrega e peças do site</button></div>
     <div class="box"><h3>Acessos por dia · últimas 2 semanas</h3>
       <div class="chart" role="img" aria-label="Acessos por dia">${days.map((d,i)=>`<div class="c ${i===13?"today":""}"><em class="num">${vals[i]}</em><i style="height:${Math.max(2,vals[i]/mx*110)}px"></i><span>${i===13?"hoje":d.getDate()+"/"+(d.getMonth()+1)}</span></div>`).join("")}</div></div>
@@ -445,18 +445,25 @@ async function tPecas(){
   if(ui.pcat!=="Todas"&&!cats.includes(ui.pcat))ui.pcat="Todas";
   $("main").innerHTML=`<div class="box"><h2>Peças da loja</h2>
     <p class="lead">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos: elas ganham o selo verde e a categoria “Pronta entrega” na loja. Desligue <b>No site</b> para tirar uma peça da sua loja (dá para voltar quando quiser).</p>
+    <div class="field"><span class="flabel">Como você trabalha</span><div class="seg" id="modo" role="radiogroup" aria-label="Como você trabalha">
+      <button type="button" data-modo="catalogo" aria-pressed="${modo()==="catalogo"}">Catálogo todo</button><button type="button" data-modo="pronta" aria-pressed="${modo()==="pronta"}">Só pronta entrega</button></div>
+      <span class="hint" id="modoHint"></span></div>
     <div class="pcbar"><span class="saved" id="pcStatus" aria-live="polite"></span></div>
     <div class="seg" id="pf"></div>
     <div class="tools"><label class="sbox"><span class="sr">Pesquisar peça</span>${I.search}<input id="pq" type="search" placeholder="Pesquisar peça" value="${esc(ui.pq)}"></label>
       <select id="pcat" aria-label="Categoria">${["Todas",...cats].map(c=>`<option value="${esc(c)}" ${ui.pcat===c?"selected":""}>${c==="Todas"?"Todas as categorias":esc(c)}</option>`).join("")}</select></div>
     <div class="massa" id="massa"></div>
     <div class="plist" id="plist"></div></div>`;
+  $("modo").onclick=e=>{const v=e.target.closest("[data-modo]")?.dataset.modo;if(!v||v===modo())return;PR.modo=v;
+    $("modo").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.modo===v));
+    updateDoc(doc(db,"lojas",U.uid),{modo:v}).then(()=>{L.modo=v}).catch(()=>{});
+    if(v==="pronta"&&ui.pf==="fora")ui.pf="todas";pecas();salvarPrecos()};
   $("pf").onclick=e=>{const v=e.target.closest("[data-f]")?.dataset.f;if(v){ui.pf=v;ui.plim=40;pecas()}};
   $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=40;pecas()};
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
   $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site;if(!id)return;
     const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
-    if(t.dataset.pe)t.checked?pe.add(id):pe.delete(id);
+    if(t.dataset.pe){if(t.checked){pe.add(id);oc.delete(id)}else pe.delete(id)}
     else{if(t.checked)oc.delete(id);else{oc.add(id);pe.delete(id)}}
     PR.pronta=[...pe];PR.ocultas=[...oc];
     const row=t.closest(".pr");if(row){row.classList.toggle("off",oc.has(id));const x=row.querySelector("[data-pe]");x.disabled=oc.has(id);x.checked=pe.has(id)}
@@ -464,11 +471,12 @@ async function tPecas(){
   $("massa").onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;
     if(ui.mArm!==b.dataset.m){ui.mArm=b.dataset.m;massa();clearTimeout(ui.mT);ui.mT=setTimeout(()=>{ui.mArm=null;if($("massa"))massa()},4000);return}
     ui.mArm=null;const ids=filtradas().map(p=>p.id),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
-    ({pe:()=>ids.forEach(i=>{if(!oc.has(i))pe.add(i)}),tirape:()=>ids.forEach(i=>pe.delete(i)),
+    ({pe:()=>ids.forEach(i=>{if(modo()==="pronta")oc.delete(i);if(!oc.has(i))pe.add(i)}),tirape:()=>ids.forEach(i=>pe.delete(i)),
       fora:()=>ids.forEach(i=>{oc.add(i);pe.delete(i)}),volta:()=>ids.forEach(i=>oc.delete(i))})[b.dataset.m]();
     PR.pronta=[...pe];PR.ocultas=[...oc];pecas();salvarPrecos()};
   pecas();
 }
+const modo=()=>PR.modo==="pronta"?"pronta":"catalogo";
 function filtradas(){
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),q=norm(ui.pq);
   return PRODS.filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(p.nome).includes(q))
@@ -477,7 +485,7 @@ function filtradas(){
 function segPecas(){
   const ids=new Set(PRODS.map(p=>p.id)),oc=new Set((PR.ocultas||[]).filter(i=>ids.has(i)));
   const n={todas:PRODS.length,pe:(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.has(i)).length,fora:oc.size};
-  $("pf").innerHTML=FILTROS.map(([k,l])=>`<button type="button" data-f="${k}" aria-pressed="${ui.pf===k}">${l} (${n[k]})</button>`).join("");
+  $("pf").innerHTML=FILTROS.filter(([k])=>!(k==="fora"&&modo()==="pronta")).map(([k,l])=>`<button type="button" data-f="${k}" aria-pressed="${ui.pf===k}">${l} (${n[k]})</button>`).join("");
 }
 function massa(){
   const el=$("massa");if(!el)return;
@@ -486,17 +494,20 @@ function massa(){
   const nPe=l.filter(p=>pe.has(p.id)&&!oc.has(p.id)).length,nOc=l.filter(p=>oc.has(p.id)).length;
   const b=(m,t)=>`<button class="btn btn-ghost btn-sm ${ui.mArm===m?"arm":""}" type="button" data-m="${m}">${ui.mArm===m?"Toque de novo para confirmar":t}</button>`;
   el.innerHTML=[nPe<n-nOc?b("pe",`Marcar todas (${n-nOc}) como pronta entrega`):"",nPe?b("tirape",`Desmarcar pronta entrega (${nPe})`):"",
-    nOc<n?b("fora",`Tirar todas (${n-nOc}) do site`):"",nOc?b("volta",`Voltar ao site (${nOc})`):""].join("");
+    ...(modo()==="pronta"?[]:[nOc<n?b("fora",`Tirar todas (${n-nOc}) do site`):"",nOc?b("volta",`Voltar ao site (${nOc})`):""])].join("");
 }
 function pecas(){
   segPecas();massa();
+  const so=modo()==="pronta",nPE=(PR.pronta||[]).filter(i=>PRODS.some(p=>p.id===i)&&!(PR.ocultas||[]).includes(i)).length;
+  $("modoHint").innerHTML=so?(nPE?`Sua loja mostra só as <b>${nPE}</b> ${nPE===1?"peça":"peças"} marcadas como pronta entrega.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`)
+    :"Sua loja mostra o catálogo Veraneio inteiro. As peças a pronta entrega ganham o selo verde e uma categoria própria.";
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),todos=filtradas();ui.plim=ui.plim||40;const l=todos.slice(0,ui.plim);
   const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="fora"?"Todas as peças estão no seu site.":"Nenhuma peça encontrada.";
-  $("plist").innerHTML=(l.length?l.map(p=>{const o=oc.has(p.id);return `<div class="pr ${o?"off":""}">
+  $("plist").innerHTML=(l.length?l.map(p=>{const o=!so&&oc.has(p.id);return `<div class="pr ${o?"off":""}">
     <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(p.nome)}<small>${esc(p.cat||"")} · ${brl(precoFinal(p.preco,PR,p.id))}</small></div><span></span>
     <div class="sws"><label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!o?"checked":""} ${o?"disabled":""} aria-label="Pronta entrega: ${esc(p.nome)}">Pronta entrega</label>
-      <label class="pe site"><input type="checkbox" role="switch" data-site="${esc(p.id)}" ${o?"":"checked"} aria-label="No site: ${esc(p.nome)}">No site</label></div></div>`}).join("")
+      ${so?"":`<label class="pe site"><input type="checkbox" role="switch" data-site="${esc(p.id)}" ${o?"":"checked"} aria-label="No site: ${esc(p.nome)}">No site</label>`}</div></div>`}).join("")
     :`<p class="hint">${vazio}</p>`)+(todos.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${todos.length-l.length})</button>`:"");
   const m=$("mais");if(m)m.onclick=()=>{ui.plim+=60;pecas()};
 }
@@ -527,7 +538,7 @@ async function tPrecos(){
     if(v==="")delete PR.over[id];else PR.over[id]=Math.max(0,Math.min(500,Number(v)));salvarPrecos();atualizar()};
   linhas();
 }
-const noSite=()=>{const oc=new Set(PR.ocultas||[]);return PRODS.filter(p=>!oc.has(p.id))};
+const noSite=()=>{const oc=new Set(PR.ocultas||[]),pe=new Set(PR.pronta||[]),so=PR.modo==="pronta";return PRODS.filter(p=>!oc.has(p.id)&&(!so||pe.has(p.id)))};
 function linhas(){
   const q=norm(ui.mq),todos=noSite().filter(p=>(ui.mcat==="Todas"||p.cat===ui.mcat)&&(!q||norm(p.nome).includes(q)));
   ui.lim=ui.lim||40;const l=todos.slice(0,ui.lim);
@@ -559,7 +570,7 @@ function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;sa
   filaPub=filaPub.then(async()=>{
     try{const ids=new Set(PRODS.map(p=>p.id)),oc=(PR.ocultas||[]).filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
       PR.ocultas=oc;PR.pronta=pe;
-      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},pronta:pe,ocultas:oc,atualizadoEm:serverTimestamp()});
+      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},pronta:pe,ocultas:oc,modo:modo(),atualizadoEm:serverTimestamp()});
       const el=$("saved");if(el)el.textContent="Atualizando a loja…";
       await C.publicarLoja(F,db,U.uid,PR,PRODS);flash();status("Loja atualizada ✓")}
     catch(e){console.error(e);status("Não foi possível salvar. Confira a internet.");toast("Não foi possível salvar. Confira a internet e tente de novo.")}

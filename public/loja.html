@@ -497,9 +497,10 @@ function renderBanners(){
 $("bnTrack").addEventListener("scroll",()=>{const t=$("bnTrack"),i=Math.round(t.scrollLeft/Math.max(1,t.clientWidth));[...$("bnDots").children].forEach((d,k)=>d.classList.toggle("on",k===i))},{passive:true});
 
 function renderNav(){
-  const all=["Todas","Pronta entrega",...cats(),...(ITENS.some(p=>p.novo)?["Novidades"]:[])];
+  const all=["Todas",...(soPE()?[]:["Pronta entrega"]),...cats(),...(ITENS.some(p=>p.novo)?["Novidades"]:[])];
   $("dnav").innerHTML=all.map(c=>`<button type="button" data-cat="${esc(c)}" aria-current="${ui.cat===c}" ${c==="Pronta entrega"?'class="pe"':""}>${c==="Todas"?"Todos os produtos":esc(c)}${c==="Pronta entrega"?` <span class="num">(${ITENS.filter(p=>p.pronta).length})</span>`:""}${I.chev}</button>`).join("");
 }
+const soPE=()=>!!L&&L.modo==="pronta";
 function ordenar(l){const s=ui.sort;return l.sort((a,b)=>s==="asc"?a.preco-b.preco:s==="desc"?b.preco-a.preco:s==="az"?a.nome.localeCompare(b.nome,"pt"):s==="new"?(b.novo?1:0)-(a.novo?1:0):(a.ordem??999)-(b.ordem??999)||(a.rank??1e6)-(b.rank??1e6))}
 function filtrada(){
   let l=ITENS.slice();
@@ -530,17 +531,17 @@ function renderMain(){
   if(!filtro){
     const mais=ITENS.slice().sort((a,b)=>(a.rank??1e6)-(b.rank??1e6)||(a.ordem??999)-(b.ordem??999)).slice(0,8),novos=ITENS.filter(p=>p.novo).slice(0,8);
     const pe=ITENS.filter(p=>p.pronta).sort((a,b)=>(a.rank??1e6)-(b.rank??1e6)).slice(0,12);
-    if(pe.length)h+=`<section class="coll"><div class="coll-head"><h2>Pronta entrega</h2><button type="button" data-cat="Pronta entrega">Ver todas (${ITENS.filter(p=>p.pronta).length})</button></div><div class="car noscroll" tabindex="0" aria-label="Pronta entrega">${pe.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
+    if(pe.length&&!soPE())h+=`<section class="coll"><div class="coll-head"><h2>Pronta entrega</h2><button type="button" data-cat="Pronta entrega">Ver todas (${ITENS.filter(p=>p.pronta).length})</button></div><div class="car noscroll" tabindex="0" aria-label="Pronta entrega">${pe.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
     if(ITENS.length>4)h+=`<section class="coll"><div class="coll-head"><h2>Mais Vendidos</h2><button type="button" data-cat="Todas" data-scroll="cat">Ver todos</button></div><div class="car noscroll" tabindex="0" aria-label="Mais vendidos">${mais.map((p,i)=>cardHTML(p,i<2)).join("")}</div></section>`;
     if(novos.length>=2)h+=`<section class="coll"><div class="coll-head"><h2>Lançamentos</h2><button type="button" data-cat="Novidades">Ver todos</button></div><div class="car noscroll" tabindex="0" aria-label="Lançamentos">${novos.map(p=>cardHTML(p)).join("")}</div></section>`;
   }
   const l=filtrada();
-  const titulo=ui.q?"Resultado da busca":ui.cat==="Todas"?"Catálogo Completo":ui.cat;
+  const titulo=ui.q?"Resultado da busca":ui.cat==="Todas"?(soPE()?"Pronta entrega":"Catálogo Completo"):ui.cat;
   h+=`<section class="coll" id="cat"><div class="coll-head"><h2>${esc(titulo)}</h2>
       ${filtro?`<button type="button" data-cat="Todas" data-clear>Ver todos os produtos</button>`:""}<span class="sub">${l.length} ${l.length===1?"produto":"produtos"}${ui.q?` para “${esc(ui.q)}”`:""}</span></div>
     <div class="tools"><button class="chipcat" type="button" id="catBtn">${ui.cat==="Todas"?"Categorias":esc(ui.cat)}${I.chev.replace('width="14"','width="12"')}</button>
       <select id="sort" aria-label="Ordenar"><option value="pop">Mais vendidos</option><option value="new">Lançamentos</option><option value="asc">Menor preço</option><option value="desc">Maior preço</option><option value="az">A a Z</option></select></div>
-    <div class="grid" id="grid">${l.length?l.slice(0,ui.lim).map((p,i)=>cardHTML(p,!filtro?false:i<4)).join(""):`<div class="nores">${ui.cat==="Pronta entrega"&&!ui.q?"No momento não há peças a pronta entrega.<br>Todas as peças do catálogo podem ser encomendadas.":"Nenhum produto encontrado."}</div>`}</div>
+    <div class="grid" id="grid">${l.length?l.slice(0,ui.lim).map((p,i)=>cardHTML(p,!filtro?false:i<4)).join(""):`<div class="nores">${soPE()&&!ui.q&&!ITENS.length?"Novas peças a pronta entrega chegando em breve.<br>Fale com a gente no WhatsApp.":ui.cat==="Pronta entrega"&&!ui.q?"No momento não há peças a pronta entrega.<br>Todas as peças do catálogo podem ser encomendadas.":"Nenhum produto encontrado."}</div>`}</div>
     ${l.length>ui.lim?`<div class="mais"><button type="button" id="maisBtn">Carregar mais (${l.length-ui.lim})</button></div>`:""}</section>`;
   $("main").innerHTML=h;
   $("sort").value=ui.sort;

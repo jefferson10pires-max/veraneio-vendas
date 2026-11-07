@@ -194,3 +194,31 @@ test.describe("P03 ADM", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("P04 modo de trabalho", () => {
+  test("P04-H1 'Só pronta entrega' publica só as peças marcadas e volta ao catálogo todo", async ({ page }) => {
+    await preparar(page, { seed: seed(800, { "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y1", "y7"], ocultas: ["y7"] } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Só pronta entrega" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    let d = await db(page);
+    const ids = () => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens.map((x: any) => x.id));
+    expect(ids()).toEqual(["y1"]);
+    expect(d["lojas/u1"].modo).toBe("pronta");
+    expect(d["precos/u1"].modo).toBe("pronta");
+    await expect(page.locator("#modoHint")).toContainText("1 peça");
+    await expect(page.getByRole("switch", { name: "No site: Peça 1", exact: true })).toHaveCount(0);
+    // marcar outra peça (mesmo que antes estivesse fora do site) coloca ela na loja
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 7");
+    await page.getByRole("switch", { name: "Pronta entrega: Peça 7", exact: true }).check();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    d = await db(page);
+    expect(ids().sort()).toEqual(["y1", "y7"]);
+    await page.getByRole("button", { name: "Catálogo todo" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    d = await db(page);
+    expect(ids().length).toBe(800);
+    expect(d["lojas/u1"].modo).toBe("catalogo");
+  });
+});

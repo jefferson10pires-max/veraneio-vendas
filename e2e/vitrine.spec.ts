@@ -252,3 +252,16 @@ test.describe("F07 baixar foto", () => {
     await expect(page.locator("#toast")).toContainText("Salvar imagem");
   });
 });
+
+test.describe("F08 loja só pronta entrega", () => {
+  test("F08-H1 sem categoria 'Pronta entrega' repetida e título 'Pronta entrega'", async ({ page }) => {
+    await abrir(page, base.filter((p: any) => p.pronta), { modo: "pronta" });
+    await expect(page.locator("#cat h2")).toHaveText("Pronta entrega");
+    await page.getByRole("button", { name: /menu/i }).first().click().catch(() => {});
+    expect(await page.locator('#dnav button[data-cat="Pronta entrega"]').count()).toBe(0);
+  });
+  test("F08-E1 loja sem peças mostra aviso", async ({ page }) => {
+    await abrir(page, [], { modo: "pronta" });
+    await expect(page.locator(".nores")).toContainText("chegando em breve");
+  });
+});
