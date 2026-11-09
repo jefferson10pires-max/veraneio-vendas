@@ -91,9 +91,11 @@ function banho(t) {
 }
 function mapear(p, catNome) {
   const pr = (p.prices && p.prices.data) || {};
+  // preço atual (com a promoção, se houver) e preço cheio (o "de", sem promoção)
   let preco = Number(pr.price) || Number(pr.price_sale) || 0;
   const disc = Number(pr.price_discount) || 0;
   if (disc > 0 && disc < preco) preco = disc;
+  const cheio = Math.max(preco, Number(pr.price_sale) || 0, Number(pr.price) || 0);
   const fotos = [];
   for (const i of [...lista(p.images), ...lista(p.skus).flatMap((s) => lista(s.images))]) {
     const u = i && (i.url || (i.large && i.large.url));
@@ -112,7 +114,8 @@ function mapear(p, catNome) {
   const cats = lista(p.categories).map((c) => c.name).filter((n) => !/^(novidades|ofertas|lan[çc]amentos|mais vendidos)$/i.test(String(n).trim()));
   return {
     yampiId: String(p.id), slug: p.slug || "", nome: String(p.name || "").trim(),
-    cat: catNome || cats[0] || "", preco: Math.round(preco * 100) / 100, fotos,
+    cat: catNome || cats[0] || "", preco: Math.round(preco * 100) / 100, precoCheio: Math.round(cheio * 100) / 100,
+    emPromocao: cheio - preco > 0.004, fotos,
     desc: semHtml(p.description), banhoSugerido: banho(`${p.name} ${cats.join(" ")}`),
     bloqueado: !!p.blocked_sale || (!!p.has_variations && skus.length > 1 && !variacao),
     var: variacao,

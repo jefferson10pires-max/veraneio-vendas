@@ -304,6 +304,9 @@ function autoYampi(){
 }
 
 /* ---------- dados ---------- */
+let CFG_ADM={promo:"nao"};
+/** preço de atacado que vem da Yampi: com "não repassar", usa o preço cheio mesmo durante a promoção */
+const precoDaYampi=m=>CFG_ADM.promo==="sim"?m.preco:(m.precoCheio||m.preco);
 async function carregar(){
   const desde=daysAgo(29);
   const [l,p,d,ld,y]=await Promise.all([
@@ -312,6 +315,7 @@ async function carregar(){
     getDocs(query(collectionGroup(db,"leads"),where("ts",">=",Timestamp.fromDate(desde)))),
     getDoc(doc(db,"sistema","yampi")).catch(()=>null)]);
   YS=y&&y.exists()?y.data():null;
+  try{const c=await getDoc(doc(db,"sistema","config"));CFG_ADM=Object.assign({promo:"nao"},c.exists()?c.data():{})}catch(e){CFG_ADM={promo:"nao"}}
   try{const c=await getDocs(collection(db,"contas"));CONTAS={};c.docs.forEach(d=>CONTAS[d.id]=d.data())}catch(e){}
   LOJAS=l.docs.map(x=>({uid:x.id,...x.data()})).sort((a,b)=>String(a.nome).localeCompare(b.nome,"pt"));
   PRODS=p.docs.map(x=>({id:x.id,...x.data()}));
@@ -435,9 +439,12 @@ function tProd(){
   const cats=[...new Set(PRODS.map(p=>p.cat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   const q=norm(ui.pq),l=PRODS.filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(`${p.nome} ${p.cat}`).includes(q)))
     .sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt"));
-  const ysTxt=!YS?"Ainda não importado.":YS.erro?`Último erro: ${esc(YS.erro)}`:`Última atualização: ${toDate(YS.em)?toDate(YS.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"agora"} · ${YS.total} peças à venda (${YS.novos} novas${YS.desativados?`, ${YS.desativados} saíram das lojas`:""})`;
+  const ysTxt=!YS?"Ainda não importado.":YS.erro?`Último erro: ${esc(YS.erro)}`:`Última atualização: ${toDate(YS.em)?toDate(YS.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"agora"} · ${YS.total} peças à venda (${YS.novos} novas${YS.desativados?`, ${YS.desativados} saíram das lojas`:""})${YS.emPromocao?` · ${YS.emPromocao} em promoção na Veraneio (${YS.promo==="sim"?"repassadas":"não repassadas"})`:""}${YS.travados?` · ${YS.travados} com preço travado`:""}`;
   $("main").innerHTML=`${ui.pend?`<div class="pubbar"><span>Atualizando o catálogo das lojas…</span></div>`:""}
     <div class="box"><h3>Yampi</h3><div class="row"><span class="hint" style="flex:1;min-width:200px;${YS&&YS.erro?"color:var(--danger)":""}" id="ysTxt">${ysTxt}</span><button class="btn btn-brand btn-sm" type="button" id="yImp">Atualizar peças da Yampi</button></div>
+      <div class="field" style="margin-top:12px"><span class="flabel">Promoções da Veraneio</span><div class="seg" id="promoSeg" role="radiogroup" aria-label="Promoções da Veraneio">
+        <button type="button" data-promo="nao" aria-pressed="${CFG_ADM.promo!=="sim"}">Não repassar</button><button type="button" data-promo="sim" aria-pressed="${CFG_ADM.promo==="sim"}">Repassar</button></div>
+        <span class="hint">${CFG_ADM.promo==="sim"?"Desconto no site da Veraneio <b>baixa o preço</b> nas lojas das revendedoras.":"Desconto no site da Veraneio <b>não muda</b> o preço nas lojas: o sistema usa sempre o preço cheio (o “de”)."} Peças com <b>Preço travado</b> nunca mudam de preço na atualização. Vale a partir da próxima atualização.</span></div>
       <span class="hint">Traz peças novas, preços, tamanhos e fotos, e <b>tira das lojas</b> as peças que não estão mais à venda ou visíveis no site da Veraneio. Roda sozinho quando você abre o ADM e a última atualização tem mais de 12 horas. “Novo”, ordem, esgotado e banho você ajusta aqui e não são sobrescritos.</span></div>
     <div class="box"><div class="row" style="justify-content:space-between"><h2>Produtos</h2><button class="btn btn-brand btn-sm" type="button" id="np">+ Produto</button></div>
     <p class="lead">Preço de atacado. Cada loja recebe o preço com a margem da revendedora.</p>
@@ -447,7 +454,7 @@ function tProd(){
     <div id="pl">${l.length?l.slice(0,ui.plim||80).map(p=>`<div class="prow" data-ed="${esc(p.id)}" role="button" tabindex="0">
       <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:"sem foto"}</div>
       <div class="nm">${esc(p.nome)}<small>${esc([p.cat,p.banho].filter(Boolean).join(" · "))}</small></div><div class="pv num">${brl(p.preco)}</div>
-      <div class="tags">${p.ativo===false?'<span class="tg off">Inativo</span>':""}${p.novo?'<span class="tg new">Novo</span>':""}${p.esgotado?'<span class="tg off">Esgotado</span>':""}${p.yampiId?'<span class="tg">Yampi</span>':""}</div></div>`).join("")
+      <div class="tags">${p.ativo===false?'<span class="tg off">Inativo</span>':""}${p.novo?'<span class="tg new">Novo</span>':""}${p.esgotado?'<span class="tg off">Esgotado</span>':""}${p.precoTravado?'<span class="tg">Preço travado</span>':""}${p.promoYampi?`<span class="tg new">Promo Veraneio ${brl(p.promoYampi)}</span>`:""}${p.yampiId?'<span class="tg">Yampi</span>':""}</div></div>`).join("")
       :`<div class="note">${PRODS.length?"Nenhum produto encontrado.":"Nenhum produto ainda. Toque em “Atualizar peças da Yampi”."}</div>`}</div>
     ${l.length>(ui.plim||80)?`<button class="btn btn-ghost btn-sm" type="button" id="pmore">Mostrar mais (${l.length-(ui.plim||80)})</button>`:""}</div>
     <button class="btn btn-ghost btn-sm" type="button" id="repub">Republicar catálogo em todas as lojas</button>`;
@@ -459,6 +466,10 @@ function tProd(){
   $("pl").onkeydown=e=>{if(e.key==="Enter"){const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)}};
   $("repub").onclick=()=>publicar(true);
   $("yImp").onclick=()=>importarYampi();
+  $("promoSeg").onclick=async e=>{const v=e.target.closest("[data-promo]")?.dataset.promo;if(!v||v===CFG_ADM.promo)return;
+    try{await setDoc(doc(db,"sistema","config"),{promo:v,em:serverTimestamp()},{merge:true});CFG_ADM.promo=v;tProd();
+      toast(v==="sim"?"Promoções serão repassadas. Toque em Atualizar peças da Yampi para aplicar.":"Promoções não serão repassadas. Toque em Atualizar peças da Yampi para aplicar.")}
+    catch(err){toast("Não foi possível salvar.")}};
 }
 /* ---------- Yampi → produtos → atacado → lojas ---------- */
 let importando=false;
@@ -474,11 +485,13 @@ async function importarYampi(forcar){
     if(!forcar&&ativosAntes>50&&Y.size<ativosAntes*0.6)throw new Error(`a Yampi devolveu só ${Y.size} peças (antes eram ${ativosAntes}). Nada foi alterado. Tente de novo em alguns minutos.`);
     prog("Salvando produtos");
     const porYampi={};PRODS.forEach(p=>{if(p.yampiId)porYampi[p.yampiId]=p});
-    let novos=0,atual=0,desat=0,ops=0,batch=writeBatch(db);
+    let novos=0,atual=0,desat=0,travados=0,ops=0,batch=writeBatch(db);
     const flush=async()=>{if(ops){await batch.commit();batch=writeBatch(db);ops=0}};
     for(const [yid,m] of Y){
-      const ex=porYampi[yid],id=ex?ex.id:"y"+yid,{banhoSugerido,bloqueado,var:vr,...dados}=m;
+      const ex=porYampi[yid],id=ex?ex.id:"y"+yid,{banhoSugerido,bloqueado,var:vr,precoCheio,emPromocao,...dados}=m;
       dados.var=vr||null;dados.rank=m.rank??null;
+      dados.preco=precoDaYampi(m);dados.promoYampi=emPromocao?m.preco:null;dados.precoCheioYampi=precoCheio||m.preco;
+      if(ex&&ex.precoTravado){delete dados.preco;travados++}
       const ativo=!bloqueado&&m.preco>0&&!(ex&&ex.desligadoAdm);
       const docData={...dados,ativo,origem:"yampi",sincronizadoEm:serverTimestamp()};
       if(ex&&ex.ativo!==false&&!ativo)desat++;
@@ -488,7 +501,8 @@ async function importarYampi(forcar){
     }
     for(const p of PRODS)if(p.yampiId&&!Y.has(p.yampiId)&&p.ativo!==false){batch.update(doc(db,"produtos",p.id),{ativo:false});desat++;if(++ops>=400)await flush()}
     await flush();
-    const resumo={total:[...Y.values()].filter(m=>!m.bloqueado&&m.preco>0).length,novos,atualizados:atual,desativados:desat,em:serverTimestamp(),erro:null};
+    const resumo={total:[...Y.values()].filter(m=>!m.bloqueado&&m.preco>0).length,novos,atualizados:atual,desativados:desat,travados,
+      emPromocao:[...Y.values()].filter(m=>m.emPromocao&&!m.bloqueado).length,promo:CFG_ADM.promo,em:serverTimestamp(),erro:null};
     await setDoc(doc(db,"sistema","yampi"),resumo);
     loaded=false;await carregar();
     await publicarTodas(prog);
@@ -525,6 +539,8 @@ function formProd(id){
     <div class="two"><div class="field"><label for="pP">Preço de atacado (R$)</label><input id="pP" type="number" inputmode="decimal" step="0.01" min="0" value="${esc(p.preco)}"></div>
       <div class="field"><label for="pO">Ordem na vitrine</label><input id="pO" type="number" inputmode="numeric" value="${esc(p.ordem??"")}" placeholder="1 = primeiro"></div></div>
     <div class="field"><label for="pD">Descrição</label><textarea id="pD" rows="3" maxlength="400">${esc(p.desc)}</textarea></div>
+    ${p.yampiId?`<label class="check"><input type="checkbox" id="pT" ${p.precoTravado?"checked":""}>Travar preço (a atualização da Yampi não muda o preço desta peça)</label>
+    ${p.promoYampi?`<span class="hint">Em promoção na Veraneio: ${brl(p.precoCheioYampi)} por <b>${brl(p.promoYampi)}</b>.</span>`:""}`:""}
     <label class="check"><input type="checkbox" id="pA" ${p.ativo!==false?"checked":""}>Ativo (aparece nas lojas)</label>
     <label class="check"><input type="checkbox" id="pNv" ${p.novo?"checked":""}>Marcar como novidade</label>
     <label class="check"><input type="checkbox" id="pE" ${p.esgotado?"checked":""}>Esgotado (some das lojas até voltar)</label>
@@ -536,12 +552,14 @@ function formProd(id){
     if(b.dataset.rm!==undefined)p.fotos.splice(Number(b.dataset.rm),1);
     else{const i=Number(b.dataset.first);[p.fotos[0],p.fotos[i]]=[p.fotos[i],p.fotos[0]]}reFotos()};
   $("fAdd").onclick=()=>{const u=$("fUrl").value.trim();if(!/^https:\/\/\S+$/.test(u)){$("fMsg").textContent="Cole um link que comece com https://";return}if(p.fotos.length>=4){$("fMsg").textContent="Máximo de 4 fotos.";return}p.fotos.push(u);$("fUrl").value="";reFotos()};
+  /* mudar o preço à mão numa peça da Yampi já marca "Travar preço", senão a próxima atualização desfaz a mudança */
+  if($("pT"))$("pP").addEventListener("input",()=>{$("pT").checked=true});
   $("pf").onsubmit=async e=>{e.preventDefault();
     const preco=Math.round(Number($("pP").value)*100)/100;
     if(!$("pN").value.trim()||!(preco>0)){$("pErr").textContent="Preencha o nome e o preço de atacado.";return}
     const ord=$("pO").value===""?999:Number($("pO").value);
     const data={nome:$("pN").value.trim(),cat:$("pC").value.trim(),banho:$("pB").value.trim(),preco,desc:$("pD").value.trim(),ordem:ord,
-      ativo:$("pA").checked,desligadoAdm:!$("pA").checked,novo:$("pNv").checked,esgotado:$("pE").checked,fotos:p.fotos,atualizadoEm:serverTimestamp()};
+      ativo:$("pA").checked,desligadoAdm:!$("pA").checked,...($("pT")?{precoTravado:$("pT").checked}:{}),novo:$("pNv").checked,esgotado:$("pE").checked,fotos:p.fotos,atualizadoEm:serverTimestamp()};
     $("pBtn").disabled=true;
     try{await setDoc(doc(db,"produtos",p.id),data,{merge:true});
       const i=PRODS.findIndex(x=>x.id===p.id),novo={id:p.id,...data};if(i>=0)PRODS[i]={...PRODS[i],...novo};else PRODS.push(novo);

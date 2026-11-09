@@ -222,3 +222,87 @@ test.describe("P04 modo de trabalho", () => {
     expect(d["lojas/u1"].modo).toBe("catalogo");
   });
 });
+
+test.describe("P05 promoções da Veraneio e preço travado", () => {
+  // Yampi simulada: 30 anéis; y1 em promoção (21 → 15); y2 em promoção (22 → 10) mas com preço travado no ADM em R$ 99
+  const yampi = Array.from({ length: 30 }, (_, i) => {
+    const promo = i === 1 ? [15, 21] : i === 2 ? [10, 22] : null;
+    const price = promo ? promo[0] : 20 + i, sale = promo ? promo[1] : 20 + i;
+    return { id: i, name: `Peça ${i}`, slug: "p" + i, has_variations: false, blocked_sale: false,
+      prices: { data: { price, price_sale: sale, price_discount: promo ? price : 0, has_promotion: !!promo } },
+      images: { data: [{ url: "https://images.yampi.me/x.jpg" }] }, skus: { data: [] }, categories: { data: [{ name: "Anéis" }] } };
+  });
+  async function abrirAdm(page: Page, extra: Record<string, any> = {}) {
+    const s = seed(30, { "sistema/yampi": { total: 30, novos: 0, em: { __ts: Date.now() } }, ...extra });
+    s["produtos/y2"] = { ...s["produtos/y2"], preco: 99, precoTravado: true };
+    await preparar(page, { seed: s });
+    await page.unroute(/images\.yampi\.(me|io)|api\.dooki/);
+    await page.route(/images\.yampi/, (r) => r.abort());
+    await page.route(/api\.dooki\.com\.br/, (r) => {
+      const u = new URL(r.request().url()), slug = u.searchParams.get("slug");
+      if (u.pathname.endsWith("/count")) return r.fulfill({ json: { data: { total_pages: 1 } } });
+      return r.fulfill({ json: { data: slug === "aneis" ? yampi : [], meta: { name: slug === "aneis" ? "Anéis" : slug } } });
+    });
+    await entrar(page, "adm@teste.com", "/adm");
+    await expect(page.getByText("Lojas ativas")).toBeVisible();
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+  }
+  const importar = async (page: Page) => {
+    const antes = (await db(page))["sistema/yampi"]?.em?.__ts;
+    await page.getByRole("button", { name: /Atualizar peças da Yampi|Tentar de novo/ }).click();
+    await expect.poll(async () => (await db(page))["sistema/yampi"]?.em?.__ts, { timeout: 15000 }).not.toBe(antes);
+    await expect(page.locator("#ysTxt")).toContainText("Última atualização", { timeout: 15000 });
+    await expect(page.getByRole("button", { name: "Atualizar peças da Yampi" })).toBeEnabled({ timeout: 15000 });
+  };
+  const preco = (d: any, id: string) => d["produtos/" + id].preco;
+  const naLoja = (d: any, id: string) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens).find((x: any) => x.id === id)?.preco;
+
+  test("P05-H1 'Não repassar' (padrão): promoção não baixa o preço; peça travada não muda", async ({ page }) => {
+    await abrirAdm(page);
+    await expect(page.getByRole("button", { name: "Não repassar" })).toHaveAttribute("aria-pressed", "true");
+    await importar(page);
+    const d = await db(page);
+    expect(preco(d, "y0")).toBe(20);
+    expect(preco(d, "y1")).toBe(21);          // preço cheio, não os R$ 15 da promoção
+    expect(preco(d, "y2")).toBe(99);          // travado
+    expect(d["produtos/y1"].promoYampi).toBe(15);
+    expect(naLoja(d, "y1")).toBe(42.9);       // 21 + 100% → 42,90
+    expect(naLoja(d, "y2")).toBe(198.9);
+    await expect(page.locator("#ysTxt")).toContainText("2 em promoção na Veraneio (não repassadas)");
+    await expect(page.locator("#ysTxt")).toContainText("1 com preço travado");
+    await expect(page.locator(".prow", { hasText: "Peça 1" }).first()).toContainText("Promo Veraneio R$ 15,00");
+  });
+
+  test("P05-H2 'Repassar': promoção baixa o preço nas lojas, peça travada continua igual", async ({ page }) => {
+    await abrirAdm(page);
+    await page.getByRole("button", { name: "Repassar", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Repassar", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await importar(page);
+    const d = await db(page);
+    expect(d["sistema/config"].promo).toBe("sim");
+    expect(preco(d, "y1")).toBe(15);
+    expect(preco(d, "y2")).toBe(99);
+    expect(naLoja(d, "y1")).toBe(30.9);
+  });
+
+  test("P05-H3 mudar o preço à mão trava a peça; destravar volta a seguir a Yampi", async ({ page }) => {
+    await abrirAdm(page);
+    await page.locator(".prow", { hasText: "Peça 5" }).first().click();
+    const trava = page.getByLabel(/Travar preço/);
+    await expect(trava).not.toBeChecked();
+    await page.getByLabel("Preço de atacado (R$)").fill("33");
+    await expect(trava).toBeChecked();
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByText("Produto salvo")).toBeVisible();
+    await importar(page);
+    let d = await db(page);
+    expect(preco(d, "y5")).toBe(33);
+    await page.locator(".prow", { hasText: "Peça 5" }).first().click();
+    await page.getByLabel(/Travar preço/).uncheck();
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByText("Produto salvo")).toBeVisible();
+    await importar(page);
+    d = await db(page);
+    expect(preco(d, "y5")).toBe(25);
+  });
+});
