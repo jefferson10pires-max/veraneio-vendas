@@ -145,6 +145,8 @@ a{color:inherit}
 .sws{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap}
 .pr.off .th,.pr.off .nm{opacity:.45}
 .pr .pacts{display:flex;gap:6px}
+.nm .orig,.items .orig{display:block;font-size:11.5px;color:var(--muted)}.items .orig{display:inline}
+.linkbtn{border:0;background:none;padding:0;color:var(--brand);text-decoration:underline;font:inherit;cursor:pointer}
 .pr .pacts .btn{padding:6px 10px;font-size:13px}
 .seg.seg-wrap{flex-wrap:wrap}.seg.seg-wrap button{flex:1 1 auto}
 /* janela do painel (trocar foto, nova peça) */
@@ -264,7 +266,7 @@ const precoFinal=C.precoFinal;
 const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
 
 /* ---------- estado ---------- */
-let U=null,L=null,PR={margem:100,arred:"90",over:{},pronta:[],ocultas:[],fotos:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
+let U=null,L=null,PR={margem:100,arred:"90",over:{},pronta:[],ocultas:[],fotos:{},nomes:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
 const ui={tab:"inicio",vez:0,pf:"todas",pcat:"Todas",pq:"",ltab:"abandonado",mq:"",mcat:"Todas",delArm:null};
 const lojaURL=()=>`${location.origin}/${L.slug}`;
 
@@ -298,7 +300,7 @@ async function carregarConta(u){
     const s=await getDoc(doc(db,"lojas",u.uid));
     if(!s.exists()){app.innerHTML=`<div class="center px"><div><h2>Sua conta ainda não tem loja</h2><p class="hint">Fale com a Veraneio para ativar.</p><button class="btn btn-ghost" id="out">Sair</button></div></div>`;$("out").onclick=()=>A.signOut(auth);return}
     L=s.data();
-    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},pronta:[],ocultas:[],fotos:{}},p.exists()?p.data():{});
+    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},pronta:[],ocultas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
     updateDoc(doc(db,"lojas",u.uid),{ultimoAcesso:serverTimestamp()}).catch(()=>{});
     aplicarCor();shell();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
@@ -375,7 +377,7 @@ async function tInicio(){
 /* ---------- PEDIDOS ---------- */
 async function tPedidos(){
   const ok=vez();if(!LEADS)loading();
-  try{await carregarLeads()}catch(e){if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os pedidos.</div>`;return}
+  try{await carregarLeads();if(Object.keys(PR.nomes||{}).length)await carregarProds().catch(()=>{})}catch(e){if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os pedidos.</div>`;return}
   if(!ok())return;navHTML();
   const nA=LEADS.filter(l=>l.status==="abandonado").length,nE=LEADS.length-nA;
   const list=LEADS.filter(l=>ui.ltab==="abandonado"?l.status==="abandonado":l.status!=="abandonado");
@@ -399,7 +401,7 @@ function leadCard(l){
     :`Oi, ${first}! Aqui é da ${L.nome}. Recebemos o seu pedido, já vou te passar os detalhes.`;
   const st={abandonado:"Abandonado",enviado:"Enviado",recuperado:"Recuperado"}[l.status]||l.status;
   return `<div class="lc"><div class="h"><div><b>${esc(l.nome)}</b> <span class="pill ${esc(l.status)}">${st}</span><div class="hint">${esc(l.tel)} · ${fmt(l.ts)}</div></div><div class="tot num">${brl(l.total)}</div></div>
-    <div class="items">${itens.map(i=>`${i.q}x ${esc(i.nome)}`).join(" · ")}</div>
+    <div class="items">${itens.map(i=>{const o=PR.nomes&&PR.nomes[i.id]&&PRODS?PRODS.find(x=>x.id===i.id):null;return `${i.q}x ${esc(i.nome)}${o?` <small class="orig">(Veraneio: ${esc(o.nome)})</small>`:""}`}).join(" · ")}</div>
     <div class="row"><a class="btn btn-wa btn-sm" href="https://wa.me/${waNum(l.tel)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${I.chat}${l.status==="abandonado"?"Chamar no WhatsApp":"Abrir conversa"}</a>
     ${l.status==="abandonado"?`<button class="btn btn-ghost btn-sm" type="button" data-rec="${l.id}">Marcar como vendido</button>`:""}
     <button class="btn btn-ghost btn-sm" type="button" data-del="${l.id}">Excluir</button></div></div>`;
@@ -473,6 +475,9 @@ async function carregarProprios(){if(PROPRIOS)return;PROPRIOS=(await C.lerPropri
   .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),"pt",{numeric:true}))}
 const todas=()=>[...(PROPRIOS||[]),...(PRODS||[])];
 const precoLoja=p=>p.proprio?Number(p.preco)||0:precoFinal(p.preco,PR,p.id);
+/* nome que a cliente vê: a revendedora pode renomear as peças da Veraneio (PR.nomes) */
+const nomeLoja=p=>p.proprio?p.nome:(PR.nomes&&PR.nomes[p.id])||p.nome;
+const renomeada=p=>!p.proprio&&!!(PR.nomes&&PR.nomes[p.id]);
 const temFotoPropria=p=>p.proprio?!!p.fotosN:!!(PR.fotos&&PR.fotos[p.id]&&PR.fotos[p.id].n);
 /* fotos próprias ficam em lojas/{uid}/fotos/{peça}; aqui são lidas só quando a linha aparece */
 const _fp={};
@@ -487,7 +492,7 @@ async function tPecas(){
   const cats=[...new Set(todas().map(p=>p.cat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   if(ui.pcat!=="Todas"&&!cats.includes(ui.pcat))ui.pcat="Todas";
   $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h2>Peças da loja</h2><button class="btn btn-brand btn-sm" type="button" id="novaPeca">${I.plus}Nova peça</button></div>
-    <p class="lead">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos. Desligue <b>No site</b> para tirar uma peça da loja. Em <b>Foto</b> você troca a foto da peça, e em <b>Nova peça</b> cadastra uma peça sua.</p>
+    <p class="lead">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos. Desligue <b>No site</b> para tirar uma peça da loja. Em <b>Editar</b> você muda o nome e a foto da peça, e em <b>Nova peça</b> cadastra uma peça sua.</p>
     <div class="field"><span class="flabel">Como você trabalha</span><div class="seg" id="modo" role="radiogroup" aria-label="Como você trabalha">
       <button type="button" data-modo="catalogo" aria-pressed="${modo()==="catalogo"}">Catálogo todo</button><button type="button" data-modo="pronta" aria-pressed="${modo()==="pronta"}">Só pronta entrega</button></div>
       <span class="hint" id="modoHint"></span></div>
@@ -505,7 +510,7 @@ async function tPecas(){
   $("pf").onclick=e=>{const v=e.target.closest("[data-f]")?.dataset.f;if(v){ui.pf=v;ui.plim=40;pecas()}};
   $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=40;pecas()};
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
-  $("plist").onclick=e=>{const f=e.target.closest("[data-foto]");if(f)return formFotos(f.dataset.foto);
+  $("plist").onclick=e=>{const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
     const ed=e.target.closest("[data-edit]");if(ed)formPropria(ed.dataset.edit)};
   $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site;if(!id)return;
     const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
@@ -525,7 +530,7 @@ async function tPecas(){
 const modo=()=>PR.modo==="pronta"?"pronta":"catalogo";
 function filtradas(){
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),q=norm(ui.pq);
-  return todas().filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(p.nome).includes(q))
+  return todas().filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(p.nome+" "+nomeLoja(p)).includes(q))
     &&(ui.pf==="todas"||(ui.pf==="pe"?pe.has(p.id)&&!oc.has(p.id):ui.pf==="minhas"?p.proprio:oc.has(p.id))));
 }
 function segPecas(){
@@ -551,13 +556,13 @@ function pecas(){
     :"Sua loja mostra o catálogo Veraneio inteiro. As peças a pronta entrega ganham o selo verde e uma categoria própria.";
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),lista=filtradas();ui.plim=ui.plim||40;const l=lista.slice(0,ui.plim);
   const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="fora"?"Todas as peças estão no seu site.":ui.pf==="minhas"?"Você ainda não cadastrou peças suas. Toque em “Nova peça”.":"Nenhuma peça encontrada.";
-  $("plist").innerHTML=(l.length?l.map(p=>{const o=!so&&oc.has(p.id),fp=temFotoPropria(p);return `<div class="pr ${o?"off":""}">
+  $("plist").innerHTML=(l.length?l.map(p=>{const o=!so&&oc.has(p.id),fp=temFotoPropria(p),nm=nomeLoja(p);return `<div class="pr ${o?"off":""}">
     <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
-    <div class="nm">${esc(p.nome)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${brl(precoLoja(p))}${fp&&!p.proprio?" · sua foto":""}</small></div>
-    <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(p.nome)}">${I.edit}Editar</button>`
-      :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Trocar foto: ${esc(p.nome)}">${I.cam}Foto</button>`}</div>
-    <div class="sws"><label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!o?"checked":""} ${o?"disabled":""} aria-label="Pronta entrega: ${esc(p.nome)}">Pronta entrega</label>
-      ${so?"":`<label class="pe site"><input type="checkbox" role="switch" data-site="${esc(p.id)}" ${o?"":"checked"} aria-label="No site: ${esc(p.nome)}">No site</label>`}</div></div>`}).join("")
+    <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${brl(precoLoja(p))}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}</div>
+    <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(nm)}">${I.edit}Editar</button>`
+      :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Editar peça: ${esc(nm)}">${I.edit}Editar</button>`}</div>
+    <div class="sws"><label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!o?"checked":""} ${o?"disabled":""} aria-label="Pronta entrega: ${esc(nm)}">Pronta entrega</label>
+      ${so?"":`<label class="pe site"><input type="checkbox" role="switch" data-site="${esc(p.id)}" ${o?"":"checked"} aria-label="No site: ${esc(nm)}">No site</label>`}</div></div>`}).join("")
     :`<p class="hint">${vazio}</p>`)+(lista.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${lista.length-l.length})</button>`:"");
   const m=$("mais");if(m)m.onclick=()=>{ui.plim+=60;pecas()};
   encherMiniaturas($("plist"));
@@ -587,23 +592,30 @@ async function lerArquivos(input,atual,msg){
 function ligarGrade(el,l,re){el.onclick=e=>{const r=e.target.closest("[data-rm]"),f=e.target.closest("[data-first]");
   if(r){l.splice(Number(r.dataset.rm),1);re()}else if(f){const i=Number(f.dataset.first);[l[0],l[i]]=[l[i],l[0]];re()}}}
 
-/* trocar a foto de uma peça da Veraneio (só na loja desta revendedora) */
-async function formFotos(id){
+/* editar uma peça da Veraneio só na loja desta revendedora: nome e fotos */
+async function formPeca(id){
   const p=(PRODS||[]).find(x=>x.id===id);if(!p)return;
-  const tinha=temFotoPropria(p),minhas=tinha?[...(await fotosProprias(id))]:[];
-  abrirFolha("Foto da peça",`<p class="lead" style="margin:0">${esc(p.nome)}</p>
+  const tinha=temFotoPropria(p),minhas=tinha?[...(await fotosProprias(id))]:[],nomeAtual=(PR.nomes&&PR.nomes[id])||"";
+  abrirFolha("Editar peça",`<div class="field"><label for="ffN">Nome na sua loja</label><input id="ffN" maxlength="80" value="${esc(nomeAtual||p.nome)}">
+      <span class="hint">Nome da Veraneio: ${esc(p.nome)}${nomeAtual?` · <button type="button" class="linkbtn" id="ffNV">Usar o nome da Veraneio</button>`:""}</span></div>
     <div class="field"><span class="flabel">Fotos da Veraneio</span><div class="fotos">${(p.fotos||[]).slice(0,4).map(u=>`<figure><img src="${esc(mini(u,300))}" alt=""></figure>`).join("")||'<p class="hint">Sem foto.</p>'}</div></div>
     <div class="field"><span class="flabel">Suas fotos (aparecem no lugar das da Veraneio)</span><div class="fotos" id="ffG"></div>
       <span class="btn btn-ghost btn-sm file">${I.upload}Enviar foto<input type="file" id="ffIn" accept="image/*" multiple aria-label="Enviar foto"></span>
       <span class="hint" id="ffMsg">Até ${MAX_FOTOS} fotos. Use fotos quadradas, com fundo claro.</span></div>
+    <span class="err" id="ffErr" role="alert"></span>
     <div class="row"><button class="btn btn-brand" type="button" id="ffOk">Salvar</button>${tinha?`<button class="btn btn-ghost" type="button" id="ffVolta">Voltar às fotos da Veraneio</button>`:""}</div>`);
   const re=()=>{$("ffG").innerHTML=gradeFotos(minhas)};re();ligarGrade($("ffG"),minhas,re);
   $("ffIn").onchange=async e=>{await lerArquivos(e.target,minhas,$("ffMsg"));re()};
-  $("ffOk").onclick=async()=>{const b=$("ffOk");b.disabled=true;
-    try{PR.fotos=PR.fotos||{};
+  const nv=$("ffNV");if(nv)nv.onclick=()=>{$("ffN").value=p.nome;$("ffN").focus()};
+  $("ffOk").onclick=async()=>{const b=$("ffOk");
+    const nome=$("ffN").value.replace(/\s+/g," ").trim();
+    if(nome.length<2){$("ffErr").textContent="Escreva o nome da peça (ou toque em “Usar o nome da Veraneio”).";$("ffN").focus();return}
+    b.disabled=true;
+    try{PR.fotos=PR.fotos||{};PR.nomes=PR.nomes||{};
+      if(nome===p.nome)delete PR.nomes[id];else PR.nomes[id]=nome;
       if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
       else if(tinha){await deleteDoc(doc(db,"lojas",U.uid,"fotos",id));delete PR.fotos[id]}
-      delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Foto salva. A loja atualiza em alguns segundos.")}
+      delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. A loja atualiza em alguns segundos.")}
     catch(e){console.error(e);b.disabled=false;$("ffMsg").textContent="Não foi possível salvar. Confira a internet."}};
   const v=$("ffVolta");if(v)v.onclick=()=>{minhas.length=0;$("ffOk").click()};
 }
@@ -685,7 +697,7 @@ function linhas(){
   ui.lim=ui.lim||40;const l=todos.slice(0,ui.lim);
   $("plist").innerHTML=(l.length?l.map(p=>{const o=(PR.over||{})[p.id];return `<div class="pr">
     <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
-    <div class="nm">${esc(p.nome)}<small>${esc(p.cat||"")}</small></div>
+    <div class="nm">${esc(nomeLoja(p))}<small>${esc(p.cat||"")}</small></div>
     <label class="mgw"><input class="mg num" type="number" inputmode="numeric" min="0" max="500" step="5" data-id="${esc(p.id)}" value="${o??""}" aria-label="Margem ${esc(p.nome)}">%</label>
     <div class="vals"><span>Atacado <b class="num">${brl(p.preco)}</b></span><span>Loja <b class="num" data-pv="${esc(p.id)}"></b></span><span class="profit">Lucro <b class="num" data-lv="${esc(p.id)}"></b></span></div></div>`}).join("")
     :`<p class="hint">Nenhuma peça encontrada.</p>`)+(todos.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${todos.length-l.length})</button>`:"");
@@ -712,8 +724,9 @@ function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;sa
     try{await Promise.all([carregarProds(),carregarProprios()]);
       const ids=new Set(todas().map(p=>p.id)),oc=(PR.ocultas||[]).filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
       const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
-      PR.ocultas=oc;PR.pronta=pe;PR.fotos=fo;
-      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},pronta:pe,ocultas:oc,fotos:fo,modo:modo(),atualizadoEm:serverTimestamp()});
+      const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
+      PR.ocultas=oc;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;
+      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},pronta:pe,ocultas:oc,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
       const el=$("saved");if(el)el.textContent="Atualizando a loja…";
       await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);flash();status("Loja atualizada ✓")}
     catch(e){console.error(e);status("Não foi possível salvar. Confira a internet.");toast("Não foi possível salvar. Confira a internet e tente de novo.")}

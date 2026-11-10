@@ -317,7 +317,7 @@ test.describe("P06 foto própria e peça própria", () => {
     const erros = await preparar(page, { seed: seed(40) });
     await entrar(page);
     await aba(page, "Peças").click();
-    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(arq());
     await expect(page.locator("#ffG img")).toHaveCount(1);
@@ -330,7 +330,7 @@ test.describe("P06 foto própria e peça própria", () => {
     expect(it.fp.n).toBe(1); expect(it.fotos).toEqual([]);
     await expect(page.locator(".pr", { hasText: "Peça 1" }).first()).toContainText("sua foto");
     // voltar às fotos da Veraneio
-    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
     await page.getByRole("button", { name: "Voltar às fotos da Veraneio" }).click();
     await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
     d = await db(page);
@@ -423,7 +423,7 @@ test.describe("P07 casos de borda: fotos e peças próprias, fontes", () => {
 
   test("P07-E1 foto grande do celular (4000×3000, 12 MB) é reduzida e salva", async ({ page }) => {
     await abrirPecas(page);
-    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
     await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(ARQ + "grande.jpg");
     await expect(page.locator("#ffG img")).toHaveCount(1, { timeout: 15000 });
     await page.getByRole("button", { name: "Salvar" }).click();
@@ -436,7 +436,7 @@ test.describe("P07 casos de borda: fotos e peças próprias, fontes", () => {
 
   test("P07-E2 arquivo que não é imagem mostra aviso e não salva nada", async ({ page }) => {
     await abrirPecas(page);
-    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
     await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(ARQ + "doc.pdf");
     await expect(page.locator("#ffMsg")).toContainText("Não deu para usar essa imagem");
     await expect(page.locator("#ffG img")).toHaveCount(0);
@@ -458,7 +458,7 @@ test.describe("P07 casos de borda: fotos e peças próprias, fontes", () => {
 
   test("P07-E4 fechar a janela sem salvar não muda nada", async ({ page }) => {
     await abrirPecas(page);
-    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
     await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(ARQ + "retrato.png");
     await expect(page.locator("#ffG img")).toHaveCount(1);
     await page.keyboard.press("Escape");
@@ -552,4 +552,71 @@ test("P08-S4 ADM: cartão 'Precisam de atenção' sem ponto solto quando a loja 
   await entrar(page, "adm@teste.com", "/adm");
   const t = await page.locator(".lc .hint").first().innerText();
   expect(t.trim()).toBe("Nunca entrou no painel");
+});
+
+test.describe("P09 renomear peças da Veraneio", () => {
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  test("P09-H1 renomear publica o nome novo; pesquisa acha pelos dois nomes; voltar ao nome da Veraneio", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
+    await expect(page.getByLabel("Nome na sua loja")).toHaveValue("Peça 1");
+    await page.getByLabel("Nome na sua loja").fill("  Brinco   Estrela da Manhã ✨ ");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    let d = await db(page);
+    expect(d["precos/u1"].nomes).toEqual({ y1: "Brinco Estrela da Manhã ✨" });
+    expect(catalogo(d).find((x: any) => x.id === "y1").nome).toBe("Brinco Estrela da Manhã ✨");
+    const linha = page.locator(".pr", { hasText: "Estrela da Manhã" });
+    await expect(linha).toContainText("Veraneio: Peça 1");
+    await page.getByPlaceholder("Pesquisar peça").fill("estrela");
+    await expect(page.locator(".pr")).toHaveCount(1);
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 1");
+    await expect(page.locator(".pr", { hasText: "Estrela da Manhã" })).toHaveCount(1);
+    // voltar ao nome original
+    await page.getByRole("button", { name: "Editar peça: Brinco Estrela da Manhã ✨", exact: true }).click();
+    await page.getByRole("button", { name: "Usar o nome da Veraneio" }).click();
+    await expect(page.getByLabel("Nome na sua loja")).toHaveValue("Peça 1");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    d = await db(page);
+    expect(d["precos/u1"].nomes).toEqual({});
+    expect(catalogo(d).find((x: any) => x.id === "y1").nome).toBe("Peça 1");
+    expect(erros).toEqual([]);
+  });
+
+  test("P09-E1 nome vazio não salva", async ({ page }) => {
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
+    await page.getByLabel("Nome na sua loja").fill("  ");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByRole("alert")).toContainText("Escreva o nome da peça");
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("P09-E2 nome trocado continua depois de mudar a margem e da republicação do ADM; pedido mostra o nome da Veraneio", async ({ page }) => {
+    const s = seed(40, { "precos/u1": { margem: 100, arred: "90", over: {}, nomes: { y2: "Colar Lua" } },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } },
+      "lojas/u1/leads/L1": { uid: "u1", nome: "Maria", tel: "(22) 99999-0000", status: "enviado", total: 99, ts: { __ts: Date.now() }, itens: [{ id: "y2", nome: "Colar Lua", q: 1, preco: 99 }] } });
+    await preparar(page, { seed: s });
+    await entrar(page);
+    await aba(page, "Pedidos").click();
+    await page.getByRole("button", { name: /Enviados/ }).click();
+    await expect(page.locator(".lc").first()).toContainText("1x Colar Lua (Veraneio: Peça 2)");
+    await aba(page, "Preços").click();
+    await expect(page.locator(".pr", { hasText: "Colar Lua" }).first()).toBeVisible();
+    await page.locator("#fM").fill("60");
+    await expect(page.locator("#saved")).toHaveText(/Salvo/, { timeout: 8000 });
+    expect(catalogo(await db(page)).find((x: any) => x.id === "y2").nome).toBe("Colar Lua");
+    // ADM republica todas as lojas
+    await page.evaluate(() => localStorage.removeItem("fake:user:adm"));
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.getByText("Catálogo atualizado em todas as lojas")).toBeVisible({ timeout: 8000 });
+    expect(catalogo(await db(page)).find((x: any) => x.id === "y2").nome).toBe("Colar Lua");
+  });
 });

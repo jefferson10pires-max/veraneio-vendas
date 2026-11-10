@@ -55,7 +55,7 @@ export function opcoesProprias(txt, nome = "Tamanhos") {
  * `fp:{n,v}` (quantas fotos e versão) e a loja busca as fotos quando precisa mostrar.
  */
 export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
-  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ocultas: [], fotos: {}, ...(precos || {}) };
+  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ocultas: [], fotos: {}, nomes: {}, ...(precos || {}) };
   const pe = new Set(pr.pronta || []), oc = new Set(pr.ocultas || []), fo = pr.fotos || {};
   if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const so = pr.modo === "pronta";
@@ -63,7 +63,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   const itens = atacado.filter((p) => vale(p.id)).map((p) => {
     const f = fo[p.id] && fo[p.id].n ? fo[p.id] : null;
     return {
-      id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
+      id: p.id, nome: (pr.nomes && String(pr.nomes[p.id] || "").trim()) || p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
       fotos: f ? [] : (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
       preco: precoFinal(p.preco, pr, p.id),
       ...(f ? { fp: { n: f.n, v: f.v || 1 } } : {}),
