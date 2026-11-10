@@ -620,3 +620,34 @@ test.describe("P09 renomear peças da Veraneio", () => {
     expect(catalogo(await db(page)).find((x: any) => x.id === "y2").nome).toBe("Colar Lua");
   });
 });
+
+test.describe("P10 renomear: segurança e combinações", () => {
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  test("P10-S1 nome com código (<img onerror>) é mostrado como texto, não executa", async ({ page }) => {
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.evaluate(() => { (window as any).__xss = 0; });
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
+    await page.getByLabel("Nome na sua loja").fill('<img src=x onerror="window.__xss=1">Anel');
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    await expect(page.locator(".pr", { hasText: "<img src=x" }).first()).toBeVisible();
+    expect(await page.evaluate(() => (window as any).__xss)).toBe(0);
+  });
+  test("P10-H1 renomear e trocar a foto juntos; A11y da janela", async ({ page }) => {
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar peça: Peça 1", exact: true }).click();
+    const graves = (await new AxeBuilder({ page }).analyze()).violations.filter((v) => ["critical", "serious"].includes(v.impact || "")).map((v) => v.id);
+    expect(graves).toEqual([]);
+    await page.getByLabel("Nome na sua loja").fill("Anel Lua");
+    await page.getByLabel("Enviar foto", { exact: true }).setInputFiles("e2e/arquivos/retrato.png");
+    await expect(page.locator("#ffG img")).toHaveCount(1);
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    const it = catalogo(await db(page)).find((x: any) => x.id === "y1");
+    expect(it).toMatchObject({ nome: "Anel Lua", fp: { n: 1 }, fotos: [] });
+  });
+});

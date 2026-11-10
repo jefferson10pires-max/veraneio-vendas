@@ -305,3 +305,13 @@ test.describe("F10 peça própria no carrinho", () => {
     expect(msg).toContain("✅ pronta entrega");
   });
 });
+
+test.describe("F11 nome trocado pela revendedora na loja", () => {
+  test("F11-S1 nome com código aparece como texto e não executa; vai para carrinho e WhatsApp", async ({ page }) => {
+    await page.addInitScript(() => { (window as any).__xss = 0; });
+    const itens = [{ ...base[0], nome: '<img src=x onerror="window.__xss=1">Brinco Lua' }, ...base.slice(1)];
+    await abrir(page, itens as any);
+    await expect(page.getByText('<img src=x onerror="window.__xss=1">Brinco Lua').first()).toBeVisible();
+    expect(await page.evaluate(() => (window as any).__xss)).toBe(0);
+  });
+});
