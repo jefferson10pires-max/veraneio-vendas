@@ -81,6 +81,21 @@ service cloud.firestore {
           && request.resource.data.get('visitas', 0) <= resource.data.get('visitas', 0) + 1;
       }
 
+      // Peças próprias da revendedora (dados de origem; o que a cliente vê sai em catalogos/)
+      match /proprios/{id} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+
+      // Fotos próprias (trocadas ou de peças próprias): a loja pública lê; só a dona e o ADM gravam
+      match /fotos/{id} {
+        allow read: if true;
+        allow create, update: if (isOwner(uid) || isAdmin())
+          && request.resource.data.keys().hasOnly(['fotos', 'v'])
+          && request.resource.data.fotos is list
+          && request.resource.data.fotos.size() >= 1 && request.resource.data.fotos.size() <= 3;
+        allow delete: if isOwner(uid) || isAdmin();
+      }
+
       // Carrinhos: a cliente final cria e atualiza o próprio carrinho até finalizar
       match /leads/{id} {
         allow read, delete: if isOwner(uid) || isAdmin();

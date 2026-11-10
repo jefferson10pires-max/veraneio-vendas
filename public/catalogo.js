@@ -37,25 +37,55 @@ export async function gravarAtacado(F, db, itens) {
   await b.commit();
 }
 
-/** monta e publica o catálogo público de uma loja (dona ou ADM) */
-export async function publicarLoja(F, db, uid, precos, atacado) {
-  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ocultas: [], ...(precos || {}) };
-  const pe = new Set(pr.pronta || []), oc = new Set(pr.ocultas || []);
-  // peças que a revendedora tirou do site não entram no catálogo público
+/** peças próprias da revendedora (lojas/{uid}/proprios): só a dona e o ADM leem */
+export async function lerProprios(F, db, uid) {
+  const s = await F.getDocs(F.collection(db, "lojas", uid, "proprios"));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** opções digitadas pela revendedora ("16, 17, 18") → variação no formato da loja */
+export function opcoesProprias(txt, nome = "Tamanhos") {
+  const ops = [...new Set(String(txt || "").split(/[,;\n]/).map((x) => x.trim()).filter(Boolean))].slice(0, 40);
+  return ops.length ? { nome, ops } : null;
+}
+
+/**
+ * Monta e publica o catálogo público de uma loja (dona ou ADM).
+ * Fotos próprias (dataURL) NÃO entram no catálogo (ficam em lojas/{uid}/fotos/{peça}); a peça leva só
+ * `fp:{n,v}` (quantas fotos e versão) e a loja busca as fotos quando precisa mostrar.
+ */
+export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
+  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ocultas: [], fotos: {}, ...(precos || {}) };
+  const pe = new Set(pr.pronta || []), oc = new Set(pr.ocultas || []), fo = pr.fotos || {};
+  if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const so = pr.modo === "pronta";
-  const itens = atacado.filter((p) => !oc.has(p.id) && (!so || pe.has(p.id))).map((p) => ({
-    id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
-    fotos: (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
-    preco: precoFinal(p.preco, pr, p.id),
-    ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
+  const vale = (id) => !oc.has(id) && (!so || pe.has(id));
+  const itens = atacado.filter((p) => vale(p.id)).map((p) => {
+    const f = fo[p.id] && fo[p.id].n ? fo[p.id] : null;
+    return {
+      id: p.id, nome: p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
+      fotos: f ? [] : (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
+      preco: precoFinal(p.preco, pr, p.id),
+      ...(f ? { fp: { n: f.n, v: f.v || 1 } } : {}),
+      ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
+      ...(pe.has(p.id) ? { pronta: true } : {}),
+    };
+  });
+  // peças próprias: preço de venda que a revendedora digitou, sem margem; aparecem primeiro na vitrine
+  const meus = (proprios || []).filter((p) => vale(p.id) && Number(p.preco) > 0).map((p) => ({
+    id: p.id, nome: String(p.nome || "").trim(), cat: p.cat || "Outras", banho: p.banho || "", desc: p.desc || "",
+    fotos: [], ...(p.fotosN ? { fp: { n: p.fotosN, v: p.fotosV || 1 } } : {}),
+    novo: !!p.novo, ordem: 0, preco: Math.round(Number(p.preco) * 100) / 100, proprio: true,
+    ...(p.var && p.var.ops && p.var.ops.length ? { var: p.var } : {}),
     ...(pe.has(p.id) ? { pronta: true } : {}),
   }));
-  const ps = partes(itens), velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
+  const todos = [...meus, ...itens];
+  const ps = partes(todos), velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
   const b = F.writeBatch(db);
   ps.forEach((p, i) => b.set(F.doc(db, "catalogos", uid, "partes", "p" + i), { itens: p, em: F.serverTimestamp() }));
   velhas.docs.forEach((d) => { if (Number(d.id.slice(1)) >= ps.length) b.delete(d.ref); });
   await b.commit();
-  return itens.length;
+  return todos.length;
 }
 
 /** converte um produto do ADM no formato do catálogo de atacado */

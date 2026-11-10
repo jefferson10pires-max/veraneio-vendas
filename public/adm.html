@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>ADM · Veraneio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap">
 <script src="/config.js"></script>
 <style>
 
@@ -14,7 +14,7 @@
 :root{
   --bg:#f6f4f2; --surface:#ffffff; --ink:#211d1a; --muted:#6d655f; --line:#e7e1db;
   --brand:#9b4d5f; --brand-ink:#ffffff; --ok:#2c7a4d; --warn:#a4651b; --danger:#b23a3a;
-  --display:"Cormorant Garamond", Georgia, serif; --body:"Jost", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display:"Quicksand", "Segoe UI", system-ui, sans-serif; --body:"Montserrat", "Segoe UI", system-ui, -apple-system, sans-serif;
   --soft:color-mix(in srgb,var(--brand) 9%,var(--surface)); --soft2:color-mix(in srgb,var(--brand) 24%,var(--surface));
   --safe-b:env(safe-area-inset-bottom,0px); color-scheme:light;
 }
@@ -213,6 +213,13 @@ a{color:inherit}
 .slugrow input{border:0!important;background:none!important;padding-left:2px!important}
 .pubbar{position:sticky;top:66px;z-index:5;background:var(--ink);color:var(--surface);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:14px}
 .pubbar span{flex:1}
+/* tipografia da vitrine (Montserrat no texto, Quicksand nos títulos), rótulos sem caixa alta */
+.top small,.box h3,.field>label,.flabel,.kpi span,.stat span,.rescard .mini span{text-transform:none;letter-spacing:0}
+.top b{font-size:19px;font-weight:600}
+.box h2{font-size:23px;font-weight:600;letter-spacing:-.01em}
+.box h3{font-size:15px;font-weight:600;color:var(--ink)}
+.field>label,.flabel{font-size:13px;font-weight:600;color:var(--ink)}
+.kpi span,.stat span{font-size:12.5px}
 </style>
 </head>
 <body>

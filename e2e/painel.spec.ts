@@ -306,3 +306,106 @@ test.describe("P05 promoções da Veraneio e preço travado", () => {
     expect(preco(d, "y5")).toBe(25);
   });
 });
+
+
+test.describe("P06 foto própria e peça própria", () => {
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8DwnwEJMDIwMDAwAAA7rAQBn6dO5QAAAABJRU5ErkJggg==", "base64");
+  const arq = (n = "foto.png") => ({ name: n, mimeType: "image/png", buffer: PNG });
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+
+  test("P06-H1 trocar a foto de uma peça da Veraneio e voltar à original", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(arq());
+    await expect(page.locator("#ffG img")).toHaveCount(1);
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    let d = await db(page);
+    expect(d["lojas/u1/fotos/y1"].fotos[0]).toMatch(/^data:image\/jpeg/);
+    expect(d["precos/u1"].fotos.y1.n).toBe(1);
+    let it = catalogo(d).find((x: any) => x.id === "y1");
+    expect(it.fp.n).toBe(1); expect(it.fotos).toEqual([]);
+    await expect(page.locator(".pr", { hasText: "Peça 1" }).first()).toContainText("sua foto");
+    // voltar às fotos da Veraneio
+    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByRole("button", { name: "Voltar às fotos da Veraneio" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    d = await db(page);
+    expect(d["lojas/u1/fotos/y1"]).toBeUndefined();
+    it = catalogo(d).find((x: any) => x.id === "y1");
+    expect(it.fp).toBeUndefined(); expect(it.fotos.length).toBe(1);
+    expect(erros).toEqual([]);
+  });
+
+  test("P06-H2 cadastrar peça própria, ela vai para a loja; mudar a margem não mexe nela; excluir tira da loja", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await page.getByLabel("Enviar foto da peça").setInputFiles([arq("a.png"), arq("b.png")]);
+    await expect(page.locator("#npG img")).toHaveCount(2);
+    await page.getByLabel("Nome da peça").fill("Brinco Lua Prata");
+    await page.getByLabel("Categoria").last().fill("Brincos");
+    await page.getByLabel("Preço de venda (R$)").fill("89,90");
+    await page.getByLabel("Tamanhos ou opções (opcional)").fill("P, M, M");
+    await page.getByRole("button", { name: "Cadastrar peça" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    let d = await db(page);
+    const id = Object.keys(d).find((k) => k.startsWith("lojas/u1/proprios/"))!.split("/").pop()!;
+    expect(d["lojas/u1/proprios/" + id]).toMatchObject({ nome: "Brinco Lua Prata", cat: "Brincos", preco: 89.9, fotosN: 2, var: { nome: "Tamanhos", ops: ["P", "M"] } });
+    expect(d["lojas/u1/fotos/" + id].fotos.length).toBe(2);
+    let it = catalogo(d)[0];
+    expect(it).toMatchObject({ id, nome: "Brinco Lua Prata", preco: 89.9, proprio: true, pronta: true, fp: { n: 2 } });
+    expect(d["precos/u1"].pronta).toContain(id);
+    await expect(page.getByRole("button", { name: "Minhas peças (1)" })).toHaveAttribute("aria-pressed", "true");
+    // margem nova: peça própria continua com o preço digitado e continua a pronta entrega
+    await aba(page, "Preços").click();
+    await page.locator("#fM").fill("50");
+    await expect(page.locator("#saved")).toHaveText(/Salvo/, { timeout: 6000 });
+    d = await db(page);
+    it = catalogo(d).find((x: any) => x.id === id);
+    expect(it.preco).toBe(89.9); expect(it.pronta).toBe(true);
+    expect(d["precos/u1"].pronta).toContain(id);
+    // excluir
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar Brinco Lua Prata" }).click();
+    await page.getByRole("button", { name: "Excluir peça" }).click();
+    await page.getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 6000 });
+    d = await db(page);
+    expect(d["lojas/u1/proprios/" + id]).toBeUndefined();
+    expect(d["lojas/u1/fotos/" + id]).toBeUndefined();
+    expect(catalogo(d).some((x: any) => x.id === id)).toBe(false);
+    expect(erros).toEqual([]);
+  });
+
+  test("P06-E1 não cadastra sem nome ou sem preço", async ({ page }) => {
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await page.getByRole("button", { name: "Cadastrar peça" }).click();
+    await expect(page.getByRole("alert")).toHaveText("Escreva o nome da peça.");
+    await page.getByLabel("Nome da peça").fill("Anel");
+    await page.getByRole("button", { name: "Cadastrar peça" }).click();
+    await expect(page.getByRole("alert")).toHaveText("Coloque o preço de venda.");
+    expect(Object.keys(await db(page)).some((k) => k.includes("/proprios/"))).toBe(false);
+  });
+
+  test("P06-E2 a republicação do ADM mantém as peças e fotos próprias", async ({ page }) => {
+    const s = seed(40, { "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } },
+      "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["rX"], ocultas: [], fotos: { y3: { n: 1, v: 5 } } },
+      "lojas/u1/proprios/rX": { nome: "Colar Meu", cat: "Colares", preco: 120, fotosN: 1, fotosV: 7 } });
+    await preparar(page, { seed: s });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.getByText("Catálogo atualizado em todas as lojas")).toBeVisible({ timeout: 8000 });
+    const it = catalogo(await db(page));
+    expect(it[0]).toMatchObject({ id: "rX", preco: 120, proprio: true, pronta: true, fp: { n: 1, v: 7 } });
+    expect(it.find((x: any) => x.id === "y3").fp).toEqual({ n: 1, v: 5 });
+  });
+});

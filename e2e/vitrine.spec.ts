@@ -27,12 +27,12 @@ const base: Item[] = [
 ];
 const grande = (n: number): Item[] => Array.from({ length: n }, (_, i) => ({ id: "g" + i, nome: `Peça ${i}`, cat: ["Anéis", "Brincos", "Colares"][i % 3], preco: 20 + (i % 50), fotos: [FOTO_OK], ordem: i }));
 
-async function abrir(page: Page, itens: Item[] = base, lojaExtra: any = {}) {
+async function abrir(page: Page, itens: Item[] = base, lojaExtra: any = {}, fotos: any = {}) {
   const erros: string[] = [];
   page.on("pageerror", (e) => erros.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) erros.push(m.text()); });
   await page.route(/fonts\.(googleapis|gstatic)\.com|gstatic\.com\/firebasejs/, (r) => r.abort());
-  await page.addInitScript(([l, i]) => { (window as any).__VRN_DEMO = { loja: l, itens: i }; if (!sessionStorage.getItem("limpo")) { localStorage.clear(); sessionStorage.setItem("limpo", "1"); } }, [loja(lojaExtra), itens] as const);
+  await page.addInitScript(([l, i, f]) => { (window as any).__VRN_DEMO = { loja: l, itens: i, fotos: f }; if (!sessionStorage.getItem("limpo")) { localStorage.clear(); sessionStorage.setItem("limpo", "1"); } }, [loja(lojaExtra), itens, fotos] as const);
   await page.goto("/loja-teste?demo");
   await expect(page.locator("#shop")).toBeVisible();
   return erros;
@@ -263,5 +263,24 @@ test.describe("F08 loja só pronta entrega", () => {
   test("F08-E1 loja sem peças mostra aviso", async ({ page }) => {
     await abrir(page, [], { modo: "pronta" });
     await expect(page.locator(".nores")).toContainText("chegando em breve");
+  });
+});
+
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8DwnwEJMDIwMDAwAAA7rAQBn6dO5QAAAABJRU5ErkJggg==";
+test.describe("F09 fotos e peças próprias da revendedora", () => {
+  test("F09-H1 peça com foto trocada mostra a foto da revendedora no card e na ficha, e baixa", async ({ page }) => {
+    const itens = [{ ...base[0], fotos: [], fp: { n: 1, v: 1 } }, { id: "r1", nome: "Brinco Próprio Lua", cat: "Brincos", banho: "", desc: "Peça da revendedora", fotos: [], fp: { n: 2, v: 1 }, preco: 89.9, proprio: true, pronta: true, ordem: 0 }, ...base.slice(1)];
+    await abrir(page, itens as any, {}, { [base[0].id]: [PNG], r1: [PNG, PNG] });
+    await expect.poll(() => card(page, base[0].nome).locator("img").getAttribute("src")).toMatch(/^data:image\/png/);
+    await expect.poll(() => card(page, "Brinco Próprio Lua").locator("img").getAttribute("src")).toMatch(/^data:image\/png/);
+    await card(page, "Brinco Próprio Lua").locator("[data-open]").first().click();
+    await expect(page.locator("#gal img")).toHaveCount(2);
+    await expect.poll(() => page.locator("#gal img").first().getAttribute("src")).toMatch(/^data:image/);
+    await expect(page.getByRole("button", { name: "Baixar foto" })).toBeVisible();
+  });
+  test("F09-E1 foto própria que não existe mais vira o desenho da categoria, sem erro", async ({ page }) => {
+    const erros = await abrir(page, [{ ...base[0], fotos: [], fp: { n: 1, v: 1 } }, ...base.slice(1)] as any, {}, {});
+    await expect(card(page, base[0].nome).locator(".ph")).toBeVisible();
+    expect(erros.filter((e) => !/ERR_UNKNOWN_URL_SCHEME|vrn:/.test(e))).toEqual([]);
   });
 });

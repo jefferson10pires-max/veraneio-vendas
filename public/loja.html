@@ -403,7 +403,7 @@ async function initFb(){
   fb={db:F.getFirestore(initializeApp(CFG)),...F};
 }
 async function carregar(){
-  if(DEMO){({loja:L,itens:ITENS}=demoData());UID="demo";return "ok"}
+  if(DEMO){({loja:L,itens:ITENS}=demoData());UID="demo";tokensFotos();return "ok"}
   if(!slug)return "semloja";
   await initFb();
   const {db,collection,query,where,limit,getDocs,getDoc,doc}=fb;
@@ -413,6 +413,7 @@ async function carregar(){
   if(L.status!=="ativa")return "pausada";
   const [c,b]=await Promise.all([getDocs(collection(db,"catalogos",UID,"partes")),getDoc(doc(db,"banners",UID)).catch(()=>null)]);
   ITENS=c.docs.sort((x,y)=>x.id.localeCompare(y.id,undefined,{numeric:true})).flatMap(d=>d.data().itens||[]);
+  tokensFotos();
   L.banners=(b&&b.exists()&&b.data().itens)||[];
   return "ok";
 }
@@ -510,9 +511,23 @@ function filtrada(){
   return ordenar(l);
 }
 const selo=p=>p.pronta?`<span class="flag pe">Pronta entrega</span>`:p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`;
+/* fotos próprias da revendedora: no catálogo a peça só diz quantas tem (fp.n); a foto vem de lojas/{uid}/fotos/{peça}.
+   Na tela ela entra como "vrn:peça:índice:versão"; o navegador não abre esse endereço, o onerror chama vrnFoto e busca a foto. */
+function tokensFotos(){ITENS.forEach(p=>{if(p.fp&&p.fp.n)p.fotos=Array.from({length:p.fp.n},(_,i)=>`vrn:${p.id}:${i}:${p.fp.v||1}`)})}
+const _fotosP={};
+function fotoPropria(tok){
+  const [,pid,i,v]=String(tok).split(":"),k=pid+":"+v;
+  if(!_fotosP[k])_fotosP[k]=(async()=>{
+    if(DEMO){const d=(demoData().fotos||{})[pid];return d||[]}
+    await initFb();const s=await fb.getDoc(fb.doc(fb.db,"lojas",UID,"fotos",pid));return (s.exists()&&s.data().fotos)||[]})().catch(()=>[]);
+  return _fotosP[k].then(l=>l[Number(i)]||null);
+}
 /* miniaturas pelo CDN de imagens da Yampi (bem mais leves que a foto original) */
 function foto(u,tam){return /^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${tam}x${tam}/filters:background_color(white):upscale()/${u}`:u}
-window.vrnFoto=(img)=>{const p=byId(img.dataset.pid);const n=Number(img.dataset.i||0)+1;
+window.vrnFoto=(img)=>{const src=img.getAttribute("src")||"";
+  if(src.startsWith("vrn:")){img.onerror=null;fotoPropria(src).then(u=>{if(u)img.src=u;else{const p=byId(img.dataset.pid);img.outerHTML=`<div class="ph">${art(p?p.cat:"")}</div>`}});return}
+  if(img.dataset.g){img.onerror=null;const p=byId(img.dataset.pid);img.outerHTML=`<div class="ph">${art(p?p.cat:"")}</div>`;return}
+  const p=byId(img.dataset.pid);const n=Number(img.dataset.i||0)+1;
   if(p&&p.fotos&&p.fotos[n]){img.dataset.i=n;img.src=foto(p.fotos[n],img.dataset.t||400);return}
   img.onerror=null;img.outerHTML=`<div class="ph">${art(p?p.cat:"")}</div>`};
 const imgTag=(p,tam,extra="")=>`<img src="${esc(foto(p.fotos[0],tam))}" alt="" data-pid="${esc(p.id)}" data-t="${tam}" onerror="vrnFoto(this)" ${extra}>`;
@@ -571,7 +586,7 @@ addEventListener("popstate",()=>{if(openStack.length){openStack.forEach(id=>$(id
 function abrirProduto(id){
   const p=byId(id);if(!p)return;registrarView(p.id);
   let q=1,op=null;const fotos=(p.fotos&&p.fotos.length)?p.fotos:[null];
-  $("pBody").innerHTML=`<div class="galwrap"><div class="gal noscroll" id="gal" tabindex="0" aria-label="Fotos da peça">${fotos.map((f,i)=>`<div>${f?`<img src="${esc(foto(f,800))}" alt="${esc(p.nome)}" onerror="this.onerror=null;this.outerHTML='<div class=ph>${esc(art(p.cat)).replace(/"/g,"&quot;")}</div>'" ${i?'loading="lazy"':""}>`:`<div class="ph">${art(p.cat)}</div>`}</div>`).join("")}</div>
+  $("pBody").innerHTML=`<div class="galwrap"><div class="gal noscroll" id="gal" tabindex="0" aria-label="Fotos da peça">${fotos.map((f,i)=>`<div>${f?`<img src="${esc(foto(f,800))}" alt="${esc(p.nome)}" data-pid="${esc(p.id)}" data-g="1" onerror="vrnFoto(this)" ${i?'loading="lazy"':""}>`:`<div class="ph">${art(p.cat)}</div>`}</div>`).join("")}</div>
       ${fotos[0]?`<span class="gcount num" id="gcount">1/${fotos.length}</span>`:""}</div>
     ${fotos[0]?`<div class="dlfoto"><button type="button" id="dlFoto">${I.down}Baixar foto</button></div>`:""}
     <div class="pinfo">
@@ -615,7 +630,8 @@ async function baixarFoto(url,nome,btn){
   const arq=(norm(nome).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"foto")+".jpg";
   const txt=btn.innerHTML;btn.disabled=true;btn.innerHTML=`${I.down}Preparando…`;
   try{
-    const r=await fetch(`https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&q=92&w=1600&we`);
+    if(String(url).startsWith("vrn:"))url=await fotoPropria(url);
+    const r=await fetch(String(url).startsWith("data:")?url:`https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&q=92&w=1600&we`);
     if(!r.ok)throw new Error("foto");
     const blob=await r.blob(),file=new File([blob],arq,{type:"image/jpeg"});
     const toque=matchMedia("(pointer:coarse)").matches;
