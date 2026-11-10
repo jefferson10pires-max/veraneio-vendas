@@ -284,3 +284,24 @@ test.describe("F09 fotos e peças próprias da revendedora", () => {
     expect(erros.filter((e) => !/ERR_UNKNOWN_URL_SCHEME|vrn:/.test(e))).toEqual([]);
   });
 });
+
+test.describe("F10 peça própria no carrinho", () => {
+  test("F10-H1 peça própria com tamanho: exige escolher, vai para o carrinho e para a mensagem do WhatsApp", async ({ page }) => {
+    const itens = [{ id: "rA", nome: "Anel Próprio Lua", cat: "Anéis", banho: "", desc: "", fotos: [], preco: 89.9, proprio: true, pronta: true, ordem: 0, var: { nome: "Tamanhos", ops: ["14", "16"] } }, ...base];
+    await abrir(page, itens as any);
+    await card(page, "Anel Próprio Lua").locator(".name").click();
+    await page.getByRole("button", { name: /adicionar ao carrinho/i }).click();
+    await expect(page.getByText(/escolha o tamanho/i)).toBeVisible();
+    await expect(page.locator("#badge")).toHaveText("0");
+    await page.getByRole("radio", { name: "16" }).click();
+    await page.getByRole("button", { name: /adicionar ao carrinho/i }).click();
+    await expect(page.locator("#badge")).toHaveText("1");
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    await page.locator("#bNome").fill("Maria Teste");
+    await page.locator("#bTel").fill("22999990000");
+    const href = await page.locator("#finish").getAttribute("href");
+    const msg = decodeURIComponent(href!.split("text=")[1]).replace(/\u00a0/g, " ");
+    expect(msg).toContain("1x Anel Próprio Lua — Tamanhos: 16 — R$ 89,90");
+    expect(msg).toContain("✅ pronta entrega");
+  });
+});

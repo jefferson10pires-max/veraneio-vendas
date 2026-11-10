@@ -33,3 +33,24 @@ Teste de 05/11/2026, no celular (375 px e Pixel 7), em duas frentes:
 - **Baixar foto:** botão abaixo da foto na ficha da peça. Gera um JPEG pelo wsrv.nl. No celular abre "Salvar imagem / Compartilhar"; no computador baixa o arquivo. Se falhar, abre a foto para salvar segurando o dedo. Testes F07.
 
 Testes automáticos: 25 de 25 passando.
+
+## Teste de 10/11/2026 — fontes, troca de foto e peças próprias
+
+Plano (casos numerados nos testes `e2e/painel.spec.ts` P06–P08 e `e2e/vitrine.spec.ts` F09–F10):
+
+| Fluxo | Casos |
+|---|---|
+| Trocar foto de peça da Veraneio | P06-H1 trocar e voltar à original · P07-E1 foto de 12 MB (4000×3000) · P07-E2 arquivo PDF · P07-E4 fechar sem salvar |
+| Peça própria | P06-H2 cadastrar/editar margem/excluir · P06-E1 sem nome/sem preço · P07-E3 mais de 3 fotos, trocar principal · P07-E5 acentos e emoji, "1.234,56", toque duplo · P07-E6 nome com 200 letras · P07-E7 modo só pronta entrega · P07-E8 fora do site · P07-E9 editar mantém fotos |
+| ADM | P06-E2 republicar mantém peças e fotos próprias · P08-S4 cartão sem ponto solto |
+| Vitrine | F09-H1 foto própria no card, na ficha e no "Baixar foto" · F09-E1 foto própria apagada vira desenho · F10-H1 peça própria com tamanho no carrinho e no WhatsApp |
+| Fontes e acessibilidade | P07-F1 Montserrat/Quicksand, rótulos sem caixa alta · P07-A11y axe na aba Peças e na janela |
+
+| ID | Sev. | Falha | Situação |
+|---|---|---|---|
+| V-09 | S2 | Preço da peça própria com vírgula ("89,90") não era aceito no teclado do celular | Corrigido (campo de texto com teclado numérico; aceita "1.234,56") |
+| V-10 | S4 | ADM, "Precisam de atenção": "· Nunca entrou no painel" com ponto solto quando a loja não tem responsável | Corrigido |
+
+A conferir (não dá para reproduzir com o Firebase simulado): as regras novas do banco (`lojas/{uid}/fotos` e `/proprios`) só valem depois de publicadas; conferir no ar que outra revendedora não consegue gravar fotos na loja de outra.
+
+Testes automáticos: 62 de 62 passando.

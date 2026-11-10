@@ -409,3 +409,147 @@ test.describe("P06 foto própria e peça própria", () => {
     expect(it.find((x: any) => x.id === "y3").fp).toEqual({ n: 1, v: 5 });
   });
 });
+
+import AxeBuilder from "@axe-core/playwright";
+test.describe("P07 casos de borda: fotos e peças próprias, fontes", () => {
+  const ARQ = "e2e/arquivos/";
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  async function abrirPecas(page: Page, extra: Record<string, any> = {}) {
+    const erros = await preparar(page, { seed: seed(40, extra) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    return erros;
+  }
+
+  test("P07-E1 foto grande do celular (4000×3000, 12 MB) é reduzida e salva", async ({ page }) => {
+    await abrirPecas(page);
+    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(ARQ + "grande.jpg");
+    await expect(page.locator("#ffG img")).toHaveCount(1, { timeout: 15000 });
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    const f = (await db(page))["lojas/u1/fotos/y1"].fotos[0];
+    expect(f.length).toBeLessThan(240000);
+    const dim = await page.evaluate((u) => new Promise<number[]>((r) => { const i = new Image(); i.onload = () => r([i.width, i.height]); i.src = u; }), f);
+    expect(Math.max(...dim)).toBeLessThanOrEqual(1000);
+  });
+
+  test("P07-E2 arquivo que não é imagem mostra aviso e não salva nada", async ({ page }) => {
+    await abrirPecas(page);
+    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(ARQ + "doc.pdf");
+    await expect(page.locator("#ffMsg")).toContainText("Não deu para usar essa imagem");
+    await expect(page.locator("#ffG img")).toHaveCount(0);
+  });
+
+  test("P07-E3 mais de 3 fotos: fica só com 3 e avisa", async ({ page }) => {
+    await abrirPecas(page);
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    const r = ARQ + "retrato.png";
+    await page.getByLabel("Enviar foto da peça").setInputFiles([r, r, r, r]);
+    await expect(page.locator("#npG img")).toHaveCount(3);
+    await page.getByLabel("Enviar foto da peça").setInputFiles([r]);
+    await expect(page.locator("#npMsg")).toContainText("Máximo de 3 fotos");
+    // trocar a principal e tirar uma
+    await page.locator("#npG").getByRole("button", { name: "Principal" }).first().click();
+    await page.getByRole("button", { name: "Tirar a foto 3" }).click();
+    await expect(page.locator("#npG img")).toHaveCount(2);
+  });
+
+  test("P07-E4 fechar a janela sem salvar não muda nada", async ({ page }) => {
+    await abrirPecas(page);
+    await page.getByRole("button", { name: "Trocar foto: Peça 1", exact: true }).click();
+    await page.getByLabel("Enviar foto", { exact: true }).setInputFiles(ARQ + "retrato.png");
+    await expect(page.locator("#ffG img")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.waitForTimeout(1500);
+    expect((await db(page))["lojas/u1/fotos/y1"]).toBeUndefined();
+    await expect(page.locator("body")).not.toHaveClass(/lock/);
+  });
+
+  test("P07-E5 nome com acentos e emoji, preço '1.234,56', toque duplo em Cadastrar cria uma peça só", async ({ page }) => {
+    await abrirPecas(page);
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await page.getByLabel("Nome da peça").fill("Colar Coração ❤️ Árvore da Vida");
+    await page.getByLabel("Preço de venda (R$)").fill("1.234,56");
+    await page.getByRole("button", { name: "Cadastrar peça" }).dblclick();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    const d = await db(page);
+    const meus = Object.keys(d).filter((k) => k.startsWith("lojas/u1/proprios/"));
+    expect(meus.length).toBe(1);
+    expect(d[meus[0]]).toMatchObject({ nome: "Colar Coração ❤️ Árvore da Vida", preco: 1234.56, cat: "Outras" });
+    await expect(page.locator(".pr", { hasText: "Árvore da Vida" })).toContainText("R$ 1.234,56");
+  });
+
+  test("P07-E6 nome muito longo é cortado em 80 letras", async ({ page }) => {
+    await abrirPecas(page);
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await page.getByLabel("Nome da peça").fill("A".repeat(200));
+    expect((await page.getByLabel("Nome da peça").inputValue()).length).toBe(80);
+  });
+
+  test("P07-E7 modo 'Só pronta entrega': peça própria aparece só se marcada", async ({ page }) => {
+    await abrirPecas(page, { "precos/u1": { margem: 100, arred: "90", over: {}, pronta: [], modo: "pronta" }, "lojas/u1/proprios/rA": { nome: "Anel Meu", cat: "Anéis", preco: 50 } });
+    await page.getByRole("button", { name: "Só pronta entrega" }).click();
+    await page.getByRole("button", { name: "Catálogo todo" }).click();
+    await page.getByRole("button", { name: "Só pronta entrega" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    expect(catalogo(await db(page)).length).toBe(0);
+    await page.getByRole("switch", { name: "Pronta entrega: Anel Meu", exact: true }).check();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    expect(catalogo(await db(page)).map((x: any) => x.id)).toEqual(["rA"]);
+  });
+
+  test("P07-E8 peça própria fora do site some da loja e volta", async ({ page }) => {
+    await abrirPecas(page, { "lojas/u1/proprios/rA": { nome: "Anel Meu", cat: "Anéis", preco: 50 } });
+    await page.getByRole("switch", { name: "No site: Anel Meu", exact: true }).uncheck();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    expect(catalogo(await db(page)).some((x: any) => x.id === "rA")).toBe(false);
+    await page.getByRole("switch", { name: "No site: Anel Meu", exact: true }).check();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    expect(catalogo(await db(page))[0].id).toBe("rA");
+  });
+
+  test("P07-E9 editar a peça própria mantém as fotos que já tinha", async ({ page }) => {
+    const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8DwnwEJMDIwMDAwAAA7rAQBn6dO5QAAAABJRU5ErkJggg==";
+    await abrirPecas(page, { "lojas/u1/proprios/rA": { nome: "Anel Meu", cat: "Anéis", preco: 50, fotosN: 2, fotosV: 1 }, "lojas/u1/fotos/rA": { fotos: [PNG, PNG], v: 1 } });
+    await expect(page.locator(".pr", { hasText: "Anel Meu" }).locator(".th img")).toHaveAttribute("src", /^data:image/);
+    await page.getByRole("button", { name: "Editar Anel Meu" }).click();
+    await expect(page.locator("#npG img")).toHaveCount(2);
+    await page.getByLabel("Preço de venda (R$)").fill("55");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    const d = await db(page);
+    expect(d["lojas/u1/fotos/rA"].fotos.length).toBe(2);
+    expect(d["lojas/u1/proprios/rA"]).toMatchObject({ preco: 55, fotosN: 2 });
+  });
+
+  test("P07-F1 fontes: Montserrat no texto, Quicksand nos títulos, rótulos sem caixa alta", async ({ page }) => {
+    await abrirPecas(page);
+    await expect(page.getByRole("heading", { name: "Peças da loja" })).toBeVisible();
+    const f = await page.evaluate(() => ({
+      corpo: getComputedStyle(document.body).fontFamily,
+      titulo: getComputedStyle(document.querySelector(".box h2")!).fontFamily,
+      rotulo: getComputedStyle(document.querySelector(".flabel")!).textTransform,
+    }));
+    expect(f.corpo).toContain("Montserrat");
+    expect(f.titulo).toContain("Quicksand");
+    expect(f.rotulo).toBe("none");
+  });
+
+  test("P07-A11y aba Peças e janela de nova peça sem falhas graves de acessibilidade", async ({ page }) => {
+    await abrirPecas(page, { "lojas/u1/proprios/rA": { nome: "Anel Meu", cat: "Anéis", preco: 50 } });
+    const graves = async () => (await new AxeBuilder({ page }).analyze()).violations.filter((v) => ["critical", "serious"].includes(v.impact || "")).map((v) => `${v.id}: ${v.nodes.length}`);
+    expect(await graves()).toEqual([]);
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    expect(await graves()).toEqual([]);
+  });
+});
+
+test("P08-S4 ADM: cartão 'Precisam de atenção' sem ponto solto quando a loja não tem responsável", async ({ page }) => {
+  await preparar(page, { seed: seed(10, { "sistema/yampi": { total: 10, novos: 0, em: { __ts: Date.now() } } }) });
+  await entrar(page, "adm@teste.com", "/adm");
+  const t = await page.locator(".lc .hint").first().innerText();
+  expect(t.trim()).toBe("Nunca entrou no painel");
+});
