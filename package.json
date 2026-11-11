@@ -3,10 +3,13 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
-    "serve": "node e2e/servidor.mjs"
+    "serve": "node e2e/servidor.mjs",
+    "test:regras": "firebase emulators:exec --only firestore --project demo-regras \"node --test e2e/regras.test.mjs\""
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
-    "@playwright/test": "^1.56.1"
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "@playwright/test": "^1.56.1",
+    "firebase": "^10.14.1"
   }
 }

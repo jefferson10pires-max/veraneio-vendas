@@ -242,7 +242,7 @@ const [{initializeApp},A,F,C]=await Promise.all([import(SDK+"firebase-app.js"),i
 /* app com nome próprio: a sessão do ADM fica separada da sessão do painel da revendedora no mesmo navegador */
 const fbApp=initializeApp(CFG,"adm"),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
 const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
-const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction}=F;
+const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction,deleteField}=F;
 /* segunda instância só para criar o login da revendedora sem deslogar o ADM */
 const auth2=A.getAuth(initializeApp(CFG,"criar-revendedora"));
 
@@ -314,6 +314,17 @@ function autoYampi(){
 let CFG_ADM={promo:"nao"};
 /** preço de atacado que vem da Yampi: com "não repassar", usa o preço cheio mesmo durante a promoção */
 const precoDaYampi=m=>CFG_ADM.promo==="sim"?m.preco:(m.precoCheio||m.preco);
+/* lojas criadas antes guardavam dados pessoais no documento público: copia para contas/acessos e apaga de lojas/ */
+async function migrarPrivados(docs){
+  const velhas=docs.filter(x=>{const d=x.data();return "resp" in d||"cidade" in d||"ultimoAcesso" in d});if(!velhas.length)return;
+  const b=writeBatch(db);
+  for(const x of velhas){const d=x.data();
+    b.set(doc(db,"contas",x.id),{...(d.resp!=null?{resp:d.resp}:{}),...(d.cidade!=null?{cidade:d.cidade}:{})},{merge:true});
+    if(d.ultimoAcesso)b.set(doc(db,"acessos",x.id),{em:d.ultimoAcesso},{merge:true});
+    b.update(doc(db,"lojas",x.id),{resp:deleteField(),cidade:deleteField(),ultimoAcesso:deleteField()});
+    CONTAS[x.id]={...(CONTAS[x.id]||{}),...(d.resp!=null?{resp:d.resp}:{}),...(d.cidade!=null?{cidade:d.cidade}:{})}}
+  await b.commit();
+}
 async function carregar(){
   const desde=daysAgo(29);
   const [l,p,d,ld,y]=await Promise.all([
@@ -324,13 +335,18 @@ async function carregar(){
   YS=y&&y.exists()?y.data():null;
   try{const c=await getDoc(doc(db,"sistema","config"));CFG_ADM=Object.assign({promo:"nao"},c.exists()?c.data():{})}catch(e){CFG_ADM={promo:"nao"}}
   try{const c=await getDocs(collection(db,"contas"));CONTAS={};c.docs.forEach(d=>CONTAS[d.id]=d.data())}catch(e){}
-  LOJAS=l.docs.map(x=>({uid:x.id,...x.data()})).sort((a,b)=>String(a.nome).localeCompare(b.nome,"pt"));
+  /* responsável, cidade e último acesso ficam em contas/ e acessos/ (só o ADM lê); lojas/ é público */
+  let AC={};try{const a=await getDocs(collection(db,"acessos"));a.docs.forEach(d=>AC[d.id]=d.data().em)}catch(e){}
+  await migrarPrivados(l.docs).catch(e=>console.error("migração",e));
+  LOJAS=l.docs.map(x=>{const d=x.data(),c=CONTAS[x.id]||{};const {resp,cidade,ultimoAcesso,...pub}=d;
+    return {uid:x.id,...pub,resp:c.resp??resp??"",cidade:c.cidade??cidade??"",ultimoAcesso:AC[x.id]||ultimoAcesso||null}}).sort((a,b)=>String(a.nome).localeCompare(b.nome,"pt"));
   PRODS=p.docs.map(x=>({id:x.id,...x.data()}));
   const base={};PRODS.forEach(x=>base[x.id]=Number(x.preco)||0);
   AGG={};const g=uid=>AGG[uid]||(AGG[uid]={acessos:0,pedidos:0,aband:0,valor:0,atacado:0});
   d.docs.forEach(x=>{const v=x.data();g(v.uid||x.ref.parent.parent.id).acessos+=v.visitas||0});
-  ld.docs.forEach(x=>{const v=x.data(),a=g(v.uid||x.ref.parent.parent.id);
-    if(v.status==="abandonado")a.aband++;else{a.pedidos++;a.valor+=v.total||0;a.atacado+=(v.itens||[]).reduce((s,i)=>s+(base[i.id]||0)*(i.q||0),0)}});
+  // pedidos vêm de visitantes: a loja é a do caminho (não o campo uid) e só números entram nas contas
+  ld.docs.forEach(x=>{const v=x.data(),a=g(x.ref.parent.parent.id);
+    if(v.status==="abandonado")a.aband++;else{a.pedidos++;a.valor+=Number(v.total)||0;a.atacado+=(Array.isArray(v.itens)?v.itens:[]).reduce((s,i)=>s+(base[i&&i.id]||0)*(Number(i&&i.q)||0),0)}});
   loaded=true;
 }
 const ag=uid=>AGG[uid]||{acessos:0,pedidos:0,aband:0,valor:0,atacado:0};
@@ -415,9 +431,9 @@ function formNova(){
       await runTransaction(db,async t=>{
         if((await t.get(doc(db,"slugs",d.slug))).exists())throw new Error("Esse endereço de loja já está em uso.");
         t.set(doc(db,"slugs",d.slug),{uid});
-        t.set(doc(db,"lojas",uid),{...PADRAO_LOJA,nome:d.nome,resp:d.resp,slug:d.slug,cidade:d.cidade,whats:d.whats,status:"ativa",criadoEm:serverTimestamp(),ultimoAcesso:null});
+        t.set(doc(db,"lojas",uid),{...PADRAO_LOJA,nome:d.nome,slug:d.slug,whats:d.whats,status:"ativa",criadoEm:serverTimestamp()});
         t.set(doc(db,"precos",uid),{margem:100,arred:"90",over:{}});
-        t.set(doc(db,"contas",uid),{email:d.email,criadoEm:serverTimestamp()});
+        t.set(doc(db,"contas",uid),{email:d.email,resp:d.resp,cidade:d.cidade,criadoEm:serverTimestamp()});
       });
       $("nBtn").textContent="Publicando o catálogo…";
       await C.publicarLoja(F,db,uid,{margem:100,arred:"90",over:{}},await C.lerAtacado(F,db));

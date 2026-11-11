@@ -729,3 +729,60 @@ test.describe("P11 preço exato por peça (sem porcentagem)", () => {
     expect(await preco(page, "y3")).toBe(45);
   });
 });
+
+test.describe("S01 segurança no navegador", () => {
+  test("S01-H1 loja, painel e ADM funcionam com os cabeçalhos de segurança, sem bloqueio da política (CSP)", async ({ page }) => {
+    const bloqueios: string[] = [];
+    page.on("console", (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) bloqueios.push(m.text()); });
+    const r = await page.request.get("/painel");
+    expect(r.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(r.headers()["x-frame-options"]).toBe("DENY");
+    expect(r.headers()["x-content-type-options"]).toBe("nosniff");
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await expect(page.getByText("Link da sua loja")).toBeVisible();
+    for (const t of ["Pedidos", "Peças", "Preços", "Aparência", "Loja"]) { await aba(page, t).click(); await page.waitForTimeout(300); }
+    await entrar(page, "adm@teste.com", "/adm");
+    await expect(page.getByText("Lojas ativas").first()).toBeVisible();
+    expect(bloqueios).toEqual([]);
+  });
+
+  test("S01-E1 pedido falso com código no id, na quantidade e no total não executa nada no painel", async ({ page }) => {
+    const s = seed(10, { 'lojas/u1/leads/x" onmouseover="window.__xss=1" a="': { uid: "u1", nome: "<img src=x onerror=window.__xss=2>", tel: "<b>1</b>", status: "abandonado", total: "<img src=x onerror=window.__xss=3>", ts: { __ts: Date.now() },
+      itens: [{ id: "y1", nome: "<svg onload=window.__xss=4>", q: "<img src=x onerror=window.__xss=5>", preco: "x" }] },
+      "lojas/u1/dias/2026-11-11": { data: "2026-11-11", uid: "u1", visitas: 1, views: { y1: "<img src=x onerror=window.__xss=6>" } } });
+    await preparar(page, { seed: s });
+    await page.addInitScript(() => { (window as any).__xss = 0; });
+    await entrar(page);
+    await expect(page.getByText("Link da sua loja")).toBeVisible();
+    await page.locator("#nav").getByRole("button", { name: /^Pedidos/ }).click();
+    await expect(page.locator(".lc").first()).toContainText("<img src=x onerror=window.__xss=2>");
+    await page.locator(".lc").first().hover();
+    await page.locator(".lc button, .lc a").first().hover();
+    await aba(page, "Início").click();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => (window as any).__xss)).toBe(0);
+  });
+
+  test("S01-E2 ADM move responsável, cidade e último acesso para a área privada", async ({ page }) => {
+    const s = seed(10, { "lojas/u1": { nome: "Kailane Joias", slug: "kailane-joias", status: "ativa", resp: "Kailane Souza", cidade: "Nova Friburgo", ultimoAcesso: { __ts: Date.now() - 3 * 86400000 } },
+      "sistema/yampi": { total: 10, novos: 0, em: { __ts: Date.now() } } });
+    await preparar(page, { seed: s });
+    await entrar(page, "adm@teste.com", "/adm");
+    await expect(page.getByText("Lojas ativas").first()).toBeVisible();
+    const d = await db(page);
+    expect(d["lojas/u1"].resp).toBeUndefined(); expect(d["lojas/u1"].cidade).toBeUndefined(); expect(d["lojas/u1"].ultimoAcesso).toBeUndefined();
+    expect(d["contas/u1"]).toMatchObject({ email: "rev@teste.com", resp: "Kailane Souza", cidade: "Nova Friburgo" });
+    expect(d["acessos/u1"].em.__ts).toBeGreaterThan(0);
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    await expect(page.getByText("Kailane Souza · Nova Friburgo")).toBeVisible();
+  });
+
+  test("S01-E3 o painel grava o último acesso em acessos/, não na loja pública", async ({ page }) => {
+    await preparar(page, { seed: seed(10) });
+    await entrar(page);
+    await expect(page.getByText("Link da sua loja")).toBeVisible();
+    await expect.poll(async () => (await db(page))["acessos/u1"]?.em?.__ts || 0).toBeGreaterThan(0);
+    expect((await db(page))["lojas/u1"].ultimoAcesso).toBeUndefined();
+  });
+});

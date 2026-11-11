@@ -50,6 +50,7 @@ export const orderBy = (f, dir = "asc") => ({ k: "orderBy", f, dir });
 export const limit = (n) => ({ k: "limit", n });
 export const serverTimestamp = () => ({ __ts: Date.now() });
 export const increment = (n) => ({ __inc: n });
+export const deleteField = () => ({ __del: 1 });
 export const Timestamp = { fromDate: (d) => ({ __ts: d.getTime() }) };
 const vivo = (v) => {
   if (v && typeof v === "object") {
@@ -81,7 +82,7 @@ export async function getDocs(q) {
   const out = docs.map(({ p, v }) => snapDoc(p, v));
   return { docs: out, size: out.length, empty: !out.length };
 }
-const aplicar = (atual, data) => { const o = { ...(atual || {}) }; for (const k in data) { const v = data[k]; if (v && typeof v === "object" && "__inc" in v) o[k] = (Number(o[k]) || 0) + v.__inc; else o[k] = v; } return o; };
+const aplicar = (atual, data) => { const o = { ...(atual || {}) }; for (const k in data) { const v = data[k]; if (v && typeof v === "object" && "__inc" in v) o[k] = (Number(o[k]) || 0) + v.__inc; else if (v && typeof v === "object" && "__del" in v) delete o[k]; else o[k] = v; } return o; };
 export async function setDoc(ref, data, opt) { await atraso(ref.path); const d = lerDB(); d[ref.path] = opt && opt.merge ? aplicar(d[ref.path], data) : aplicar({}, data); gravarDB(d); conta(ref.path); }
 export async function updateDoc(ref, data) { await atraso(ref.path); const d = lerDB(); if (!d[ref.path]) { const e = new Error("not-found"); e.code = "not-found"; throw e; } d[ref.path] = aplicar(d[ref.path], data); gravarDB(d); conta(ref.path); }
 export async function deleteDoc(ref) { const d = lerDB(); delete d[ref.path]; gravarDB(d); conta(ref.path); }

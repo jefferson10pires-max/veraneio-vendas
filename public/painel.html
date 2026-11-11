@@ -304,7 +304,7 @@ async function carregarConta(u){
     if(!s.exists()){app.innerHTML=`<div class="center px"><div><h2>Sua conta ainda não tem loja</h2><p class="hint">Fale com a Veraneio para ativar.</p><button class="btn btn-ghost" id="out">Sair</button></div></div>`;$("out").onclick=()=>A.signOut(auth);return}
     L=s.data();
     const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
-    updateDoc(doc(db,"lojas",u.uid),{ultimoAcesso:serverTimestamp()}).catch(()=>{});
+    setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     aplicarCor();shell();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
 }
@@ -337,7 +337,7 @@ function salvarCampo(k,v){pend[k]=v;L[k]=v;clearTimeout(saveT.c);saveT.c=setTime
 function flash(){const el=$("saved");if(!el)return;el.textContent="Salvo ✓";clearTimeout(el._t);el._t=setTimeout(()=>el.textContent="",1600)}
 
 /* ---------- dados ---------- */
-async function carregarLeads(){if(LEADS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"leads"),orderBy("ts","desc"),limit(300)));LEADS=s.docs.map(d=>({id:d.id,...d.data()}))}
+async function carregarLeads(){if(LEADS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"leads"),orderBy("ts","desc"),limit(300)));LEADS=s.docs.map(d=>limparLead({...d.data(),id:d.id}))}
 async function carregarDias(){if(DIAS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"dias"),where("data",">=",dkey(daysAgo(29)))));DIAS={};s.docs.forEach(d=>DIAS[d.id]=d.data())}
 async function carregarProds(){if(PRODS)return;PRODS=(await C.lerAtacado(F,db)).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt",{numeric:true}))}
 async function carregarCat(){if(CAT)return;await carregarProds();CAT={};PRODS.forEach(p=>CAT[p.id]=p)}
@@ -352,7 +352,7 @@ async function tInicio(){
   const lim=daysAgo(29).getTime(),rec=LEADS.filter(l=>(toDate(l.ts)||new Date()).getTime()>=lim);
   const env=rec.filter(l=>l.status!=="abandonado"),ab=LEADS.filter(l=>l.status==="abandonado");
   const vis=n=>{let s=0;for(let i=0;i<n;i++)s+=(DIAS[dkey(daysAgo(i))]||{}).visitas||0;return s};
-  const views={};Object.values(DIAS).forEach(d=>Object.entries(d.views||{}).forEach(([id,n])=>views[id]=(views[id]||0)+n));
+  const views={};Object.values(DIAS).forEach(d=>Object.entries(d.views||{}).forEach(([id,n])=>views[id]=(views[id]||0)+(Number(n)||0)));
   const top=Object.entries(views).sort((a,b)=>b[1]-a[1]).slice(0,5),mt=top.length?top[0][1]:1;
   const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>(DIAS[dkey(d)]||{}).visitas||0),mx=Math.max(1,...vals);
   $("main").innerHTML=`
@@ -397,6 +397,13 @@ async function tPedidos(){
       tPedidos();
     }catch(err){toast("Não foi possível atualizar. Tente de novo.")}};
 }
+/* pedidos e carrinhos vêm de qualquer visitante da loja: só números e textos limpos chegam à tela */
+const ST_LEAD=["abandonado","enviado","recuperado"];
+function limparLead(l){
+  return {id:String(l.id||"").replace(/[^\w-]/g,"").slice(0,40),nome:String(l.nome||"").slice(0,100),tel:String(l.tel||"").slice(0,30),
+    status:ST_LEAD.includes(l.status)?l.status:"abandonado",total:Number(l.total)||0,ts:l.ts,
+    itens:(Array.isArray(l.itens)?l.itens:[]).slice(0,80).map(i=>({id:String((i&&i.id)||""),nome:String((i&&i.nome)||"").slice(0,160),q:Math.max(0,Math.min(999,Math.floor(Number(i&&i.q)||0))),preco:Number(i&&i.preco)||0}))};
+}
 function leadCard(l){
   const first=String(l.nome||"").split(" ")[0],itens=l.itens||[];
   const msg=l.status==="abandonado"
@@ -404,9 +411,9 @@ function leadCard(l){
     :`Oi, ${first}! Aqui é da ${L.nome}. Recebemos o seu pedido, já vou te passar os detalhes.`;
   const st={abandonado:"Abandonado",enviado:"Enviado",recuperado:"Recuperado"}[l.status]||l.status;
   return `<div class="lc"><div class="h"><div><b>${esc(l.nome)}</b> <span class="pill ${esc(l.status)}">${st}</span><div class="hint">${esc(l.tel)} · ${fmt(l.ts)}</div></div><div class="tot num">${brl(l.total)}</div></div>
-    <div class="items">${itens.map(i=>{const o=PR.nomes&&PR.nomes[i.id]&&PRODS?PRODS.find(x=>x.id===i.id):null;return `${i.q}x ${esc(i.nome)}${o?` <small class="orig">(Veraneio: ${esc(o.nome)})</small>`:""}`}).join(" · ")}</div>
+    <div class="items">${itens.map(i=>{const o=PR.nomes&&PR.nomes[i.id]&&PRODS?PRODS.find(x=>x.id===i.id):null;return `${Number(i.q)||0}x ${esc(i.nome)}${o?` <small class="orig">(Veraneio: ${esc(o.nome)})</small>`:""}`}).join(" · ")}</div>
     <div class="row"><a class="btn btn-wa btn-sm" href="https://wa.me/${waNum(l.tel)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${I.chat}${l.status==="abandonado"?"Chamar no WhatsApp":"Abrir conversa"}</a>
-    ${l.status==="abandonado"?`<button class="btn btn-ghost btn-sm" type="button" data-rec="${l.id}">Marcar como vendido</button>`:""}
+    ${l.status==="abandonado"?`<button class="btn btn-ghost btn-sm" type="button" data-rec="${esc(l.id)}">Marcar como vendido</button>`:""}
     <button class="btn btn-ghost btn-sm" type="button" data-del="${l.id}">Excluir</button></div></div>`;
 }
 

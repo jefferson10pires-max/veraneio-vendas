@@ -1,25 +1,39 @@
 rules_version = '2';
-// Plataforma de lojas Veraneio — regras do Firestore
+// Plataforma de lojas — regras do Firestore
+//
+// Quem é quem:
+//   ADM          → tem documento em admins/{uid} (criado à mão no console)
+//   revendedora  → tem loja em lojas/{uid} (criada pelo ADM); o uid do login é o da loja
+//   visitante    → qualquer pessoa na loja pública (sem login)
+// Qualquer pessoa consegue criar uma conta pela API pública do Firebase; por isso "estar logada" NÃO basta:
+// tudo o que é da revendedora exige que exista a loja dela.
 //
 // Coleções:
-//   admins/{uid}            → quem é ADM (criado à mão no console)
-//   produtos/{id}           → catálogo com PREÇO DE ATACADO (só usuários logados leem)
-//   sistema/catalogo        → "versão" do catálogo; mudar dispara a republicação das lojas
-//   precos/{uid}            → margem da revendedora (privado: dona + ADM)
-//   atacado/{parte}         → catálogo com preço de atacado montado pelo ADM (só usuários logados leem)
-//   catalogos/{uid}/partes/{parte} → catálogo PÚBLICO da loja, já com o preço final (dona ou ADM escrevem)
-//   banners/{uid}           → banners da loja (imagens comprimidas)
-//   contas/{uid}            → e-mail de login da revendedora (só ADM)
+//   admins/{uid}            → quem é ADM
+//   produtos/{id}           → catálogo com PREÇO DE ATACADO (ADM edita; revendedoras leem)
+//   atacado/{parte}         → catálogo de atacado montado pelo ADM (revendedoras leem)
+//   sistema/{id}            → configurações e resumo da Yampi (só ADM)
+//   precos/{uid}            → margem, preços, pronta entrega… da revendedora (dona + ADM)
+//   catalogos/{uid}/partes  → catálogo PÚBLICO da loja, já com o preço final
+//   banners/{uid}           → banners da loja
+//   contas/{uid}            → e-mail, responsável e cidade da revendedora (só ADM)
+//   acessos/{uid}           → último acesso ao painel (a revendedora grava a hora; só o ADM lê)
 //   slugs/{slug}            → endereço único de cada loja (só ADM cria)
 //   lojas/{uid}             → aparência e dados públicos da loja
 //   lojas/{uid}/dias/{data} → acessos e visualizações por dia
 //   lojas/{uid}/leads/{id}  → carrinhos e pedidos das clientes finais
+//   lojas/{uid}/proprios    → peças próprias da revendedora
+//   lojas/{uid}/fotos       → fotos próprias (públicas)
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signed() { return request.auth != null; }
     function isAdmin() { return signed() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
     function isOwner(uid) { return signed() && request.auth.uid == uid; }
+    // dona de uma loja que existe (não basta ter conta)
+    function isLoja(uid) { return isOwner(uid) && exists(/databases/$(database)/documents/lojas/$(uid)); }
+    function isRevendedora() { return signed() && exists(/databases/$(database)/documents/lojas/$(request.auth.uid)); }
+    function dono(uid) { return isLoja(uid) || isAdmin(); }
 
     match /admins/{uid} {
       allow read: if isOwner(uid);
@@ -27,7 +41,12 @@ service cloud.firestore {
     }
 
     match /produtos/{id} {
-      allow read: if signed();
+      allow read: if isRevendedora() || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /atacado/{parte} {
+      allow read: if isRevendedora() || isAdmin();
       allow write: if isAdmin();
     }
 
@@ -36,27 +55,29 @@ service cloud.firestore {
     }
 
     match /precos/{uid} {
-      allow read, write: if isOwner(uid) || isAdmin();
-    }
-
-    match /atacado/{parte} {
-      allow read: if signed();
-      allow write: if isAdmin();
+      allow read, write: if dono(uid);
     }
 
     match /catalogos/{uid}/partes/{parte} {
       allow read: if true;
-      allow write: if isOwner(uid) || isAdmin();
+      allow write: if dono(uid) && parte.matches('^p[0-9]{1,3}$');
     }
 
     match /banners/{uid} {
       allow read: if true;
-      allow write: if (isOwner(uid) || isAdmin()) && request.resource.data.keys().hasOnly(['itens', 'em'])
+      allow create, update: if dono(uid) && request.resource.data.keys().hasOnly(['itens', 'em'])
         && request.resource.data.itens is list && request.resource.data.itens.size() <= 4;
+      allow delete: if dono(uid);
     }
 
     match /contas/{uid} {
       allow read, write: if isAdmin();
+    }
+
+    match /acessos/{uid} {
+      allow read: if isAdmin();
+      allow write: if isAdmin()
+        || (isLoja(uid) && request.resource.data.keys().hasOnly(['em']) && request.resource.data.em == request.time);
     }
 
     match /slugs/{slug} {
@@ -67,49 +88,68 @@ service cloud.firestore {
     match /lojas/{uid} {
       allow read: if true;
       allow create, delete: if isAdmin();
+      // a revendedora não muda endereço, situação (ativa/pausada) nem data de criação,
+      // e não grava dados pessoais aqui (o documento é público)
       allow update: if isAdmin()
-        || (isOwner(uid) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['slug', 'status', 'criadoEm']));
+        || (isOwner(uid)
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['slug', 'status', 'criadoEm', 'resp', 'cidade', 'ultimoAcesso', 'email']));
 
       // Acessos: a loja pública só consegue somar +1
       match /dias/{dia} {
-        allow read: if isOwner(uid) || isAdmin();
-        allow create: if request.resource.data.keys().hasOnly(['data', 'uid', 'visitas', 'views'])
+        allow read: if dono(uid);
+        allow create: if dia.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.keys().hasOnly(['data', 'uid', 'visitas', 'views'])
           && request.resource.data.uid == uid
           && request.resource.data.data == dia
-          && request.resource.data.get('visitas', 0) <= 1;
+          && request.resource.data.get('visitas', 0) is int
+          && request.resource.data.get('visitas', 0) <= 1
+          && request.resource.data.get('views', {}) is map
+          && request.resource.data.get('views', {}).size() <= 1;
         allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visitas', 'views'])
-          && request.resource.data.get('visitas', 0) <= resource.data.get('visitas', 0) + 1;
+          && request.resource.data.get('visitas', 0) is int
+          && request.resource.data.get('visitas', 0) <= resource.data.get('visitas', 0) + 1
+          && request.resource.data.get('views', {}) is map
+          && request.resource.data.get('views', {}).size() <= resource.data.get('views', {}).size() + 1
+          && request.resource.data.get('views', {}).size() <= 3000;
       }
 
       // Peças próprias da revendedora (dados de origem; o que a cliente vê sai em catalogos/)
       match /proprios/{id} {
-        allow read, write: if isOwner(uid) || isAdmin();
+        allow read, write: if dono(uid);
       }
 
       // Fotos próprias (trocadas ou de peças próprias): a loja pública lê; só a dona e o ADM gravam
       match /fotos/{id} {
         allow read: if true;
-        allow create, update: if (isOwner(uid) || isAdmin())
+        allow create, update: if dono(uid)
           && request.resource.data.keys().hasOnly(['fotos', 'v'])
           && request.resource.data.fotos is list
           && request.resource.data.fotos.size() >= 1 && request.resource.data.fotos.size() <= 3;
-        allow delete: if isOwner(uid) || isAdmin();
+        allow delete: if dono(uid);
       }
 
-      // Carrinhos: a cliente final cria e atualiza o próprio carrinho até finalizar
+      // Carrinhos: a cliente final (sem login) cria e atualiza o próprio carrinho até finalizar.
+      // Id no formato gerado pelo Firebase, data = hora do servidor, campos com tipo e tamanho conferidos.
       match /leads/{id} {
-        allow read, delete: if isOwner(uid) || isAdmin();
-        allow create: if request.resource.data.keys().hasOnly(['nome', 'tel', 'itens', 'total', 'status', 'ts', 'uid'])
+        function leadOk(d) {
+          return d.nome is string && d.nome.size() >= 1 && d.nome.size() <= 100
+            && d.tel is string && d.tel.size() <= 30
+            && d.itens is list && d.itens.size() <= 80
+            && d.total is number && d.total >= 0 && d.total <= 1000000
+            && d.ts == request.time;
+        }
+        allow read, delete: if dono(uid);
+        allow create: if id.matches('^[A-Za-z0-9]{20}$')
+          && exists(/databases/$(database)/documents/lojas/$(uid))
+          && request.resource.data.keys().hasOnly(['nome', 'tel', 'itens', 'total', 'status', 'ts', 'uid'])
           && request.resource.data.status == 'abandonado'
           && request.resource.data.uid == uid
-          && request.resource.data.nome is string && request.resource.data.nome.size() <= 100
-          && request.resource.data.tel is string && request.resource.data.tel.size() <= 30
-          && request.resource.data.itens is list && request.resource.data.itens.size() <= 80;
-        allow update: if isOwner(uid) || isAdmin()
+          && leadOk(request.resource.data);
+        allow update: if dono(uid)
           || (resource.data.status == 'abandonado'
               && request.resource.data.status in ['abandonado', 'enviado']
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'tel', 'itens', 'total', 'status', 'ts'])
-              && request.resource.data.itens.size() <= 80);
+              && leadOk(request.resource.data));
       }
     }
 
