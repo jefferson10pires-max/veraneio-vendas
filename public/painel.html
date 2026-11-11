@@ -269,7 +269,7 @@ const precoFinal=C.precoFinal;
 const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
 
 /* ---------- estado ---------- */
-let U=null,L=null,PR={margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],fotos:{},nomes:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
+let U=null,L=null,PR={margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
 const ui={tab:"inicio",vez:0,pf:"todas",pcat:"Todas",pq:"",ltab:"abandonado",mq:"",mcat:"Todas",delArm:null};
 const lojaURL=()=>`${location.origin}/${L.slug}`;
 
@@ -304,7 +304,7 @@ async function carregarConta(u){
     const s=await getDoc(doc(db,"lojas",u.uid));
     if(!s.exists()){app.innerHTML=`<div class="center px"><div><h2>Sua conta ainda não tem loja</h2><p class="hint">Fale com a Veraneio para ativar.</p><button class="btn btn-ghost" id="out">Sair</button></div></div>`;$("out").onclick=()=>A.signOut(auth);return}
     L=s.data();
-    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
+    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     aplicarCor();shell();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
@@ -481,7 +481,7 @@ async function paraDataURL(file,w,h,modo,q,max){
 
 
 /* ---------- PEÇAS: pronta entrega, o que fica no site, fotos próprias e peças próprias ---------- */
-const FILTROS=[["todas","Todas"],["pe","Pronta entrega"],["minhas","Minhas peças"],["fora","Fora do site"]];
+const FILTROS=[["todas","Todas"],["pe","Pronta entrega"],["minhas","Minhas peças"],["fora","Fora do site"],["excl","Excluídas"]];
 let PROPRIOS=null;
 async function carregarProprios(){if(PROPRIOS)return;PROPRIOS=(await C.lerProprios(F,db,U.uid)).map(p=>({...p,proprio:true}))
   .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),"pt",{numeric:true}))}
@@ -525,7 +525,8 @@ async function tPecas(){
   $("pf").onclick=e=>{const v=e.target.closest("[data-f]")?.dataset.f;if(v){ui.pf=v;ui.plim=40;pecas()}};
   $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=40;pecas()};
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
-  $("plist").onclick=e=>{const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
+  $("plist").onclick=e=>{const r=e.target.closest("[data-rest]");if(r){restaurar(r.dataset.rest);return}
+    const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
     const ed=e.target.closest("[data-edit]");if(ed)formPropria(ed.dataset.edit)};
   $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site;if(!id)return;
     const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
@@ -543,19 +544,29 @@ async function tPecas(){
   pecas();
 }
 const modo=()=>PR.modo==="pronta"?"pronta":"catalogo";
+/* excluir uma peça da Veraneio só da loja desta revendedora: sai do site, da pronta entrega e das listas (dá para restaurar) */
+function excluirPeca(id){
+  const ex=new Set(PR.excluidas||[]),oc=new Set(PR.ocultas||[]);ex.add(id);oc.add(id);
+  PR.excluidas=[...ex];PR.ocultas=[...oc];PR.pronta=(PR.pronta||[]).filter(x=>x!==id);
+  if($("plist"))pecas();salvarPrecos();toast("Peça excluída da sua loja. Ela fica em “Excluídas” se quiser restaurar.")}
+function restaurar(id){
+  PR.excluidas=(PR.excluidas||[]).filter(x=>x!==id);PR.ocultas=(PR.ocultas||[]).filter(x=>x!==id);
+  if($("plist"))pecas();salvarPrecos();toast("Peça restaurada. Ela volta para a sua loja em alguns segundos.")}
 function filtradas(){
-  const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),q=norm(ui.pq);
+  const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),ex=new Set(PR.excluidas||[]),q=norm(ui.pq);
   return todas().filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(p.nome+" "+nomeLoja(p)).includes(q))
-    &&(ui.pf==="todas"||(ui.pf==="pe"?pe.has(p.id)&&!oc.has(p.id):ui.pf==="minhas"?p.proprio:oc.has(p.id))));
+    &&(ui.pf==="excl"?ex.has(p.id):!ex.has(p.id)&&(ui.pf==="todas"||(ui.pf==="pe"?pe.has(p.id)&&!oc.has(p.id):ui.pf==="minhas"?p.proprio:oc.has(p.id)))));
 }
 function segPecas(){
-  const l=todas(),ids=new Set(l.map(p=>p.id)),oc=new Set((PR.ocultas||[]).filter(i=>ids.has(i)));
-  const n={todas:l.length,pe:(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.has(i)).length,minhas:(PROPRIOS||[]).length,fora:oc.size};
-  $("pf").innerHTML=FILTROS.filter(([k])=>!(k==="fora"&&modo()==="pronta")&&!(k==="minhas"&&!n.minhas&&ui.pf!=="minhas"))
+  const ex=new Set(PR.excluidas||[]),l=todas().filter(p=>!ex.has(p.id)),ids=new Set(l.map(p=>p.id)),oc=new Set((PR.ocultas||[]).filter(i=>ids.has(i)));
+  const n={todas:l.length,pe:(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.has(i)).length,minhas:(PROPRIOS||[]).length,fora:oc.size,excl:todas().filter(p=>ex.has(p.id)).length};
+  if(ui.pf==="excl"&&!n.excl)ui.pf="todas";
+  $("pf").innerHTML=FILTROS.filter(([k])=>!(k==="fora"&&modo()==="pronta")&&!(k==="minhas"&&!n.minhas&&ui.pf!=="minhas")&&!(k==="excl"&&!n.excl))
     .map(([k,l])=>`<button type="button" data-f="${k}" aria-pressed="${ui.pf===k}">${l} (${n[k]})</button>`).join("");
 }
 function massa(){
   const el=$("massa");if(!el)return;
+  if(ui.pf==="excl"){el.innerHTML=`<span class="hint">Peças excluídas não aparecem na sua loja nem nas listas. Toque em “Restaurar” para trazer de volta.</span>`;return}
   if(ui.pcat==="Todas"&&!ui.pq.trim()){el.innerHTML=`<span class="hint">Escolha uma categoria para marcar ou tirar do site várias peças de uma vez.</span>`;return}
   const l=filtradas(),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),n=l.length;if(!n){el.innerHTML="";return}
   const nPe=l.filter(p=>pe.has(p.id)&&!oc.has(p.id)).length,nOc=l.filter(p=>oc.has(p.id)).length;
@@ -571,7 +582,11 @@ function pecas(){
     :"Sua loja mostra o catálogo Veraneio inteiro. As peças a pronta entrega ganham o selo verde e uma categoria própria.";
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),lista=filtradas();ui.plim=ui.plim||40;const l=lista.slice(0,ui.plim);
   const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="fora"?"Todas as peças estão no seu site.":ui.pf==="minhas"?"Você ainda não cadastrou peças suas. Toque em “Nova peça”.":"Nenhuma peça encontrada.";
-  $("plist").innerHTML=(l.length?l.map(p=>{const o=!so&&oc.has(p.id),fp=temFotoPropria(p),nm=nomeLoja(p);return `<div class="pr ${o?"off":""}">
+  $("plist").innerHTML=(l.length?l.map(p=>{const o=!so&&oc.has(p.id),fp=temFotoPropria(p),nm=nomeLoja(p);
+    if(ui.pf==="excl")return `<div class="pr off"><div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
+    <div class="nm">${esc(nm)}<small>${esc(p.cat||"")} · excluída da sua loja</small></div>
+    <div class="pacts"><button class="btn btn-ghost btn-sm" type="button" data-rest="${esc(p.id)}" aria-label="Restaurar ${esc(nm)}">Restaurar</button></div></div>`;
+    return `<div class="pr ${o?"off":""}">
     <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${brl(precoLoja(p))}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}</div>
     <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(nm)}">${I.edit}Editar</button>`
@@ -620,7 +635,9 @@ async function formPeca(id){
       <span class="btn btn-ghost btn-sm file">${I.upload}Enviar foto<input type="file" id="ffIn" accept="image/*" multiple aria-label="Enviar foto"></span>
       <span class="hint" id="ffMsg">Até ${MAX_FOTOS} fotos. Use fotos quadradas, com fundo claro.</span></div>
     <span class="err" id="ffErr" role="alert"></span>
-    <div class="row"><button class="btn btn-brand" type="button" id="ffOk">Salvar</button>${tinha?`<button class="btn btn-ghost" type="button" id="ffVolta">Voltar às fotos da Veraneio</button>`:""}</div>`);
+    <div class="row"><button class="btn btn-brand" type="button" id="ffOk">Salvar</button>${tinha?`<button class="btn btn-ghost" type="button" id="ffVolta">Voltar às fotos da Veraneio</button>`:""}</div>
+    <div class="row" style="margin-top:14px;border-top:1px solid var(--line);padding-top:14px"><button class="btn btn-ghost" type="button" id="ffEx">Excluir da minha loja</button>
+      <span class="hint">Some do site e das suas listas. Para só esconder por um tempo, use a chave “No site”.</span></div>`);
   const re=()=>{$("ffG").innerHTML=gradeFotos(minhas)};re();ligarGrade($("ffG"),minhas,re);
   $("ffIn").onchange=async e=>{await lerArquivos(e.target,minhas,$("ffMsg"));re()};
   const nv=$("ffNV");if(nv)nv.onclick=()=>{$("ffN").value=p.nome;$("ffN").focus()};
@@ -638,6 +655,9 @@ async function formPeca(id){
       delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. A loja atualiza em alguns segundos.")}
     catch(e){console.error(e);b.disabled=false;$("ffMsg").textContent="Não foi possível salvar. Confira a internet."}};
   const v=$("ffVolta");if(v)v.onclick=()=>{minhas.length=0;$("ffOk").click()};
+  const ex=$("ffEx");ex.onclick=()=>{
+    if(ex.dataset.arm!=="1"){ex.dataset.arm="1";ex.textContent="Toque de novo para excluir";setTimeout(()=>{if(ex.isConnected){ex.dataset.arm="";ex.textContent="Excluir da minha loja"}},3500);return}
+    fecharFolha();excluirPeca(id)};
 }
 
 /* cadastrar / editar uma peça própria da revendedora */
@@ -750,12 +770,12 @@ function status(t){const a=$("pcStatus");if(a)a.textContent=t}
 function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;saveT.p=setTimeout(()=>{
   filaPub=filaPub.then(async()=>{
     try{await Promise.all([carregarProds(),carregarProprios()]);
-      const ids=new Set(todas().map(p=>p.id)),oc=(PR.ocultas||[]).filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
+      const ids=new Set(todas().map(p=>p.id)),exl=[...new Set((PR.excluidas||[]).filter(i=>ids.has(i)))],oc=[...new Set([...(PR.ocultas||[]),...exl])].filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
       const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
       const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
       const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
-      PR.ocultas=oc;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
-      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},fixo:fx,pronta:pe,ocultas:oc,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
+      PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
+      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
       const el=$("saved");if(el)el.textContent="Atualizando a loja…";
       await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);flash();status("Loja atualizada ✓")}
     catch(e){console.error(e);status("Não foi possível salvar. Confira a internet.");toast("Não foi possível salvar. Confira a internet e tente de novo.")}

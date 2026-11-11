@@ -188,6 +188,8 @@ a{color:inherit}
 .prow .nm small{display:block;font-size:12px;color:var(--muted)}
 .prow .pv{font-weight:600;text-align:right}
 .prow .tags{grid-column:2/-1;display:flex;gap:6px;flex-wrap:wrap}
+.prow .pacts{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.prow.off .nm,.prow.off .pv{opacity:.55}
 .tg{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--bg);color:var(--muted)}
 .tg.off{background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger)}
 .tg.new{background:var(--soft);color:var(--brand)}
@@ -242,7 +244,7 @@ const [{initializeApp},A,F,C]=await Promise.all([import(SDK+"firebase-app.js"),i
 /* app com nome próprio: a sessão do ADM fica separada da sessão do painel da revendedora no mesmo navegador */
 const fbApp=initializeApp(CFG,"adm"),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
 const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
-const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction,deleteField}=F;
+const {doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction,deleteField}=F;
 /* segunda instância só para criar o login da revendedora sem deslogar o ADM */
 /* sessão só na memória: se a aba fechar no meio, o login da revendedora não fica salvo neste navegador */
 const auth2=A.initializeAuth(initializeApp(CFG,"criar-revendedora"),{persistence:A.inMemoryPersistence});
@@ -271,7 +273,7 @@ const I={home:sv('<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>'),users:sv('<circle 
 const BANHOS=["Ouro 18k","Ródio branco","Ródio negro","Ouro rosé","Prata"];
 
 let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={};
-const ui={tab:"geral",q:"",st:"todas",pq:"",pcat:"Todas",pend:false};
+const ui={tab:"geral",q:"",st:"todas",pq:"",pcat:"Todas",pst:"todos",pend:false};
 
 /* ---------- login ---------- */
 let msgLogin="";
@@ -465,7 +467,8 @@ function mostrarAcesso(lj,email,nova){
 /* ---------- PRODUTOS ---------- */
 function tProd(){
   const cats=[...new Set(PRODS.map(p=>p.cat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
-  const q=norm(ui.pq),l=PRODS.filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(`${p.nome} ${p.cat}`).includes(q)))
+  const stOk=p=>ui.pst==="excluidos"?!!p.excluido:!p.excluido&&(ui.pst==="todos"||(ui.pst==="ativos"?p.ativo!==false:p.ativo===false));
+  const q=norm(ui.pq),l=PRODS.filter(p=>stOk(p)&&(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(`${p.nome} ${p.cat}`).includes(q)))
     .sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt"));
   const ysTxt=!YS?"Ainda não importado.":YS.erro?`Último erro: ${esc(YS.erro)}`:`Última atualização: ${toDate(YS.em)?toDate(YS.em).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"agora"} · ${YS.total} peças à venda (${YS.novos} novas${YS.desativados?`, ${YS.desativados} saíram das lojas`:""})${YS.emPromocao?` · ${YS.emPromocao} em promoção na Veraneio (${YS.promo==="sim"?"repassadas":"não repassadas"})`:""}${YS.travados?` · ${YS.travados} com preço travado`:""}`;
   $("main").innerHTML=`${ui.pend?`<div class="pubbar"><span>Atualizando o catálogo das lojas…</span></div>`:""}
@@ -477,12 +480,15 @@ function tProd(){
     <div class="box"><div class="row" style="justify-content:space-between"><h2>Produtos</h2><button class="btn btn-brand btn-sm" type="button" id="np">+ Produto</button></div>
     <p class="lead">Preço de atacado. Cada loja recebe o preço com a margem da revendedora.</p>
     <div class="tools"><label class="sbox"><span class="sr">Buscar</span>${I.search}<input id="pq" type="search" placeholder="Buscar produto" value="${esc(ui.pq)}"></label>
-      <select id="pc" aria-label="Categoria">${["Todas",...cats].map(c=>`<option ${ui.pcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
-    <div class="hint">${l.length} de ${PRODS.length} produtos · ${PRODS.filter(p=>p.ativo!==false).length} ativos</div>
-    <div id="pl">${l.length?l.slice(0,ui.plim||80).map(p=>`<div class="prow" data-ed="${esc(p.id)}" role="button" tabindex="0">
+      <select id="pc" aria-label="Categoria">${["Todas",...cats].map(c=>`<option ${ui.pcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select>
+      <select id="pst" aria-label="Situação">${[["todos","Todos"],["ativos","Ativos"],["inativos","Desativados"],["excluidos",`Excluídos (${PRODS.filter(p=>p.excluido).length})`]].map(([v,t])=>`<option value="${v}" ${ui.pst===v?"selected":""}>${t}</option>`).join("")}</select></div>
+    <div class="hint">${l.length} de ${PRODS.filter(p=>!p.excluido).length} produtos · ${PRODS.filter(p=>!p.excluido&&p.ativo!==false).length} ativos · Desativar tira das lojas e dá para ativar de novo; Excluir tira da lista também.</div>
+    <div id="pl">${l.length?l.slice(0,ui.plim||80).map(p=>`<div class="prow ${p.ativo===false?"off":""}" data-ed="${esc(p.id)}" role="button" tabindex="0">
       <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:"sem foto"}</div>
       <div class="nm">${esc(p.nome)}<small>${esc([p.cat,p.banho].filter(Boolean).join(" · "))}</small></div><div class="pv num">${brl(p.preco)}</div>
-      <div class="tags">${p.ativo===false?'<span class="tg off">Inativo</span>':""}${p.novo?'<span class="tg new">Novo</span>':""}${p.esgotado?'<span class="tg off">Esgotado</span>':""}${p.precoTravado?'<span class="tg">Preço travado</span>':""}${p.promoYampi?`<span class="tg new">Promo Veraneio ${brl(p.promoYampi)}</span>`:""}${p.yampiId?'<span class="tg">Yampi</span>':""}</div></div>`).join("")
+      <div class="tags">${p.ativo===false?'<span class="tg off">Inativo</span>':""}${p.novo?'<span class="tg new">Novo</span>':""}${p.esgotado?'<span class="tg off">Esgotado</span>':""}${p.precoTravado?'<span class="tg">Preço travado</span>':""}${p.promoYampi?`<span class="tg new">Promo Veraneio ${brl(p.promoYampi)}</span>`:""}${p.yampiId?'<span class="tg">Yampi</span>':""}</div>
+      <div class="pacts">${p.excluido?`<button class="btn btn-ghost btn-sm" type="button" data-rest="${esc(p.id)}">Restaurar</button>`
+        :`<button class="btn btn-ghost btn-sm" type="button" data-at="${esc(p.id)}">${p.ativo===false?"Ativar":"Desativar"}</button><button class="btn btn-ghost btn-sm" type="button" data-ex="${esc(p.id)}">Excluir</button>`}</div></div>`).join("")
       :`<div class="note">${PRODS.length?"Nenhum produto encontrado.":"Nenhum produto ainda. Toque em “Atualizar peças da Yampi”."}</div>`}</div>
     ${l.length>(ui.plim||80)?`<button class="btn btn-ghost btn-sm" type="button" id="pmore">Mostrar mais (${l.length-(ui.plim||80)})</button>`:""}</div>
     <button class="btn btn-ghost btn-sm" type="button" id="repub">Republicar catálogo em todas as lojas</button>`;
@@ -490,8 +496,11 @@ function tProd(){
   $("pmore")&&($("pmore").onclick=()=>{ui.plim=(ui.plim||80)+120;tProd()});
   $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=80;const p=e.target.selectionStart;tProd();$("pq").focus();$("pq").setSelectionRange(p,p)};
   $("pc").onchange=e=>{ui.pcat=e.target.value;ui.plim=80;tProd()};
-  $("pl").onclick=e=>{const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)};
-  $("pl").onkeydown=e=>{if(e.key==="Enter"){const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)}};
+  $("pst").onchange=e=>{ui.pst=e.target.value;ui.plim=80;tProd()};
+  $("pl").onclick=e=>{const a=e.target.closest("[data-at],[data-ex],[data-rest]");
+    if(a){e.stopPropagation();if(a.dataset.at)alternarProd(a.dataset.at);else if(a.dataset.rest)restaurarProd(a.dataset.rest);else excluirProd(a.dataset.ex,a);return}
+    const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)};
+  $("pl").onkeydown=e=>{if(e.key==="Enter"&&!e.target.closest("button")){const r=e.target.closest("[data-ed]");if(r)formProd(r.dataset.ed)}};
   $("repub").onclick=()=>publicar(true);
   $("yImp").onclick=()=>importarYampi();
   $("promoSeg").onclick=async e=>{const v=e.target.closest("[data-promo]")?.dataset.promo;if(!v||v===CFG_ADM.promo)return;
@@ -554,6 +563,19 @@ let pubT=null;
 function publicar(agora){clearTimeout(pubT);ui.pend=true;
   pubT=setTimeout(async()=>{try{await publicarTodas();toast("Catálogo atualizado em todas as lojas")}catch(e){console.error(e);toast(/loja\(s\)/.test(e.message)?e.message:"Não foi possível atualizar as lojas.")}
     ui.pend=false;if(ui.tab==="produtos")tProd()},agora?0:3000)}
+/* desativar: some das lojas e volta quando ativar. excluir: some também desta lista.
+   Peça da Yampi excluída fica marcada (excluido) para a próxima atualização não trazer de volta; peça cadastrada à mão é apagada. */
+async function mudarProd(id,dados,msg){const p=PRODS.find(x=>x.id===id);if(!p)return;
+  try{await setDoc(doc(db,"produtos",id),{...dados,atualizadoEm:serverTimestamp()},{merge:true});Object.assign(p,dados);publicar();tProd();toast(msg)}
+  catch(err){toast("Não foi possível salvar. Confira a internet.")}}
+function alternarProd(id){const p=PRODS.find(x=>x.id===id);if(!p)return;const on=p.ativo===false;
+  mudarProd(id,{ativo:on,desligadoAdm:!on},on?"Produto ativado. Volta para as lojas em alguns segundos.":"Produto desativado. Sai das lojas em alguns segundos.")}
+function restaurarProd(id){mudarProd(id,{excluido:false,ativo:true,desligadoAdm:false},"Produto restaurado e ativo nas lojas.")}
+async function excluirProd(id,btn){const p=PRODS.find(x=>x.id===id);if(!p)return;
+  if(btn&&btn.dataset.arm!=="1"){const t=btn.textContent;btn.dataset.arm="1";btn.textContent="Toque de novo para excluir";setTimeout(()=>{if(btn.isConnected){btn.dataset.arm="";btn.textContent=t}},3500);return}
+  if(p.yampiId){await mudarProd(id,{excluido:true,ativo:false,desligadoAdm:true},"Produto excluído. Ele fica em “Excluídos” se quiser restaurar.");return}
+  try{await deleteDoc(doc(db,"produtos",id));PRODS=PRODS.filter(x=>x.id!==id);publicar();tProd();toast("Produto excluído.")}
+  catch(err){toast("Não foi possível excluir. Confira a internet.")}}
 function formProd(id){
   const p=id?{...PRODS.find(x=>x.id===id)}:{id:doc(collection(db,"produtos")).id,nome:"",cat:"",banho:"Ouro 18k",preco:"",desc:"",novo:true,ativo:true,ordem:"",fotos:[],fotosPath:[],_novo:true};
   p.fotos=[...(p.fotos||[])];
@@ -576,7 +598,8 @@ function formProd(id){
     <label class="check"><input type="checkbox" id="pNv" ${p.novo?"checked":""}>Marcar como novidade</label>
     <label class="check"><input type="checkbox" id="pE" ${p.esgotado?"checked":""}>Esgotado (some das lojas até voltar)</label>
     <span class="err" id="pErr"></span></form>
-    <div class="sh-foot px"><button class="btn btn-ghost" type="button" data-x>Cancelar</button><button class="btn btn-brand" type="submit" form="pf" id="pBtn">Salvar</button></div>`);
+    <div class="sh-foot px">${p._novo||p.excluido?"":`<button class="btn btn-ghost" type="button" id="pDel" style="margin-right:auto">Excluir</button>`}<button class="btn btn-ghost" type="button" data-x>Cancelar</button><button class="btn btn-brand" type="submit" form="pf" id="pBtn">Salvar</button></div>`);
+  const pDel=$("pDel");if(pDel)pDel.onclick=async()=>{if(pDel.dataset.arm==="1")fechar();await excluirProd(p.id,pDel)};
   const fotosEl=$("fotos");
   const reFotos=()=>{fotosEl.innerHTML=fotosHTML()};
   fotosEl.onclick=e=>{const b=e.target.closest("[data-rm],[data-first]");if(!b)return;

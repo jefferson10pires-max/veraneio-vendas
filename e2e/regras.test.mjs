@@ -168,6 +168,8 @@ test("R16 preços da revendedora só no formato do painel", async () => {
   await assertFails(setDoc(doc(db, "precos/rev"), { margem: 100, extra: true }));
   await assertSucceeds(setDoc(doc(db, "precos/rev"), { margem: 100, arred: "90", over: {}, fixo: {}, pronta: ["y1"], ocultas: [], fotos: {}, nomes: {}, modo: "todo", atualizadoEm: serverTimestamp() }));
   await assertSucceeds(setDoc(doc(adm(), "precos/rev"), { margem: 100, arred: "90", over: {} }));
+  await assertSucceeds(setDoc(doc(db, "precos/rev"), { margem: 100, ocultas: ["y1"], excluidas: ["y1"] }));
+  await assertFails(setDoc(doc(db, "precos/rev"), { margem: 100, excluidas: "y1" }));
 });
 test("R17 fotos próprias só imagem embutida ou https (nunca javascript:)", async () => {
   const db = rev();

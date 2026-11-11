@@ -845,3 +845,73 @@ test.describe("S02 auditoria de segurança — ADM", () => {
     await expect(page.locator("#main")).not.toContainText("Peça 3");
   });
 });
+
+test.describe("D01 desativar e excluir produto no ADM", () => {
+  const base = () => seed(40, { "produtos/m1": { nome: "Peça Manual", cat: "Anéis", banho: "Ouro 18k", preco: 30, ativo: true, ordem: 1, fotos: [] }, "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } });
+  const abrirProdutos = async (page: Page) => {
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+  };
+  const linha = (page: Page, nome: string) => page.locator(".prow", { hasText: nome });
+
+  test("D01-H1 desativar tira das lojas e ativar devolve", async ({ page }) => {
+    const erros = await preparar(page, { seed: base() });
+    await abrirProdutos(page);
+    await linha(page, "Peça 3").getByRole("button", { name: "Desativar" }).click();
+    await expect(page.locator("#toast")).toContainText("desativado");
+    expect((await db(page))["produtos/y3"].ativo).toBe(false);
+    await expect.poll(async () => ((await db(page))["catalogos/u1/partes/p0"]?.itens ?? { some: () => null }).some((x: any) => x.id === "y3"), { timeout: 10000 }).toBe(false);
+    await linha(page, "Peça 3").getByRole("button", { name: "Ativar" }).click();
+    await expect.poll(async () => ((await db(page))["catalogos/u1/partes/p0"]?.itens ?? { some: () => null }).some((x: any) => x.id === "y3"), { timeout: 10000 }).toBe(true);
+    expect(erros).toEqual([]);
+  });
+
+  test("D01-H2 excluir peça da Yampi pede confirmação, some da lista e pode ser restaurada", async ({ page }) => {
+    await preparar(page, { seed: base() });
+    await abrirProdutos(page);
+    const b = linha(page, "Peça 5").getByRole("button", { name: "Excluir" });
+    await b.click();
+    expect((await db(page))["produtos/y5"].excluido).toBeUndefined();
+    await linha(page, "Peça 5").getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect(linha(page, "Peça 5")).toHaveCount(0);
+    const d = (await db(page))["produtos/y5"];
+    expect([d.excluido, d.ativo, d.desligadoAdm]).toEqual([true, false, true]);
+    await expect.poll(async () => ((await db(page))["catalogos/u1/partes/p0"]?.itens ?? { some: () => null }).some((x: any) => x.id === "y5"), { timeout: 10000 }).toBe(false);
+    await page.locator("#pst").selectOption("excluidos");
+    await linha(page, "Peça 5").getByRole("button", { name: "Restaurar" }).click();
+    await expect.poll(async () => (await db(page))["produtos/y5"].excluido).toBe(false);
+    expect((await db(page))["produtos/y5"].ativo).toBe(true);
+  });
+
+  test("D01-H3 excluir produto cadastrado à mão apaga o produto", async ({ page }) => {
+    await preparar(page, { seed: base() });
+    await abrirProdutos(page);
+    await linha(page, "Peça Manual").getByRole("button", { name: "Excluir" }).click();
+    await linha(page, "Peça Manual").getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect.poll(async () => (await db(page))["produtos/m1"]).toBeUndefined();
+    await expect(linha(page, "Peça Manual")).toHaveCount(0);
+  });
+});
+
+test.describe("D02 revendedora exclui peça da Veraneio da própria loja", () => {
+  test("D02-H1 excluir tira do site e das listas; restaurar devolve", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y4"] } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: /Editar peça: Peça 4$/ }).click();
+    await page.getByRole("button", { name: "Excluir da minha loja" }).click();
+    await page.getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect(page.locator("#toast")).toContainText("excluída");
+    await expect.poll(async () => (await db(page))["precos/u1"]?.excluidas, { timeout: 10000 }).toEqual(["y4"]);
+    const pr = (await db(page))["precos/u1"];
+    expect(pr.ocultas).toContain("y4");
+    expect(pr.pronta).not.toContain("y4");
+    await expect.poll(async () => ((await db(page))["catalogos/u1/partes/p0"]?.itens ?? { some: () => null }).some((x: any) => x.id === "y4"), { timeout: 10000 }).toBe(false);
+    await expect(page.locator("#plist")).not.toContainText("Peça 4");
+    await page.locator("#pf").getByRole("button", { name: /Excluídas/ }).click();
+    await page.getByRole("button", { name: "Restaurar Peça 4" }).click();
+    await expect.poll(async () => (await db(page))["precos/u1"].excluidas, { timeout: 10000 }).toEqual([]);
+    await expect.poll(async () => ((await db(page))["catalogos/u1/partes/p0"]?.itens ?? { some: () => null }).some((x: any) => x.id === "y4"), { timeout: 10000 }).toBe(true);
+    expect(erros).toEqual([]);
+  });
+});
