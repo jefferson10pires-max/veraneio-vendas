@@ -68,7 +68,7 @@ test("R06 conta qualquer não grava catálogo, fotos, banners nem peças (nem co
 });
 test("R07 revendedora mexe na própria loja, mas não no endereço, situação ou dados pessoais", async () => {
   const db = rev();
-  await assertSucceeds(updateDoc(doc(db, "lojas/rev"), { nome: "Novo nome", cor: "#000" }));
+  await assertSucceeds(updateDoc(doc(db, "lojas/rev"), { nome: "Novo nome", cor: "#000000" }));
   await assertFails(updateDoc(doc(db, "lojas/rev"), { slug: "outra-coisa" }));
   await assertFails(updateDoc(doc(db, "lojas/rev"), { status: "ativa2" }));
   await assertFails(updateDoc(doc(db, "lojas/rev"), { resp: "Maria" }));
@@ -121,16 +121,70 @@ test("R12 visitante não lê pedidos de ninguém", async () => {
 });
 
 // --- contadores de acesso ---
+const dk = (n = 0) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 test("R13 contador: +1 visita e +1 peça vista funcionam; inflar não", async () => {
-  const db = visitante(), d = "2026-11-11", r = doc(db, `lojas/rev/dias/${d}`);
+  const db = visitante(), d = dk(), r = doc(db, `lojas/rev/dias/${d}`);
   await assertSucceeds(setDoc(r, { data: d, uid: "rev", visitas: increment(1) }, { merge: true }));
-  await assertSucceeds(setDoc(r, { data: d, uid: "rev", views: { y1: increment(1) } }, { merge: true }));
+  await assertSucceeds(setDoc(r, { data: d, uid: "rev", ultima: "y1", views: { y1: increment(1) } }, { merge: true }));
+  await assertSucceeds(setDoc(r, { data: d, uid: "rev", ultima: "y1", views: { y1: increment(1) } }, { merge: true }));
   await assertSucceeds(setDoc(r, { data: d, uid: "rev", visitas: increment(1) }, { merge: true }));
   await assertFails(setDoc(r, { visitas: 999 }, { merge: true }));
   await assertFails(setDoc(r, { views: { a: 1, b: 1, c: 1 } }, { merge: true }));
-  await assertFails(setDoc(doc(db, "lojas/rev/dias/2026-11-12"), { data: "2026-11-12", uid: "rev", visitas: 1, views: { a: 1, b: 1 } }));
+  await assertFails(setDoc(doc(db, `lojas/rev/dias/${dk(1)}`), { data: dk(1), uid: "rev", visitas: 1, views: { a: 1, b: 1 } }));
   await assertFails(setDoc(doc(db, "lojas/rev/dias/lixo"), { data: "lixo", uid: "rev", visitas: 1 }));
   await assertFails(getDoc(r));
+});
+test("R13b contador: não diminui, não troca valor de peça, não aceita data futura nem loja inexistente", async () => {
+  const db = visitante(), d = dk(), r = doc(db, `lojas/rev/dias/${d}`);
+  await assertSucceeds(setDoc(r, { data: d, uid: "rev", visitas: increment(1), ultima: "y1", views: { y1: increment(1) } }, { merge: true }));
+  await assertFails(setDoc(r, { visitas: -1000000000 }, { merge: true }));
+  await assertFails(setDoc(r, { ultima: "y1", views: { y1: 1e15 } }, { merge: true }));
+  await assertFails(setDoc(r, { views: { y1: 1e15 } }, { merge: true }));
+  await assertFails(setDoc(doc(db, "lojas/rev/dias/9999-12-31"), { data: "9999-12-31", uid: "rev", visitas: 1 }));
+  await assertFails(setDoc(doc(db, "lojas/rev/dias/2020-01-01"), { data: "2020-01-01", uid: "rev", visitas: 1 }));
+  await assertFails(setDoc(doc(db, `lojas/rev/dias/${dk(5)}`), { data: dk(5), uid: "rev", visitas: 1 }));
+  await assertFails(setDoc(doc(db, `lojas/rev/dias/${dk()}x`), { data: d, uid: "rev", visitas: 1 }));
+  await assertFails(setDoc(doc(db, `lojas/naoexiste/dias/${d}`), { data: d, uid: "naoexiste", visitas: 1 }));
+  await assertFails(setDoc(doc(db, `lojas/outra/dias/${d}`), { data: d, uid: "outra", visitas: -5 }));
+  await assertFails(setDoc(doc(db, `lojas/outra/dias/${d}`), { data: d, uid: "outra", ultima: "y3", views: { y3: 1e15 } }));
+});
+
+// --- correções da auditoria de segurança ---
+test("R15 revendedora não grava 'uid' nem campos fora da lista na própria loja; cor só #RRGGBB", async () => {
+  const db = rev();
+  await assertFails(updateDoc(doc(db, "lojas/rev"), { uid: "outra" }));
+  await assertFails(updateDoc(doc(db, "lojas/rev"), { qualquer: 1 }));
+  await assertFails(updateDoc(doc(db, "lojas/rev"), { cor: "red;background-image:url(https://x)" }));
+  await assertFails(updateDoc(doc(db, "lojas/rev"), { logo: "javascript:alert(1)" }));
+  await assertSucceeds(updateDoc(doc(db, "lojas/rev"), { cor: "#a1B2c3", logo: "data:image/png;base64,AAAA", modo: "pronta", rodape: { horario: "x" } }));
+  await assertSucceeds(updateDoc(doc(db, "lojas/rev"), { logo: null }));
+  await assertFails(updateDoc(doc(estranho(), "lojas/rev"), { nome: "x" }));
+});
+test("R16 preços da revendedora só no formato do painel", async () => {
+  const db = rev();
+  await assertFails(setDoc(doc(db, "precos/rev"), { margem: 0, arred: "", over: {}, pronta: 1 }));
+  await assertFails(setDoc(doc(db, "precos/rev"), { margem: 0, ocultas: { a: 1 } }));
+  await assertFails(setDoc(doc(db, "precos/rev"), { margem: "100" }));
+  await assertFails(setDoc(doc(db, "precos/rev"), { margem: 100, extra: true }));
+  await assertSucceeds(setDoc(doc(db, "precos/rev"), { margem: 100, arred: "90", over: {}, fixo: {}, pronta: ["y1"], ocultas: [], fotos: {}, nomes: {}, modo: "todo", atualizadoEm: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(adm(), "precos/rev"), { margem: 100, arred: "90", over: {} }));
+});
+test("R17 fotos próprias só imagem embutida ou https (nunca javascript:)", async () => {
+  const db = rev();
+  await assertFails(setDoc(doc(db, "lojas/rev/fotos/y1"), { fotos: ["javascript:alert(1)"], v: 1 }));
+  await assertFails(setDoc(doc(db, "lojas/rev/fotos/y1"), { fotos: ["data:image/jpeg;base64,AA", "data:text/html,<script>"], v: 1 }));
+  await assertFails(setDoc(doc(db, "lojas/rev/fotos/y1"), { fotos: [1], v: 1 }));
+  await assertSucceeds(setDoc(doc(db, "lojas/rev/fotos/y1"), { fotos: ["data:image/jpeg;base64,AA", "https://images.yampi.me/a.jpg"], v: 1 }));
+});
+test("R18 catálogo tem no máximo 40 partes", async () => {
+  await assertSucceeds(setDoc(doc(rev(), "catalogos/rev/partes/p39"), { itens: [] }));
+  await assertFails(setDoc(doc(rev(), "catalogos/rev/partes/p40"), { itens: [] }));
+  await assertFails(setDoc(doc(rev(), "catalogos/rev/partes/p999"), { itens: [] }));
+});
+test("R19 loja pausada não recebe carrinho novo", async () => {
+  await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), "lojas/outra"), { status: "pausada" }); });
+  await assertFails(setDoc(doc(visitante(), "lojas/outra/leads/abcdefghijABCDEFGHIJ"), lead({ uid: "outra" })));
+  await assertSucceeds(setDoc(doc(visitante(), "lojas/rev/leads/abcdefghijABCDEFGHIK"), lead()));
 });
 
 // --- ADM ---

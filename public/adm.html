@@ -244,7 +244,10 @@ const fbApp=initializeApp(CFG,"adm"),auth=A.getAuth(fbApp),db=F.getFirestore(fbA
 const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
 const {doc,getDoc,getDocs,setDoc,updateDoc,collection,collectionGroup,query,where,serverTimestamp,increment,Timestamp,writeBatch,runTransaction,deleteField}=F;
 /* segunda instância só para criar o login da revendedora sem deslogar o ADM */
-const auth2=A.getAuth(initializeApp(CFG,"criar-revendedora"));
+/* sessão só na memória: se a aba fechar no meio, o login da revendedora não fica salvo neste navegador */
+const auth2=A.initializeAuth(initializeApp(CFG,"criar-revendedora"),{persistence:A.inMemoryPersistence});
+const corOk=c=>/^#[0-9a-fA-F]{6}$/.test(String(c||""))?c:"#9a7a3c";
+const num=(v,max=1e6)=>{v=Number(v);return Number.isFinite(v)&&v>0?Math.min(v,max):0};
 
 const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const int=v=>Math.round(v||0).toLocaleString("pt-BR");
@@ -329,7 +332,7 @@ async function carregar(){
   const desde=daysAgo(29);
   const [l,p,d,ld,y]=await Promise.all([
     getDocs(collection(db,"lojas")),getDocs(collection(db,"produtos")),
-    getDocs(query(collectionGroup(db,"dias"),where("data",">=",dkey(desde)))),
+    getDocs(query(collectionGroup(db,"dias"),where("data",">=",dkey(desde)),where("data","<=",dkey(daysAgo(-1))))),
     getDocs(query(collectionGroup(db,"leads"),where("ts",">=",Timestamp.fromDate(desde)))),
     getDoc(doc(db,"sistema","yampi")).catch(()=>null)]);
   YS=y&&y.exists()?y.data():null;
@@ -338,15 +341,16 @@ async function carregar(){
   /* responsável, cidade e último acesso ficam em contas/ e acessos/ (só o ADM lê); lojas/ é público */
   let AC={};try{const a=await getDocs(collection(db,"acessos"));a.docs.forEach(d=>AC[d.id]=d.data().em)}catch(e){}
   await migrarPrivados(l.docs).catch(e=>console.error("migração",e));
-  LOJAS=l.docs.map(x=>{const d=x.data(),c=CONTAS[x.id]||{};const {resp,cidade,ultimoAcesso,...pub}=d;
-    return {uid:x.id,...pub,resp:c.resp??resp??"",cidade:c.cidade??cidade??"",ultimoAcesso:AC[x.id]||ultimoAcesso||null}}).sort((a,b)=>String(a.nome).localeCompare(b.nome,"pt"));
+  LOJAS=l.docs.map(x=>{const d=x.data(),c=CONTAS[x.id]||{};const {resp,cidade,ultimoAcesso,uid:_naoUsar,...pub}=d;
+    /* a identidade da loja vem só do caminho do documento (nunca de um campo que a revendedora consiga gravar) */
+    return {...pub,uid:x.id,resp:c.resp??resp??"",cidade:c.cidade??cidade??"",ultimoAcesso:AC[x.id]||ultimoAcesso||null}}).sort((a,b)=>String(a.nome).localeCompare(b.nome,"pt"));
   PRODS=p.docs.map(x=>({id:x.id,...x.data()}));
-  const base={};PRODS.forEach(x=>base[x.id]=Number(x.preco)||0);
-  AGG={};const g=uid=>AGG[uid]||(AGG[uid]={acessos:0,pedidos:0,aband:0,valor:0,atacado:0});
-  d.docs.forEach(x=>{const v=x.data();g(v.uid||x.ref.parent.parent.id).acessos+=v.visitas||0});
+  const base=Object.create(null);PRODS.forEach(x=>base[x.id]=Number(x.preco)||0);
+  AGG=Object.create(null);const g=uid=>AGG[uid]||(AGG[uid]={acessos:0,pedidos:0,aband:0,valor:0,atacado:0});
+  d.docs.forEach(x=>{const v=x.data();g(x.ref.parent.parent.id).acessos+=num(v.visitas)});
   // pedidos vêm de visitantes: a loja é a do caminho (não o campo uid) e só números entram nas contas
   ld.docs.forEach(x=>{const v=x.data(),a=g(x.ref.parent.parent.id);
-    if(v.status==="abandonado")a.aband++;else{a.pedidos++;a.valor+=Number(v.total)||0;a.atacado+=(Array.isArray(v.itens)?v.itens:[]).reduce((s,i)=>s+(base[i&&i.id]||0)*(Number(i&&i.q)||0),0)}});
+    if(v.status==="abandonado")a.aband++;else{a.pedidos++;a.valor+=num(v.total);a.atacado+=(Array.isArray(v.itens)?v.itens.slice(0,80):[]).reduce((s,i)=>s+(base[i&&i.id]||0)*num(i&&i.q,999),0)}});
   loaded=true;
 }
 const ag=uid=>AGG[uid]||{acessos:0,pedidos:0,aband:0,valor:0,atacado:0};
@@ -390,12 +394,12 @@ function tRes(){
       b.disabled=true;try{await A.sendPasswordResetEmail(auth,em);mostrarAcesso(lj,em,false)}catch(err){toast("Não foi possível enviar o e-mail agora.")}b.disabled=false}};
 }
 function resCard(l){const a=ag(l.uid);return `<div class="rescard">
-  <div class="h"><span class="logo" style="background:${esc(l.cor||"#9a7a3c")}">${l.logo?`<img alt="" src="${esc(l.logo)}">`:esc(initials(l.nome))}</span>
+  <div class="h"><span class="logo" style="background:${corOk(l.cor)}">${/^(data:image\/|https:)/i.test(String(l.logo||""))?`<img alt="" src="${esc(l.logo)}">`:esc(initials(l.nome))}</span>
     <div style="flex:1;min-width:0"><b>${esc(l.nome)}</b><span class="hint">${esc([l.resp,l.cidade].filter(Boolean).join(" · "))}</span></div><span class="pill ${esc(l.status)}">${l.status==="ativa"?"Ativa":"Pausada"}</span></div>
   <div class="mini"><div><b class="num">${int(a.acessos)}</b><span>Acessos</span></div><div><b class="num">${a.pedidos}</b><span>Pedidos</span></div><div><b class="num">${a.aband}</b><span>Abandon.</span></div><div><b class="num">${a.valor>=1000?"R$ "+(a.valor/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mil":brl(Math.round(a.valor)).replace(",00","")}</b><span>Vendas</span></div></div>
   <div class="hint">${ultimoTxt(l.ultimoAcesso)} · /${esc(l.slug)}</div>
-  <div class="row"><a class="btn btn-ghost btn-sm" href="/${esc(l.slug)}" target="_blank" rel="noopener">Ver loja</a><button class="btn btn-ghost btn-sm" type="button" data-cp="${l.uid}">${I.copy}Link</button>
-    <button class="btn btn-ghost btn-sm" type="button" data-lk="${l.uid}">Acesso</button><button class="btn btn-ghost btn-sm" type="button" data-st="${l.uid}">${l.status==="ativa"?"Pausar":"Reativar"}</button>
+  <div class="row"><a class="btn btn-ghost btn-sm" href="/${esc(l.slug)}" target="_blank" rel="noopener">Ver loja</a><button class="btn btn-ghost btn-sm" type="button" data-cp="${esc(l.uid)}">${I.copy}Link</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-lk="${esc(l.uid)}">Acesso</button><button class="btn btn-ghost btn-sm" type="button" data-st="${esc(l.uid)}">${l.status==="ativa"?"Pausar":"Reativar"}</button>
     ${l.whats?`<a class="btn btn-ghost btn-sm" href="https://wa.me/${waNum(l.whats)}" target="_blank" rel="noopener" aria-label="WhatsApp">${I.chat}</a>`:""}</div></div>`}
 
 /* folha (modal) */
@@ -427,14 +431,15 @@ function formNova(){
       if((await getDoc(doc(db,"slugs",d.slug))).exists())throw new Error("Esse endereço de loja já está em uso.");
       let cred;try{cred=await A.createUserWithEmailAndPassword(auth2,d.email,crypto.randomUUID()+"Aa1!")}
       catch(err){throw new Error(err.code==="auth/email-already-in-use"?"Já existe uma conta com esse e-mail.":err.code==="auth/invalid-email"?"E-mail inválido.":"Não foi possível criar o login.")}
-      const uid=cred.user.uid;await A.signOut(auth2);
-      await runTransaction(db,async t=>{
+      const uid=cred.user.uid;
+      try{await runTransaction(db,async t=>{
         if((await t.get(doc(db,"slugs",d.slug))).exists())throw new Error("Esse endereço de loja já está em uso.");
         t.set(doc(db,"slugs",d.slug),{uid});
         t.set(doc(db,"lojas",uid),{...PADRAO_LOJA,nome:d.nome,slug:d.slug,whats:d.whats,status:"ativa",criadoEm:serverTimestamp()});
         t.set(doc(db,"precos",uid),{margem:100,arred:"90",over:{}});
         t.set(doc(db,"contas",uid),{email:d.email,resp:d.resp,cidade:d.cidade,criadoEm:serverTimestamp()});
-      });
+      })}catch(err){await A.deleteUser(cred.user).catch(()=>{});throw err} /* não deixa login sem loja */
+      finally{await A.signOut(auth2).catch(()=>{})}
       $("nBtn").textContent="Publicando o catálogo…";
       await C.publicarLoja(F,db,uid,{margem:100,arred:"90",over:{}},await C.lerAtacado(F,db));
       await A.sendPasswordResetEmail(auth,d.email);
@@ -539,12 +544,15 @@ async function importarYampi(forcar){
 async function publicarTodas(prog=()=>{}){
   const at=PRODS.filter(C.ativoNaLoja).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt")).map(C.paraAtacado);
   prog("Gravando catálogo de atacado");await C.gravarAtacado(F,db,at);
-  const pr=await getDocs(collection(db,"precos"));let n=0;
-  for(const d of pr.docs){prog(`Atualizando lojas ${++n}/${pr.size}`);await C.publicarLoja(F,db,d.id,d.data(),at)}
+  const pr=await getDocs(collection(db,"precos"));let n=0;const falhas=[];
+  /* uma loja com problema não impede as outras de serem atualizadas */
+  for(const d of pr.docs){prog(`Atualizando lojas ${++n}/${pr.size}`);
+    try{await C.publicarLoja(F,db,d.id,d.data(),at)}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
+  if(falhas.length){const nomes=falhas.map(u=>(LOJAS.find(l=>l.uid===u)||{}).nome||u);throw new Error(`${falhas.length} loja(s) não foram atualizadas: ${nomes.join(", ")}`)}
 }
 let pubT=null;
 function publicar(agora){clearTimeout(pubT);ui.pend=true;
-  pubT=setTimeout(async()=>{try{await publicarTodas();toast("Catálogo atualizado em todas as lojas")}catch(e){console.error(e);toast("Não foi possível atualizar as lojas.")}
+  pubT=setTimeout(async()=>{try{await publicarTodas();toast("Catálogo atualizado em todas as lojas")}catch(e){console.error(e);toast(/loja\(s\)/.test(e.message)?e.message:"Não foi possível atualizar as lojas.")}
     ui.pend=false;if(ui.tab==="produtos")tProd()},agora?0:3000)}
 function formProd(id){
   const p=id?{...PRODS.find(x=>x.id===id)}:{id:doc(collection(db,"produtos")).id,nome:"",cat:"",banho:"Ouro 18k",preco:"",desc:"",novo:true,ativo:true,ordem:"",fotos:[],fotosPath:[],_novo:true};

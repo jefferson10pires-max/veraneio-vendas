@@ -427,7 +427,7 @@ function registrarVisita(){
 function registrarView(id){
   if(DEMO||!fb)return;
   const {db,doc,setDoc,increment}=fb,d=dkey(new Date());
-  setDoc(doc(db,"lojas",UID,"dias",d),{data:d,uid:UID,views:{[id]:increment(1)}},{merge:true}).catch(()=>{});
+  if(String(id).length<=64)setDoc(doc(db,"lojas",UID,"dias",d),{data:d,uid:UID,ultima:String(id),views:{[id]:increment(1)}},{merge:true}).catch(()=>{});
 }
 
 /* ---------- marca ---------- */
@@ -513,7 +513,7 @@ function filtrada(){
 const selo=p=>p.pronta?`<span class="flag pe">Pronta entrega</span>`:p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`;
 /* fotos próprias da revendedora: no catálogo a peça só diz quantas tem (fp.n); a foto vem de lojas/{uid}/fotos/{peça}.
    Na tela ela entra como "vrn:peça:índice:versão"; o navegador não abre esse endereço, o onerror chama vrnFoto e busca a foto. */
-function tokensFotos(){ITENS.forEach(p=>{if(p.fp&&p.fp.n)p.fotos=Array.from({length:p.fp.n},(_,i)=>`vrn:${p.id}:${i}:${p.fp.v||1}`)})}
+function tokensFotos(){ITENS.forEach(p=>{const n=Math.min(3,Math.max(0,Math.floor(Number(p.fp&&p.fp.n)||0)));if(n)p.fotos=Array.from({length:n},(_,i)=>`vrn:${p.id}:${i}:${p.fp.v||1}`)})}
 const _fotosP={};
 function fotoPropria(tok){
   const [,pid,i,v]=String(tok).split(":"),k=pid+":"+v;
@@ -626,11 +626,14 @@ function abrirProduto(id){
    wsrv.nl (serviço gratuito e aberto de imagens), que entrega um JPEG.
    No celular abre "Salvar imagem / Compartilhar"; no computador baixa o arquivo.
    Se algo falhar, abre a foto numa aba para salvar segurando o dedo nela. */
+/* só aceita foto de verdade: endereço https ou imagem embutida (nunca javascript: e afins) */
+const fotoSegura=u=>typeof u==="string"&&(/^https:\/\/[^\s"<>]+$/i.test(u)||/^data:image\/(jpeg|png|webp|gif);base64,/i.test(u));
 async function baixarFoto(url,nome,btn){
   const arq=(norm(nome).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"foto")+".jpg";
   const txt=btn.innerHTML;btn.disabled=true;btn.innerHTML=`${I.down}Preparando…`;
   try{
     if(String(url).startsWith("vrn:"))url=await fotoPropria(url);
+    if(!fotoSegura(url)){url=null;throw new Error("foto")}
     const r=await fetch(String(url).startsWith("data:")?url:`https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&q=92&w=1600&we`);
     if(!r.ok)throw new Error("foto");
     const blob=await r.blob(),file=new File([blob],arq,{type:"image/jpeg"});
@@ -641,7 +644,7 @@ async function baixarFoto(url,nome,btn){
       const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=arq;document.body.appendChild(a);a.click();
       setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast("Foto baixada");
     }
-  }catch(e){window.open(url,"_blank","noopener");toast("Abrimos a foto: segure o dedo nela e escolha “Salvar imagem”.")}
+  }catch(e){if(fotoSegura(url)&&/^https:/i.test(url)){window.open(url,"_blank","noopener");toast("Abrimos a foto: segure o dedo nela e escolha “Salvar imagem”.")}else toast("Não foi possível baixar esta foto.")}
   finally{btn.disabled=false;btn.innerHTML=txt}
 }
 

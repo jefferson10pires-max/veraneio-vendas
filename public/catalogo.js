@@ -15,7 +15,8 @@ export function precoFinal(base, pr, id) {
   const fx = pr.fixo && Number(pr.fixo[id]);
   if (fx > 0) return Math.max(Math.round(fx * 100) / 100, base);
   const o = pr.over && pr.over[id];
-  const m = Math.max(0, (o === undefined || o === null || o === "") ? Number(pr.margem || 0) : Number(o));
+  let m = Math.max(0, (o === undefined || o === null || o === "") ? Number(pr.margem || 0) : Number(o));
+  if (!Number.isFinite(m)) m = Math.max(0, Number(pr.margem) || 0);
   let v = base * (1 + m / 100);
   if (pr.arred === "90") { let r = Math.floor(v) + 0.9; if (r < v - 0.005) r += 1; v = r; }
   else if (pr.arred === "int") v = Math.ceil(v - 0.005);
@@ -58,18 +59,24 @@ export function opcoesProprias(txt, nome = "Tamanhos") {
  * `fp:{n,v}` (quantas fotos e versão) e a loja busca as fotos quando precisa mostrar.
  */
 export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
-  const pr = { margem: 100, arred: "90", over: {}, fixo: {}, pronta: [], ocultas: [], fotos: {}, nomes: {}, ...(precos || {}) };
-  const pe = new Set(pr.pronta || []), oc = new Set(pr.ocultas || []), fo = pr.fotos || {};
+  // dados da revendedora podem vir malformados: normaliza tudo antes de usar
+  const src = precos && typeof precos === "object" ? precos : {};
+  const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), pronta: arr(src.pronta), ocultas: arr(src.ocultas) };
+  if (!Number.isFinite(Number(pr.margem))) pr.margem = 100;
+  const pe = new Set(pr.pronta), oc = new Set(pr.ocultas), fo = pr.fotos;
+  const nFotos = (n) => Math.min(3, Math.max(0, Math.floor(Number(n) || 0)));
   if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const so = pr.modo === "pronta";
   const vale = (id) => !oc.has(id) && (!so || pe.has(id));
   const itens = atacado.filter((p) => vale(p.id)).map((p) => {
-    const f = fo[p.id] && fo[p.id].n ? fo[p.id] : null;
+    const f = fo[p.id] && nFotos(fo[p.id].n) ? fo[p.id] : null;
     return {
-      id: p.id, nome: (pr.nomes && String(pr.nomes[p.id] || "").trim()) || p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
+      id: p.id, nome: String(pr.nomes[p.id] || "").trim().slice(0, 80) || p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
       fotos: f ? [] : (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
       preco: precoFinal(p.preco, pr, p.id),
-      ...(f ? { fp: { n: f.n, v: f.v || 1 } } : {}),
+      ...(f ? { fp: { n: nFotos(f.n), v: Number(f.v) || 1 } } : {}),
       ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
       ...(pe.has(p.id) ? { pronta: true } : {}),
     };
@@ -77,7 +84,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   // peças próprias: preço de venda que a revendedora digitou, sem margem; aparecem primeiro na vitrine
   const meus = (proprios || []).filter((p) => vale(p.id) && Number(p.preco) > 0).map((p) => ({
     id: p.id, nome: String(p.nome || "").trim(), cat: p.cat || "Outras", banho: p.banho || "", desc: p.desc || "",
-    fotos: [], ...(p.fotosN ? { fp: { n: p.fotosN, v: p.fotosV || 1 } } : {}),
+    fotos: [], ...(nFotos(p.fotosN) ? { fp: { n: nFotos(p.fotosN), v: Number(p.fotosV) || 1 } } : {}),
     novo: !!p.novo, ordem: 0, preco: Math.round(Number(p.preco) * 100) / 100, proprio: true,
     ...(p.var && p.var.ops && p.var.ops.length ? { var: p.var } : {}),
     ...(pe.has(p.id) ? { pronta: true } : {}),

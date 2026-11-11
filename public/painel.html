@@ -290,7 +290,8 @@ function telaLogin(msg=""){
     try{await A.signInWithEmailAndPassword(auth,$("lE").value.trim(),$("lS").value)}
     catch(err){$("lErr").textContent=["auth/invalid-credential","auth/wrong-password","auth/user-not-found","auth/invalid-email"].includes(err.code)?"E-mail ou senha incorretos.":err.code==="auth/too-many-requests"?"Muitas tentativas. Espere alguns minutos.":"Não foi possível entrar. Verifique sua internet.";$("lBtn").disabled=false}};
   $("lRec").onclick=async()=>{const e=$("lE").value.trim();if(!e.includes("@")){$("lErr").textContent="Digite o seu e-mail acima e toque de novo.";return}
-    try{await A.sendPasswordResetEmail(auth,e);toast("Enviamos um link para o seu e-mail.")}catch(err){$("lErr").textContent="Não encontramos esse e-mail."}};
+    try{await A.sendPasswordResetEmail(auth,e)}catch(err){if(err.code==="auth/too-many-requests"){$("lErr").textContent="Muitas tentativas. Espere alguns minutos.";return}}
+    toast("Se esse e-mail tiver cadastro, enviamos um link para criar uma nova senha.")};
 }
 
 A.onAuthStateChanged(auth,u=>{if(!u){U=null;L=null;PRODS=LEADS=DIAS=CAT=BAN=PROPRIOS=null;return telaLogin()}U=u;carregarConta(u)});
@@ -338,7 +339,7 @@ function flash(){const el=$("saved");if(!el)return;el.textContent="Salvo ✓";cl
 
 /* ---------- dados ---------- */
 async function carregarLeads(){if(LEADS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"leads"),orderBy("ts","desc"),limit(300)));LEADS=s.docs.map(d=>limparLead({...d.data(),id:d.id}))}
-async function carregarDias(){if(DIAS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"dias"),where("data",">=",dkey(daysAgo(29)))));DIAS={};s.docs.forEach(d=>DIAS[d.id]=d.data())}
+async function carregarDias(){if(DIAS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"dias"),where("data",">=",dkey(daysAgo(29))),where("data","<=",dkey(daysAgo(-1)))));DIAS=Object.create(null);s.docs.forEach(d=>DIAS[d.id]=d.data())}
 async function carregarProds(){if(PRODS)return;PRODS=(await C.lerAtacado(F,db)).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt",{numeric:true}))}
 async function carregarCat(){if(CAT)return;await carregarProds();CAT={};PRODS.forEach(p=>CAT[p.id]=p)}
 let BAN=null;async function carregarBanners(){if(BAN)return;const s=await getDoc(doc(db,"banners",U.uid));BAN=(s.exists()&&s.data().itens)||[]}
@@ -351,10 +352,11 @@ async function tInicio(){
   const oc=new Set(PR.ocultas||[]),noSite=PRODS.filter(p=>!oc.has(p.id)).length,nPE=(PR.pronta||[]).filter(i=>CAT[i]&&!oc.has(i)).length;
   const lim=daysAgo(29).getTime(),rec=LEADS.filter(l=>(toDate(l.ts)||new Date()).getTime()>=lim);
   const env=rec.filter(l=>l.status!=="abandonado"),ab=LEADS.filter(l=>l.status==="abandonado");
-  const vis=n=>{let s=0;for(let i=0;i<n;i++)s+=(DIAS[dkey(daysAgo(i))]||{}).visitas||0;return s};
-  const views={};Object.values(DIAS).forEach(d=>Object.entries(d.views||{}).forEach(([id,n])=>views[id]=(views[id]||0)+(Number(n)||0)));
+  const nv=x=>{x=Number(x);return Number.isFinite(x)&&x>0&&x<1e6?x:0};
+  const vis=n=>{let s=0;for(let i=0;i<n;i++)s+=nv((DIAS[dkey(daysAgo(i))]||{}).visitas);return s};
+  const views=Object.create(null);Object.values(DIAS).forEach(d=>Object.entries(d.views||{}).forEach(([id,n])=>{n=Number(n);if(Number.isFinite(n)&&n>0&&n<1e6)views[id]=(views[id]||0)+n}));
   const top=Object.entries(views).sort((a,b)=>b[1]-a[1]).slice(0,5),mt=top.length?top[0][1]:1;
-  const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>(DIAS[dkey(d)]||{}).visitas||0),mx=Math.max(1,...vals);
+  const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>nv((DIAS[dkey(d)]||{}).visitas)),mx=Math.max(1,...vals);
   $("main").innerHTML=`
     <div class="box"><h3>Link da sua loja</h3>
       <div class="linkbox"><code id="lk">${esc(lojaURL().replace(/^https?:\/\//,""))}</code></div>
@@ -414,7 +416,7 @@ function leadCard(l){
     <div class="items">${itens.map(i=>{const o=PR.nomes&&PR.nomes[i.id]&&PRODS?PRODS.find(x=>x.id===i.id):null;return `${Number(i.q)||0}x ${esc(i.nome)}${o?` <small class="orig">(Veraneio: ${esc(o.nome)})</small>`:""}`}).join(" · ")}</div>
     <div class="row"><a class="btn btn-wa btn-sm" href="https://wa.me/${waNum(l.tel)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">${I.chat}${l.status==="abandonado"?"Chamar no WhatsApp":"Abrir conversa"}</a>
     ${l.status==="abandonado"?`<button class="btn btn-ghost btn-sm" type="button" data-rec="${esc(l.id)}">Marcar como vendido</button>`:""}
-    <button class="btn btn-ghost btn-sm" type="button" data-del="${l.id}">Excluir</button></div></div>`;
+    <button class="btn btn-ghost btn-sm" type="button" data-del="${esc(l.id)}">Excluir</button></div></div>`;
 }
 
 /* ---------- APARÊNCIA ---------- */

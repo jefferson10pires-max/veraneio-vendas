@@ -786,3 +786,62 @@ test.describe("S01 segurança no navegador", () => {
     expect((await db(page))["lojas/u1"].ultimoAcesso).toBeUndefined();
   });
 });
+
+/* Correções da auditoria de segurança: cada teste reproduz o ataque e confere que ele não funciona mais. */
+test.describe("S02 auditoria de segurança — ADM", () => {
+  const duas = (extra: Record<string, any> = {}) => seed(40, {
+    "lojas/vit": { nome: "Vitima Joias", slug: "vitima", cor: "#043034", status: "ativa" },
+    "lojas/atk": { nome: "Atacante Joias", slug: "atacante", cor: "#043034", status: "ativa", uid: "vit" },
+    "contas/vit": { email: "vitima@exemplo.test" }, "contas/atk": { email: "atacante@exemplo.test" },
+    "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } }, ...extra,
+  });
+
+  test("S02-1 'Pausar' no cartão de uma loja que gravou uid de outra pausa só a própria loja", async ({ page }) => {
+    await preparar(page, { seed: duas() });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    const cartao = page.locator(".rescard", { hasText: "Atacante Joias" });
+    await cartao.getByRole("button", { name: "Pausar" }).click();
+    await expect.poll(async () => (await db(page))["lojas/atk"].status).toBe("pausada");
+    expect((await db(page))["lojas/vit"].status).toBe("ativa");
+  });
+
+  test("S02-2 uma loja com preços malformados não impede a republicação das outras", async ({ page }) => {
+    await preparar(page, { seed: duas({ "precos/atk": { margem: 0, arred: "", over: {}, pronta: 1 }, "precos/vit": { margem: 100, arred: "90", over: {} } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.getByText("Catálogo atualizado em todas as lojas")).toBeVisible({ timeout: 8000 });
+    const d = await db(page);
+    for (const u of ["u1", "vit", "atk"]) expect(d[`catalogos/${u}/partes/p0`].itens.length).toBeGreaterThan(0);
+  });
+
+  test("S02-3 cor da loja com código CSS não entra no estilo do ADM", async ({ page }) => {
+    const erros = await preparar(page, { seed: duas({ "lojas/atk": { nome: "Atacante Joias", slug: "atacante", status: "ativa", cor: "red;background-image:url(https://exemplo.test/x)" } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    const st = await page.locator(".rescard", { hasText: "Atacante Joias" }).locator(".logo").getAttribute("style");
+    expect(st).not.toContain("url(");
+    expect(erros).toEqual([]);
+  });
+
+  test("S02-4 recuperar senha não revela se o e-mail tem cadastro", async ({ page }) => {
+    await preparar(page);
+    await page.goto("/painel");
+    await page.getByLabel("E-mail").fill("ninguem@exemplo.test");
+    await page.getByRole("button", { name: /Esqueci/ }).click();
+    await expect(page.locator("#toast")).toContainText("Se esse e-mail tiver cadastro");
+  });
+
+  test("S02-5 contadores adulterados (negativos, enormes, data no futuro) não distorcem o painel", async ({ page }) => {
+    const hoje = new Date(), k = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    await preparar(page, { seed: seed(40, {
+      "lojas/u1/dias/9999-12-31": { data: "9999-12-31", uid: "u1", visitas: -1000000, views: { y3: 1e15 } },
+      [`lojas/u1/dias/${k(hoje)}`]: { data: k(hoje), uid: "u1", visitas: 7, views: { y1: 5, y2: "abc" } },
+    }) });
+    await entrar(page);
+    await expect(page.getByText("Link da sua loja")).toBeVisible();
+    await expect(page.locator("#main")).not.toContainText("1000000000000000");
+    await expect(page.locator("#main")).not.toContainText("Peça 3");
+  });
+});

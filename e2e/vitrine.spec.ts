@@ -315,3 +315,31 @@ test.describe("F11 nome trocado pela revendedora na loja", () => {
     expect(await page.evaluate(() => (window as any).__xss)).toBe(0);
   });
 });
+
+test.describe("S03 auditoria de segurança — vitrine", () => {
+  const JS = "javascript:localStorage.setItem('S03',1)";
+  test("S03-1 'Baixar foto' nunca abre endereço javascript: (catálogo nem foto própria)", async ({ page }) => {
+    const itens = [
+      { id: "x1", nome: "Peca Catalogo", cat: "Anéis", preco: 30, fotos: [JS] },
+      { id: "x2", nome: "Peca Propria", cat: "Anéis", preco: 30, fp: { n: 1, v: 1 } } as any,
+    ];
+    await abrir(page, itens, {}, { x2: [JS] });
+    await page.evaluate(() => { (window as any).__abriu = []; window.open = ((u: string) => { (window as any).__abriu.push(u); return null; }) as any; });
+    for (const nome of ["Peca Catalogo", "Peca Propria"]) {
+      await card(page, nome).locator(".name").click();
+      await page.getByRole("button", { name: "Baixar foto" }).click();
+      await expect(page.locator("#toast")).toContainText("Não foi possível baixar");
+      await page.keyboard.press("Escape");
+    }
+    expect(await page.evaluate(() => (window as any).__abriu)).toEqual([]);
+    expect(await page.evaluate(() => localStorage.getItem("S03"))).toBeNull();
+  });
+
+  test("S03-2 quantidade de fotos absurda (fp.n) não trava a ficha", async ({ page }) => {
+    const erros = await abrir(page, [{ id: "x3", nome: "Peca Muitas", cat: "Anéis", preco: 30, fp: { n: 1e7, v: 1 } } as any], {}, { x3: [FOTO_OK] });
+    await card(page, "Peca Muitas").locator(".name").click();
+    await expect(page.getByRole("button", { name: "Baixar foto" })).toBeVisible();
+    expect(await page.evaluate(() => document.querySelectorAll("img").length)).toBeLessThan(20);
+    expect(erros.filter((e) => !/'vrn:/.test(e))).toEqual([]);
+  });
+});

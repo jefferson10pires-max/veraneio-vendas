@@ -4,3 +4,11 @@ node_modules/
 test-results/
 playwright-report/
 e2e/arquivos/grande.jpg
+
+# segredos (nunca versionar)
+.env
+.env.*
+*.key
+*.pem
+*service-account*.json
+*-adminsdk-*.json

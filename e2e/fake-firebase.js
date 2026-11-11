@@ -33,6 +33,9 @@ export async function signInWithEmailAndPassword(a, email, senha) {
 }
 export async function createUserWithEmailAndPassword(a, email) { const uid = "u" + Math.random().toString(36).slice(2, 10); a.currentUser = { uid, email }; return { user: a.currentUser }; }
 export async function signOut(a) { a.currentUser = null; localStorage.removeItem(LU + ":" + a.nome); avisar(a); }
+export const inMemoryPersistence = { tipo: "memoria" };
+export function initializeAuth(app) { return getAuth(app); }
+export async function deleteUser(u) { window.__FAKE_APAGADOS = (window.__FAKE_APAGADOS || 0) + 1; }
 export async function sendPasswordResetEmail() { window.__FAKE_RESET = (window.__FAKE_RESET || 0) + 1; }
 
 /* ---------- firestore ---------- */
