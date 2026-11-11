@@ -651,3 +651,81 @@ test.describe("P10 renomear: segurança e combinações", () => {
     expect(it).toMatchObject({ nome: "Anel Lua", fp: { n: 1 }, fotos: [] });
   });
 });
+
+test.describe("P11 preço exato por peça (sem porcentagem)", () => {
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  const preco = async (page: Page, id: string) => catalogo(await db(page)).find((x: any) => x.id === id).preco;
+  const salvo = (page: Page) => expect(page.locator("#saved")).toHaveText(/Salvo/, { timeout: 8000 });
+  // Peça 1 = atacado R$ 21; Peça 2 = R$ 22 (seed: 20 + i%30)
+  test("P11-H1 preço exato vale como está e não muda com a margem padrão", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Preços").click();
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 1");
+    await page.getByLabel("Preço exato Peça 1", { exact: true }).fill("59,90");
+    await salvo(page);
+    expect((await db(page))["precos/u1"].fixo).toEqual({ y1: 59.9 });
+    expect(await preco(page, "y1")).toBe(59.9);
+    const linha = page.locator(".pr", { hasText: "Peça 1" }).first();
+    await expect(linha).toContainText("Loja R$ 59,90");
+    await expect(linha).toContainText("Lucro R$ 38,90");
+    await page.locator("#fM").fill("200");
+    await expect.poll(() => preco(page, "y2"), { timeout: 8000 }).toBe(66.9);   // 22 × 3 = 66 → 66,90
+    expect(await preco(page, "y1")).toBe(59.9);   // não mudou
+    expect(erros).toEqual([]);
+  });
+
+  test("P11-E1 preço abaixo do atacado avisa e a loja vende pelo atacado", async ({ page }) => {
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Preços").click();
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 1");
+    await page.getByLabel("Preço exato Peça 1", { exact: true }).fill("10");
+    await salvo(page);
+    await expect(page.locator(".pr", { hasText: "Peça 1" }).first()).toContainText("Abaixo do atacado: a loja vende a R$ 21,00");
+    expect(await preco(page, "y1")).toBe(21);
+  });
+
+  test("P11-E2 digitar margem apaga o preço exato e vice-versa; 'Usar margem padrão em todas' limpa tudo", async ({ page }) => {
+    await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Preços").click();
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 1");
+    const fx = page.getByLabel("Preço exato Peça 1", { exact: true }), mg = page.getByLabel("Margem Peça 1", { exact: true });
+    await fx.fill("59,90");
+    await mg.fill("50");
+    await expect(fx).toHaveValue("");
+    await expect.poll(async () => (await db(page))["precos/u1"].over, { timeout: 8000 }).toEqual({ y1: 50 });
+    let pr = (await db(page))["precos/u1"];
+    expect(pr.fixo).toEqual({});
+    await fx.fill("1.234,50");
+    await expect(mg).toHaveValue("");
+    await expect.poll(async () => (await db(page))["precos/u1"].fixo, { timeout: 8000 }).toEqual({ y1: 1234.5 });
+    pr = (await db(page))["precos/u1"];
+    expect(pr.over).toEqual({});
+    await page.getByRole("button", { name: "Usar margem padrão em todas" }).click();
+    await page.getByRole("button", { name: /Toque de novo/ }).click();
+    await expect.poll(async () => (await db(page))["precos/u1"].fixo, { timeout: 8000 }).toEqual({});
+    expect((await db(page))["precos/u1"].over).toEqual({});
+  });
+
+  test("P11-H2 preço exato pela janela Editar da aba Peças; ADM republica e mantém", async ({ page }) => {
+    await preparar(page, { seed: seed(40, { "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar peça: Peça 3", exact: true }).click();
+    await page.getByLabel("Preço exato na sua loja (R$, opcional)").fill("abc");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.getByRole("alert")).toContainText("Preço inválido");
+    await page.getByLabel("Preço exato na sua loja (R$, opcional)").fill("45");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await expect(page.locator("#pcStatus")).toHaveText(/Loja atualizada/, { timeout: 8000 });
+    await expect(page.locator(".pr", { hasText: "Peça 3" }).first()).toContainText("R$ 45,00");
+    expect(await preco(page, "y3")).toBe(45);
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.getByText("Catálogo atualizado em todas as lojas")).toBeVisible({ timeout: 8000 });
+    expect(await preco(page, "y3")).toBe(45);
+  });
+});

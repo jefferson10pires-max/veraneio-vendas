@@ -139,6 +139,9 @@ a{color:inherit}
 .pr .mgw{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)}
 .pr .mg{width:64px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 8px;text-align:right}
 .pr .mg.set{border-color:var(--brand);background:var(--soft)}
+.pr .ins{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.pr .mg.fx{width:84px}
+.pr .vals .warn{color:var(--danger);flex-basis:100%}
 .pr .vals{grid-column:2/-1;display:flex;gap:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
 .pr .vals b{color:var(--ink);font-weight:600}
 .pr .vals .profit b{color:var(--ok)}
@@ -266,7 +269,7 @@ const precoFinal=C.precoFinal;
 const mini=(u,t=120)=>/^https:\/\/images\.yampi\.me\//.test(u||"")?`https://images.yampi.io/unsafe/fit-in/${t}x${t}/filters:background_color(white):upscale()/${u}`:(u||"");
 
 /* ---------- estado ---------- */
-let U=null,L=null,PR={margem:100,arred:"90",over:{},pronta:[],ocultas:[],fotos:{},nomes:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
+let U=null,L=null,PR={margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],fotos:{},nomes:{}},PRODS=null,LEADS=null,DIAS=null,CAT=null;
 const ui={tab:"inicio",vez:0,pf:"todas",pcat:"Todas",pq:"",ltab:"abandonado",mq:"",mcat:"Todas",delArm:null};
 const lojaURL=()=>`${location.origin}/${L.slug}`;
 
@@ -300,7 +303,7 @@ async function carregarConta(u){
     const s=await getDoc(doc(db,"lojas",u.uid));
     if(!s.exists()){app.innerHTML=`<div class="center px"><div><h2>Sua conta ainda não tem loja</h2><p class="hint">Fale com a Veraneio para ativar.</p><button class="btn btn-ghost" id="out">Sair</button></div></div>`;$("out").onclick=()=>A.signOut(auth);return}
     L=s.data();
-    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},pronta:[],ocultas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
+    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
     updateDoc(doc(db,"lojas",u.uid),{ultimoAcesso:serverTimestamp()}).catch(()=>{});
     aplicarCor();shell();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
@@ -474,6 +477,9 @@ let PROPRIOS=null;
 async function carregarProprios(){if(PROPRIOS)return;PROPRIOS=(await C.lerProprios(F,db,U.uid)).map(p=>({...p,proprio:true}))
   .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),"pt",{numeric:true}))}
 const todas=()=>[...(PROPRIOS||[]),...(PRODS||[])];
+/* "1.234,56", "89,9", "R$ 60" → número */
+const lerReais=v=>Math.round(Number(String(v||"").replace(/[^\d,.]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",","."))*100)/100;
+const reaisTxt=n=>n>0?n.toFixed(2).replace(".",","):"";
 const precoLoja=p=>p.proprio?Number(p.preco)||0:precoFinal(p.preco,PR,p.id);
 /* nome que a cliente vê: a revendedora pode renomear as peças da Veraneio (PR.nomes) */
 const nomeLoja=p=>p.proprio?p.nome:(PR.nomes&&PR.nomes[p.id])||p.nome;
@@ -598,6 +604,8 @@ async function formPeca(id){
   const tinha=temFotoPropria(p),minhas=tinha?[...(await fotosProprias(id))]:[],nomeAtual=(PR.nomes&&PR.nomes[id])||"";
   abrirFolha("Editar peça",`<div class="field"><label for="ffN">Nome na sua loja</label><input id="ffN" maxlength="80" value="${esc(nomeAtual||p.nome)}">
       <span class="hint">Nome da Veraneio: ${esc(p.nome)}${nomeAtual?` · <button type="button" class="linkbtn" id="ffNV">Usar o nome da Veraneio</button>`:""}</span></div>
+    <div class="field"><label for="ffP">Preço exato na sua loja (R$, opcional)</label><input id="ffP" type="text" inputmode="decimal" autocomplete="off" value="${reaisTxt((PR.fixo||{})[id])}" placeholder="${esc(brl(precoFinal(p.preco,{...PR,fixo:{}},id)))} pela sua margem">
+      <span class="hint">Atacado ${brl(p.preco)}. Deixe em branco para usar a margem.</span></div>
     <div class="field"><span class="flabel">Fotos da Veraneio</span><div class="fotos">${(p.fotos||[]).slice(0,4).map(u=>`<figure><img src="${esc(mini(u,300))}" alt=""></figure>`).join("")||'<p class="hint">Sem foto.</p>'}</div></div>
     <div class="field"><span class="flabel">Suas fotos (aparecem no lugar das da Veraneio)</span><div class="fotos" id="ffG"></div>
       <span class="btn btn-ghost btn-sm file">${I.upload}Enviar foto<input type="file" id="ffIn" accept="image/*" multiple aria-label="Enviar foto"></span>
@@ -611,8 +619,11 @@ async function formPeca(id){
     const nome=$("ffN").value.replace(/\s+/g," ").trim();
     if(nome.length<2){$("ffErr").textContent="Escreva o nome da peça (ou toque em “Usar o nome da Veraneio”).";$("ffN").focus();return}
     b.disabled=true;
-    try{PR.fotos=PR.fotos||{};PR.nomes=PR.nomes||{};
+    const fxv=lerReais($("ffP").value);
+    if($("ffP").value.trim()&&!(fxv>0)){$("ffErr").textContent="Preço inválido. Use, por exemplo, 59,90.";$("ffP").focus();b.disabled=false;return}
+    try{PR.fotos=PR.fotos||{};PR.nomes=PR.nomes||{};PR.fixo=PR.fixo||{};
       if(nome===p.nome)delete PR.nomes[id];else PR.nomes[id]=nome;
+      if(fxv>0){PR.fixo[id]=fxv;if(PR.over)delete PR.over[id]}else delete PR.fixo[id];
       if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
       else if(tinha){await deleteDoc(doc(db,"lojas",U.uid,"fotos",id));delete PR.fotos[id]}
       delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. A loja atualiza em alguns segundos.")}
@@ -641,7 +652,7 @@ async function formPropria(id){
   const re=()=>{$("npG").innerHTML=gradeFotos(fotos)};re();ligarGrade($("npG"),fotos,re);
   $("npIn").onchange=async e=>{await lerArquivos(e.target,fotos,$("npMsg"));re()};
   $("npF").onsubmit=async e=>{e.preventDefault();
-    const nome=$("npN").value.trim(),preco=Math.round(Number(String($("npP").value).replace(/[^\d,.]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",","."))*100)/100;
+    const nome=$("npN").value.trim(),preco=lerReais($("npP").value);
     if(nome.length<2){$("npErr").textContent="Escreva o nome da peça.";$("npN").focus();return}
     if(!(preco>0)){$("npErr").textContent="Coloque o preço de venda.";$("npP").focus();return}
     const b=$("npOk");b.disabled=true;$("npErr").textContent="";
@@ -677,18 +688,23 @@ async function tPrecos(){
     <div class="field"><label for="fM">Margem padrão (todas as peças)</label><div class="slider-row"><input type="range" id="fM" min="0" max="300" step="5" value="${PR.margem}"><output class="num" id="oM"></output></div></div>
     <div class="field"><span class="flabel">Arredondar preço</span><div class="seg" id="seg">${[["none","Exato"],["90","Final ,90"],["int","Inteiro"]].map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${PR.arred===v}">${l}</button>`).join("")}</div></div>
     <span class="saved" id="saved" aria-live="polite"></span></div>
-  <div class="box"><h3>Margem por peça</h3>
+  <div class="box"><h3>Margem ou preço por peça</h3>
+    <p class="hint" style="margin:0 0 10px">Para uma peça ter outro valor, digite a <b>margem (%)</b> ou o <b>preço exato (R$)</b> que você quer. O preço exato não muda quando você mexe na margem padrão.</p>
     <div class="tools"><label class="sbox"><span class="sr">Pesquisar peça</span>${I.search}<input id="mq" type="search" placeholder="Pesquisar peça" value="${esc(ui.mq)}"></label>
       <select id="mcat" aria-label="Categoria">${["Todas",...cats].map(c=>`<option value="${esc(c)}" ${ui.mcat===c?"selected":""}>${c==="Todas"?"Todas as categorias":esc(c)}</option>`).join("")}</select></div>
     <div class="plist" id="plist"></div>
-    <div class="row"><span class="hint" style="flex:1">Deixe em branco para usar a margem padrão. Peças fora do site não aparecem aqui.</span><button class="btn btn-ghost btn-sm" type="button" id="clr">Usar padrão em todas</button></div></div>`;
+    <div class="row"><span class="hint" style="flex:1">Deixe em branco para usar a margem padrão. Peças fora do site não aparecem aqui.</span><button class="btn btn-ghost btn-sm" type="button" id="clr">Usar margem padrão em todas</button></div></div>`;
   $("fM").oninput=e=>{PR.margem=Number(e.target.value);salvarPrecos();atualizar()};
   $("seg").onclick=e=>{const v=e.target.closest("[data-v]")?.dataset.v;if(!v)return;PR.arred=v;$("seg").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===v));salvarPrecos();atualizar()};
   $("mq").oninput=e=>{ui.mq=e.target.value;ui.lim=40;linhas()};
   $("mcat").onchange=e=>{ui.mcat=e.target.value;ui.lim=40;linhas()};
-  $("clr").onclick=()=>{PR.over={};salvarPrecos();linhas()};
-  $("plist").oninput=e=>{const id=e.target.dataset.id;if(!id)return;const v=e.target.value;PR.over=PR.over||{};
-    if(v==="")delete PR.over[id];else PR.over[id]=Math.max(0,Math.min(500,Number(v)));salvarPrecos();atualizar()};
+  $("clr").onclick=()=>{if($("clr").dataset.arm!=="1"){$("clr").dataset.arm="1";$("clr").textContent="Toque de novo: apaga margens e preços por peça";setTimeout(()=>{const c=$("clr");if(c){c.dataset.arm="";c.textContent="Usar margem padrão em todas"}},4000);return}
+    PR.over={};PR.fixo={};salvarPrecos();linhas()};
+  $("plist").oninput=e=>{const t=e.target,id=t.dataset.id||t.dataset.fx;if(!id)return;PR.over=PR.over||{};PR.fixo=PR.fixo||{};
+    const row=t.closest(".pr");
+    if(t.dataset.id){const v=t.value;if(v==="")delete PR.over[id];else{PR.over[id]=Math.max(0,Math.min(500,Number(v)));delete PR.fixo[id];const f=row.querySelector("[data-fx]");if(f)f.value=""}}
+    else{const v=lerReais(t.value);if(!(v>0))delete PR.fixo[id];else{PR.fixo[id]=v;delete PR.over[id];const m=row.querySelector("[data-id]");if(m)m.value=""}}
+    salvarPrecos();atualizar()};
   linhas();
 }
 const noSite=()=>{const oc=new Set(PR.ocultas||[]),pe=new Set(PR.pronta||[]),so=PR.modo==="pronta";return PRODS.filter(p=>!oc.has(p.id)&&(!so||pe.has(p.id)))};
@@ -698,8 +714,9 @@ function linhas(){
   $("plist").innerHTML=(l.length?l.map(p=>{const o=(PR.over||{})[p.id];return `<div class="pr">
     <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(nomeLoja(p))}<small>${esc(p.cat||"")}</small></div>
-    <label class="mgw"><input class="mg num" type="number" inputmode="numeric" min="0" max="500" step="5" data-id="${esc(p.id)}" value="${o??""}" aria-label="Margem ${esc(p.nome)}">%</label>
-    <div class="vals"><span>Atacado <b class="num">${brl(p.preco)}</b></span><span>Loja <b class="num" data-pv="${esc(p.id)}"></b></span><span class="profit">Lucro <b class="num" data-lv="${esc(p.id)}"></b></span></div></div>`}).join("")
+    <div class="ins"><label class="mgw"><input class="mg num" type="number" inputmode="numeric" min="0" max="500" step="5" data-id="${esc(p.id)}" value="${o??""}" aria-label="Margem ${esc(nomeLoja(p))}">%</label>
+      <label class="mgw">R$<input class="mg fx num" type="text" inputmode="decimal" autocomplete="off" data-fx="${esc(p.id)}" value="${reaisTxt((PR.fixo||{})[p.id])}" placeholder="preço" aria-label="Preço exato ${esc(nomeLoja(p))}"></label></div>
+    <div class="vals"><span>Atacado <b class="num">${brl(p.preco)}</b></span><span>Loja <b class="num" data-pv="${esc(p.id)}"></b></span><span class="profit">Lucro <b class="num" data-lv="${esc(p.id)}"></b></span><span class="warn" data-wv="${esc(p.id)}" hidden></span></div></div>`}).join("")
     :`<p class="hint">Nenhuma peça encontrada.</p>`)+(todos.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${todos.length-l.length})</button>`:"");
   const m=$("mais");if(m)m.onclick=()=>{ui.lim+=60;linhas()};
   atualizar();
@@ -710,7 +727,9 @@ function atualizar(){
   $("oM").textContent=PR.margem+"%";$("sM").textContent=PR.margem+"%";
   $("plist").querySelectorAll("[data-id]").forEach(i=>{const id=i.dataset.id,p=CATI()[id];if(!p)return;const v=precoFinal(p.preco,PR,id);
     $("plist").querySelector(`[data-pv="${CSS.escape(id)}"]`).textContent=brl(v);$("plist").querySelector(`[data-lv="${CSS.escape(id)}"]`).textContent=brl(v-p.preco);
-    i.placeholder=PR.margem;const o=(PR.over||{})[id];i.classList.toggle("set",o!==undefined&&o!==null&&o!=="")});
+    const fx=(PR.fixo||{})[id];i.placeholder=fx>0?"—":PR.margem;const o=(PR.over||{})[id];i.classList.toggle("set",o!==undefined&&o!==null&&o!=="");
+    const f=$("plist").querySelector(`[data-fx="${CSS.escape(id)}"]`);if(f)f.classList.toggle("set",fx>0);
+    const w=$("plist").querySelector(`[data-wv="${CSS.escape(id)}"]`);if(w){const baixo=fx>0&&fx<p.preco;w.hidden=!baixo;w.textContent=baixo?`Abaixo do atacado: a loja vende a ${brl(p.preco)}`:""}});
   const ps=noSite();if(ps.length){let t=0,l=0;for(const p of ps){const v=precoFinal(p.preco,PR,p.id);t+=v;l+=v-p.preco}$("sP").textContent=brl(t/ps.length);$("sL").textContent=brl(l/ps.length)}
 }
 let _cati=null,_catiDe=null;const CATI=()=>{if(_catiDe!==PRODS){_cati={};PRODS.forEach(p=>_cati[p.id]=p);_catiDe=PRODS}return _cati};
@@ -725,8 +744,9 @@ function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;sa
       const ids=new Set(todas().map(p=>p.id)),oc=(PR.ocultas||[]).filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
       const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
       const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
-      PR.ocultas=oc;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;
-      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},pronta:pe,ocultas:oc,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
+      const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
+      PR.ocultas=oc;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
+      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},fixo:fx,pronta:pe,ocultas:oc,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
       const el=$("saved");if(el)el.textContent="Atualizando a loja…";
       await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);flash();status("Loja atualizada ✓")}
     catch(e){console.error(e);status("Não foi possível salvar. Confira a internet.");toast("Não foi possível salvar. Confira a internet e tente de novo.")}

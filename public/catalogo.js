@@ -11,6 +11,9 @@ export const POR_PARTE = 250;
 /** preço final da loja: margem (padrão ou por peça) sobre o atacado, com arredondamento; nunca abaixo do atacado */
 export function precoFinal(base, pr, id) {
   base = Number(base) || 0;
+  // preço fixo digitado pela revendedora para esta peça: vale como está (sem margem nem arredondamento), nunca abaixo do atacado
+  const fx = pr.fixo && Number(pr.fixo[id]);
+  if (fx > 0) return Math.max(Math.round(fx * 100) / 100, base);
   const o = pr.over && pr.over[id];
   const m = Math.max(0, (o === undefined || o === null || o === "") ? Number(pr.margem || 0) : Number(o));
   let v = base * (1 + m / 100);
@@ -55,7 +58,7 @@ export function opcoesProprias(txt, nome = "Tamanhos") {
  * `fp:{n,v}` (quantas fotos e versão) e a loja busca as fotos quando precisa mostrar.
  */
 export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
-  const pr = { margem: 100, arred: "90", over: {}, pronta: [], ocultas: [], fotos: {}, nomes: {}, ...(precos || {}) };
+  const pr = { margem: 100, arred: "90", over: {}, fixo: {}, pronta: [], ocultas: [], fotos: {}, nomes: {}, ...(precos || {}) };
   const pe = new Set(pr.pronta || []), oc = new Set(pr.ocultas || []), fo = pr.fotos || {};
   if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const so = pr.modo === "pronta";
