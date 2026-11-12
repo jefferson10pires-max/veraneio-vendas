@@ -1,13 +1,13 @@
 // Testes das regras do Firestore no emulador oficial (nada toca no banco real).
 // Rodar: npx firebase emulators:exec --only firestore --project demo-regras "node --test e2e/regras.test.mjs"
 import { initializeTestEnvironment, assertSucceeds, assertFails } from "@firebase/rules-unit-testing";
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, serverTimestamp, increment, Timestamp } from "firebase/firestore";
-import { readFileSync } from "node:fs";
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, serverTimestamp, increment, deleteField, Timestamp } from "firebase/firestore";
+import { readFileSync, existsSync } from "node:fs";
 import { test, before, after, beforeEach } from "node:test";
 
 let env;
 before(async () => {
-  env = await initializeTestEnvironment({ projectId: "demo-regras", firestore: { rules: readFileSync("firestore.rules", "utf8") } });
+  env = await initializeTestEnvironment({ projectId: "demo-regras", firestore: { rules: readFileSync(process.env.REGRAS || "firestore.rules", "utf8") } });
 });
 after(async () => { await env.cleanup(); });
 beforeEach(async () => {
@@ -214,4 +214,49 @@ test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertFails(getDoc(doc(visitante(), "sistema/yampi")));
   await assertSucceeds(updateDoc(doc(adm(), "lojas/rev"), { status: "pausada" }));
   await assertSucceeds(setDoc(doc(adm(), "catalogos/rev/partes/p0"), { itens: [] }));
+});
+
+// --- R99: tudo que o app gravou nos testes do painel/ADM (e2e/escritas-gravadas.json, gerado por `npm test`)
+// é reproduzido aqui com as regras reais. Pega casos em que o app grava algo que as regras recusam.
+const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const vivo = (v) => {
+  if (Array.isArray(v)) return v.map(vivo);
+  if (v && typeof v === "object") {
+    if ("__ts" in v && Object.keys(v).length === 1) return Timestamp.fromMillis(v.__ts);
+    const o = {}; for (const k in v) o[k] = vivo(v[k]); return o;
+  }
+  return v;
+};
+const gravar = (v) => {
+  if (Array.isArray(v)) return v.map(gravar);
+  if (v && typeof v === "object") {
+    if ("__ts" in v && Object.keys(v).length === 1) return serverTimestamp();
+    if ("__inc" in v) return increment(v.__inc);
+    if ("__del" in v) return deleteField();
+    const o = {}; for (const k in v) o[k] = gravar(v[k]); return o;
+  }
+  return v;
+};
+const GRAV = existsSync("e2e/escritas-gravadas.json") ? JSON.parse(readFileSync("e2e/escritas-gravadas.json", "utf8")) : [];
+test(`R99 as ${GRAV.reduce((n, g) => n + g.log.length, 0)} gravações feitas pelo app nos testes são aceitas pelas regras`, async () => {
+  const falhas = [];
+  for (const g of GRAV) {
+    await env.clearFirestore();
+    await env.withSecurityRulesDisabled(async (c) => { const db = c.firestore(); for (const [p, v] of Object.entries(g.seed)) await setDoc(doc(db, p), vivo(v)); });
+    const ids = {};
+    for (const w of g.log) {
+      let p = w.path.replace(/\/dias\/\d{4}-\d{2}-\d{2}$/, `/dias/${hoje()}`);
+      p = p.replace(/(\/leads\/)([^/]+)$/, (m, a, id) => a + (ids[id] ||= (id + "A".repeat(20)).replace(/[^A-Za-z0-9]/g, "A").slice(0, 20)));
+      let data = w.data ? gravar(w.data) : null;
+      if (data && /\/dias\//.test(p) && data.data) data.data = hoje();
+      const db = w.uid ? env.authenticatedContext(w.uid).firestore() : env.unauthenticatedContext().firestore();
+      const r = doc(db, p);
+      try { await (w.op === "delete" ? deleteDoc(r) : w.op === "update" ? updateDoc(r, data) : setDoc(r, data, w.merge ? { merge: true } : undefined)); }
+      catch (e) {
+        falhas.push(`[${g.teste}] ${w.op} ${p} como ${w.uid || "visitante"} (${w.pagina}): ${String(e.code || e.message).slice(0, 80)}`);
+        await env.withSecurityRulesDisabled(async (c) => { const d2 = c.firestore(), r2 = doc(d2, p); try { await (w.op === "delete" ? deleteDoc(r2) : w.op === "update" ? updateDoc(r2, data) : setDoc(r2, data, w.merge ? { merge: true } : undefined)); } catch (e2) {} });
+      }
+    }
+  }
+  if (falhas.length) throw new Error(`${falhas.length} gravação(ões) recusada(s):\n` + [...new Set(falhas)].slice(0, 40).join("\n"));
 });

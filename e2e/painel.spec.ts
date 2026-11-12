@@ -23,6 +23,18 @@ function seed(n = 800, extra: Record<string, any> = {}) {
 }
 const USERS = { "rev@teste.com": { senha: "senha123", uid: "u1" }, "adm@teste.com": { senha: "senha123", uid: "adm1" } };
 
+/* Cada teste grava o que o app escreveu no banco simulado; o arquivo é reproduzido no emulador
+   com as regras reais (e2e/regras.test.mjs, R99), para pegar gravações que as regras recusariam. */
+const GRAVADAS: any[] = [];
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== "passed") return;
+  try {
+    const r = await page.evaluate(() => ({ seed: (window as any).__FAKE_SEED || null, log: JSON.parse(localStorage.getItem("fake:log") || "[]") }));
+    if (r.seed && r.log.length) { const s: any = {}; for (const k in r.seed) if (!k.startsWith("atacado/")) s[k] = r.seed[k]; GRAVADAS.push({ teste: info.title, seed: s, log: r.log }); }
+  } catch (e) {}
+});
+test.afterAll(() => { if (GRAVADAS.length) fs.writeFileSync("e2e/escritas-gravadas.json", JSON.stringify(GRAVADAS)); });
+
 async function preparar(page: Page, o: { seed?: any; delay?: any; falha?: string } = {}) {
   const erros: string[] = [];
   page.on("pageerror", (e) => erros.push(String(e)));
@@ -283,6 +295,45 @@ test.describe("P05 promoções da Veraneio e preço travado", () => {
     expect(preco(d, "y1")).toBe(15);
     expect(preco(d, "y2")).toBe(99);
     expect(naLoja(d, "y1")).toBe(30.9);
+  });
+
+  test("E01-H1 peça que a revendedora tirou do site ou excluiu não volta quando o estoque da Yampi é atualizado", async ({ page }) => {
+    // revendedora tira y3 do site e exclui y4 pelo painel; depois o ADM atualiza as peças da Yampi
+    await abrirAdm(page);
+    await page.goto("/painel");
+    await page.getByLabel("E-mail").fill("rev@teste.com"); await page.getByLabel("Senha").fill("senha123");
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.locator("#nav").getByRole("button", { name: "Peças", exact: true }).click();
+    await page.getByRole("switch", { name: "No site: Peça 3", exact: true }).uncheck();
+    await page.getByRole("button", { name: /Editar peça: Peça 4$/ }).click();
+    await page.getByRole("button", { name: "Excluir da minha loja" }).click();
+    await page.getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect.poll(async () => (await db(page))["precos/u1"]?.excluidas, { timeout: 10000 }).toEqual(["y4"]);
+    expect((await db(page))["precos/u1"].ocultas).toEqual(expect.arrayContaining(["y3", "y4"]));
+    await page.goto("/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await importar(page);
+    const d = await db(page);
+    expect(naLoja(d, "y3")).toBeUndefined();
+    expect(naLoja(d, "y4")).toBeUndefined();
+    expect(naLoja(d, "y5")).toBeDefined();
+    expect(d["precos/u1"].ocultas).toEqual(expect.arrayContaining(["y3", "y4"]));
+    expect(d["precos/u1"].excluidas).toEqual(["y4"]);
+  });
+
+  test("E01-H2 peça que o ADM desativou ou excluiu continua fora depois da atualização da Yampi", async ({ page }) => {
+    await abrirAdm(page);
+    await page.locator(".prow", { hasText: "Peça 7" }).first().getByRole("button", { name: "Desativar" }).click();
+    await expect.poll(async () => (await db(page))["produtos/y7"].ativo).toBe(false);
+    await page.locator(".prow", { hasText: "Peça 8" }).first().getByRole("button", { name: "Excluir" }).click();
+    await page.locator(".prow", { hasText: "Peça 8" }).first().getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect.poll(async () => (await db(page))["produtos/y8"].excluido).toBe(true);
+    await importar(page);
+    const d = await db(page);
+    expect([d["produtos/y7"].ativo, d["produtos/y8"].ativo, d["produtos/y8"].excluido]).toEqual([false, false, true]);
+    expect(naLoja(d, "y7")).toBeUndefined();
+    expect(naLoja(d, "y8")).toBeUndefined();
+    expect(naLoja(d, "y9")).toBeDefined();
   });
 
   test("P05-H3 mudar o preço à mão trava a peça; destravar volta a seguir a Yampi", async ({ page }) => {

@@ -6,6 +6,16 @@ const lerDB = () => { try { const s = localStorage.getItem(LS); if (s) return JS
 const gravarDB = (d) => localStorage.setItem(LS, JSON.stringify(d));
 const atraso = async (path) => { const d = window.__FAKE_DELAY || {}; for (const k in d) if (path.startsWith(k)) await sleep(d[k]); await sleep(5); };
 const conta = (path) => { window.__FAKE_ESCRITAS = window.__FAKE_ESCRITAS || []; window.__FAKE_ESCRITAS.push(path); };
+/* registro de cada gravação (quem gravou, onde e o quê) para conferir depois contra as regras reais no emulador */
+const registrar = (op, path, data, merge) => {
+  try {
+    const pg = location.pathname, nome = pg === "/painel" ? "[DEFAULT]" : pg === "/adm" ? "adm" : null;
+    let uid = null; if (nome) { try { const u = JSON.parse(localStorage.getItem(LU + ":" + nome) || "null"); uid = u && u.uid || null; } catch (e) {} } // cada módulo do SDK é uma cópia: o login fica no localStorage
+    const l = JSON.parse(localStorage.getItem("fake:log") || "[]");
+    l.push({ op, path, data: data === undefined ? null : data, merge: !!merge, pagina: pg, uid });
+    localStorage.setItem("fake:log", JSON.stringify(l));
+  } catch (e) {}
+};
 
 /* ---------- app ---------- */
 export function initializeApp(cfg, nome = "[DEFAULT]") { return { nome, cfg }; }
@@ -86,9 +96,9 @@ export async function getDocs(q) {
   return { docs: out, size: out.length, empty: !out.length };
 }
 const aplicar = (atual, data) => { const o = { ...(atual || {}) }; for (const k in data) { const v = data[k]; if (v && typeof v === "object" && "__inc" in v) o[k] = (Number(o[k]) || 0) + v.__inc; else if (v && typeof v === "object" && "__del" in v) delete o[k]; else o[k] = v; } return o; };
-export async function setDoc(ref, data, opt) { await atraso(ref.path); const d = lerDB(); d[ref.path] = opt && opt.merge ? aplicar(d[ref.path], data) : aplicar({}, data); gravarDB(d); conta(ref.path); }
-export async function updateDoc(ref, data) { await atraso(ref.path); const d = lerDB(); if (!d[ref.path]) { const e = new Error("not-found"); e.code = "not-found"; throw e; } d[ref.path] = aplicar(d[ref.path], data); gravarDB(d); conta(ref.path); }
-export async function deleteDoc(ref) { const d = lerDB(); delete d[ref.path]; gravarDB(d); conta(ref.path); }
+export async function setDoc(ref, data, opt) { await atraso(ref.path); registrar("set", ref.path, data, opt && opt.merge); const d = lerDB(); d[ref.path] = opt && opt.merge ? aplicar(d[ref.path], data) : aplicar({}, data); gravarDB(d); conta(ref.path); }
+export async function updateDoc(ref, data) { await atraso(ref.path); const d = lerDB(); if (!d[ref.path]) { const e = new Error("not-found"); e.code = "not-found"; throw e; } registrar("update", ref.path, data); d[ref.path] = aplicar(d[ref.path], data); gravarDB(d); conta(ref.path); }
+export async function deleteDoc(ref) { registrar("delete", ref.path); const d = lerDB(); delete d[ref.path]; gravarDB(d); conta(ref.path); }
 export function writeBatch() {
   const ops = [];
   return {

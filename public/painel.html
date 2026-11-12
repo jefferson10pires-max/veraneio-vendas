@@ -787,7 +787,7 @@ function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;sa
       const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
       const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
       PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
-      await setDoc(doc(db,"precos",U.uid),{margem:PR.margem,arred:PR.arred,over:PR.over||{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
+      await setDoc(doc(db,"precos",U.uid),{margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
       const el=$("saved");if(el)el.textContent="Atualizando a loja…";
       await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);flash();status("Loja atualizada ✓")}
     catch(e){console.error(e);status("Não foi possível salvar. Confira a internet.");toast("Não foi possível salvar. Confira a internet e tente de novo.")}

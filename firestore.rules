@@ -67,7 +67,7 @@ service cloud.firestore {
         && d.get('pronta', []) is list && d.get('ocultas', []) is list
         && d.get('excluidas', []) is list
         && d.get('pronta', []).size() <= 5000 && d.get('ocultas', []).size() <= 5000 && d.get('excluidas', []).size() <= 5000
-        && d.get('modo', 'todo') in ['todo', 'pronta'];
+        && d.get('modo', 'catalogo') in ['catalogo', 'todo', 'pronta'];
     }
     // Aviso da Veraneio no painel de todas as revendedoras (só o ADM escreve)
     function avisoOk(d) {
@@ -123,7 +123,7 @@ service cloud.firestore {
         && (!k.hasAny(['cor']) || isCor(d.cor))
         && (!k.hasAny(['nome']) || (d.nome is string && d.nome.size() <= 80))
         && (!k.hasAny(['logo']) || d.logo == null || isFoto(d.logo))
-        && (!k.hasAny(['modo']) || d.modo in ['todo', 'pronta']);
+        && (!k.hasAny(['modo']) || d.modo in ['catalogo', 'todo', 'pronta']);
     }
     match /lojas/{uid} {
       allow read: if true;
