@@ -915,3 +915,50 @@ test.describe("D02 revendedora exclui peça da Veraneio da própria loja", () =>
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("A01 aviso do ADM no Início das revendedoras", () => {
+  test("A01-H1 ADM cria aviso com imagem, título, mensagem e link; revendedora vê no Início", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.getByRole("button", { name: "Criar aviso" }).click();
+    await page.getByLabel("Escolher imagem do banner").setInputFiles("e2e/arquivos/retrato.png");
+    await expect(page.locator("#avMsg")).toHaveText("Imagem pronta.");
+    await page.getByLabel("Título").fill("Coleção Verão chegou");
+    await page.getByLabel("Mensagem").fill("Peças novas no catálogo.\nAproveitem!");
+    await page.getByLabel("Link do botão (opcional)").fill("https://veraneio.com.br/verao");
+    await page.getByLabel("Texto do botão").fill("Ver coleção");
+    await page.getByLabel("Mostrar no painel das revendedoras").check();
+    await expect(page.locator("#avPrev")).toContainText("Coleção Verão chegou");
+    await page.getByRole("button", { name: "Salvar aviso" }).click();
+    await expect(page.locator("#toast")).toContainText("Aviso publicado");
+    const a = (await db(page))["avisos/geral"];
+    expect(a.ativo).toBe(true);
+    expect(a.img).toMatch(/^data:image\/jpeg;base64,/);
+    expect(a.img.length).toBeLessThan(300000);
+    await expect(page.locator("#main")).toContainText("Aparecendo no painel");
+    await entrar(page);
+    const p2 = page;
+    const av = p2.getByRole("region", { name: "Aviso da Veraneio" });
+    await expect(av).toContainText("Coleção Verão chegou");
+    await expect(av.getByRole("link", { name: "Ver coleção" })).toHaveAttribute("href", "https://veraneio.com.br/verao");
+    await expect(av.locator("img")).toHaveCount(1);
+    expect(erros).toEqual([]);
+  });
+
+  test("A01-H2 aviso desligado não aparece; texto com HTML aparece como texto", async ({ page }) => {
+    await preparar(page, { seed: seed(40, { "avisos/geral": { ativo: false, titulo: "Escondido", texto: "x" } }) });
+    await entrar(page);
+    await expect(page.getByText("Link da sua loja")).toBeVisible();
+    await expect(page.getByRole("region", { name: "Aviso da Veraneio" })).toHaveCount(0);
+  });
+
+  test("A01-N1 título com HTML e link javascript: não viram código", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "avisos/geral": { ativo: true, titulo: '<img src=x onerror="window.__pw=1">Oi', texto: "<b>t</b>", link: "javascript:alert(1)" } }) });
+    await entrar(page);
+    const av = page.getByRole("region", { name: "Aviso da Veraneio" });
+    await expect(av).toContainText('<img src=x onerror="window.__pw=1">Oi');
+    await expect(av.getByRole("link")).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).__pw)).toBeUndefined();
+    expect(erros).toEqual([]);
+  });
+});

@@ -65,6 +65,11 @@ a{color:inherit}
 .err{color:var(--danger);font-size:13.5px}
 .saved{font-size:13px;color:var(--ok);min-height:1.2em}
 .note{background:var(--soft);border-radius:12px;padding:12px 14px;font-size:13.5px}
+.aviso{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.aviso img{display:block;width:100%;max-height:340px;object-fit:cover}
+.aviso .av-c{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.aviso .av-k{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.aviso .av-c b{font-size:17px}.aviso .av-c p{margin:0;white-space:pre-line;font-size:14.5px;line-height:1.5}
 
 .linkbox{display:flex;align-items:center;gap:10px;background:var(--soft);border-radius:12px;padding:12px 14px;min-width:0}
 .linkbox code{flex:1;min-width:0;font-family:inherit;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -345,9 +350,16 @@ async function carregarCat(){if(CAT)return;await carregarProds();CAT={};PRODS.fo
 let BAN=null;async function carregarBanners(){if(BAN)return;const s=await getDoc(doc(db,"banners",U.uid));BAN=(s.exists()&&s.data().itens)||[]}
 
 /* ---------- INÍCIO ---------- */
+/* aviso da Veraneio (o ADM escreve; igual para todas as revendedoras) */
+let AVISO=null;
+async function carregarAviso(){try{const s=await getDoc(doc(db,"avisos","geral"));AVISO=s.exists()?s.data():{}}catch(e){console.error(e);AVISO={}}}
+function avisoHTML(){const a=AVISO||{};if(!a.ativo||!(a.img||a.titulo||a.texto))return "";
+  const lk=/^https:\/\/[^\s"<>]+$/.test(String(a.link||""));
+  return `<div class="aviso" role="region" aria-label="Aviso da Veraneio">${a.img&&/^(data:image\/|https:)/.test(a.img)?`<img src="${esc(a.img)}" alt="">`:""}<div class="av-c"><span class="av-k">Aviso da Veraneio</span>${a.titulo?`<b>${esc(a.titulo)}</b>`:""}${a.texto?`<p>${esc(a.texto)}</p>`:""}
+    ${lk?`<a class="btn btn-brand btn-sm" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.botao||"Saiba mais")}</a>`:""}</div></div>`}
 async function tInicio(){
   const ok=vez();loading();
-  try{await Promise.all([carregarLeads(),carregarDias(),carregarCat()])}catch(e){console.error(e);if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os números agora.</div>`;return}
+  try{await Promise.all([carregarLeads(),carregarDias(),carregarCat(),carregarAviso()])}catch(e){console.error(e);if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os números agora.</div>`;return}
   if(!ok())return;navHTML();
   const oc=new Set(PR.ocultas||[]),noSite=PRODS.filter(p=>!oc.has(p.id)).length,nPE=(PR.pronta||[]).filter(i=>CAT[i]&&!oc.has(i)).length;
   const lim=daysAgo(29).getTime(),rec=LEADS.filter(l=>(toDate(l.ts)||new Date()).getTime()>=lim);
@@ -357,7 +369,7 @@ async function tInicio(){
   const views=Object.create(null);Object.values(DIAS).forEach(d=>Object.entries(d.views||{}).forEach(([id,n])=>{n=Number(n);if(Number.isFinite(n)&&n>0&&n<1e6)views[id]=(views[id]||0)+n}));
   const top=Object.entries(views).sort((a,b)=>b[1]-a[1]).slice(0,5),mt=top.length?top[0][1]:1;
   const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>nv((DIAS[dkey(d)]||{}).visitas)),mx=Math.max(1,...vals);
-  $("main").innerHTML=`
+  $("main").innerHTML=`${avisoHTML()}
     <div class="box"><h3>Link da sua loja</h3>
       <div class="linkbox"><code id="lk">${esc(lojaURL().replace(/^https?:\/\//,""))}</code></div>
       <div class="row"><button class="btn btn-brand btn-sm" type="button" id="shr">${I.share}Compartilhar</button><button class="btn btn-ghost btn-sm" type="button" id="cpy">${I.copy}Copiar link</button></div>

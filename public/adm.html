@@ -202,6 +202,11 @@ a{color:inherit}
 .sheet .sh-foot .btn{flex:1}
 @media (min-width:760px){.sheet{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:min(620px,calc(100% - 48px));max-height:calc(100% - 64px);border-radius:16px;overflow:hidden;padding-top:0}}
 .check{display:flex;align-items:center;gap:10px;font-size:15px;min-height:44px}
+.aviso{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--soft)}
+.aviso img{display:block;width:100%;max-height:340px;object-fit:cover}
+.aviso .av-c{padding:14px 16px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.aviso .av-c b{font-size:16px}.aviso .av-c p{margin:0;white-space:pre-line;font-size:14.5px;line-height:1.5}
+.tg.ok{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
 .check input{width:22px;height:22px;accent-color:var(--brand)}
 .fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
 .fotos figure{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg)}
@@ -272,7 +277,7 @@ const I={home:sv('<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>'),users:sv('<circle 
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'};
 const BANHOS=["Ouro 18k","Ródio branco","Ródio negro","Ouro rosé","Prata"];
 
-let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={};
+let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={},AVISO=null;
 const ui={tab:"geral",q:"",st:"todas",pq:"",pcat:"Todas",pst:"todos",pend:false};
 
 /* ---------- login ---------- */
@@ -358,11 +363,58 @@ async function carregar(){
 const ag=uid=>AGG[uid]||{acessos:0,pedidos:0,aband:0,valor:0,atacado:0};
 
 /* ---------- VISÃO GERAL ---------- */
+/* aviso que aparece no Início do painel de todas as revendedoras */
+const linkOk=u=>/^https:\/\/[^\s"<>]+$/.test(String(u||""));
+async function lerAviso(){try{const s=await getDoc(doc(db,"avisos","geral"));AVISO=s.exists()?s.data():{}}catch(e){console.error(e);AVISO=AVISO||{}}}
+function avisoHTML(a){if(!a||!(a.img||a.titulo||a.texto))return "";
+  return `<div class="aviso">${a.img?`<img src="${esc(a.img)}" alt="">`:""}<div class="av-c">${a.titulo?`<b>${esc(a.titulo)}</b>`:""}${a.texto?`<p>${esc(a.texto)}</p>`:""}
+    ${linkOk(a.link)?`<a class="btn btn-brand btn-sm" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.botao||"Saiba mais")}</a>`:""}</div></div>`}
+async function fotoAviso(file){
+  const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)});
+  const k=Math.min(1200/img.width,1200/img.height,1),c=document.createElement("canvas");c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+  const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);
+  let q=.85,u=c.toDataURL("image/jpeg",q);while(u.length>250000&&q>.4){q-=.08;u=c.toDataURL("image/jpeg",q)}
+  if(u.length>290000)throw new Error("grande");return u}
+function formAviso(){
+  const a={ativo:false,titulo:"",texto:"",img:null,link:"",botao:"",...(AVISO||{})};
+  abrir(`${head("Aviso para as revendedoras")}<form class="sh-body px" id="avf" novalidate>
+    <span class="hint">Aparece no topo da aba Início do painel de todas as revendedoras.</span>
+    <div class="field"><span class="flabel">Imagem do banner (opcional)</span><div id="avImg"></div>
+      <div class="row"><label class="btn btn-ghost btn-sm" style="position:relative;overflow:hidden">Escolher imagem<input type="file" id="avIn" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer" aria-label="Escolher imagem do banner"></label><button class="btn btn-ghost btn-sm" type="button" id="avRm">Tirar imagem</button></div>
+      <span class="hint" id="avMsg">Formato deitado funciona melhor (ex.: 1200 × 500).</span></div>
+    <div class="field"><label for="avT">Título</label><input id="avT" maxlength="80" value="${esc(a.titulo)}" placeholder="Ex.: Lançamento da coleção Verão"></div>
+    <div class="field"><label for="avX">Mensagem</label><textarea id="avX" rows="4" maxlength="600" placeholder="O que você quer avisar">${esc(a.texto)}</textarea></div>
+    <div class="two"><div class="field"><label for="avL">Link do botão (opcional)</label><input id="avL" type="url" inputmode="url" value="${esc(a.link)}" placeholder="https://…"></div>
+      <div class="field"><label for="avB">Texto do botão</label><input id="avB" maxlength="30" value="${esc(a.botao)}" placeholder="Saiba mais"></div></div>
+    <label class="check"><input type="checkbox" id="avA" ${a.ativo?"checked":""}>Mostrar no painel das revendedoras</label>
+    <div class="field"><span class="flabel">Prévia</span><div id="avPrev"></div></div>
+    <span class="err" id="avErr"></span></form>
+    <div class="sh-foot px"><button class="btn btn-ghost" type="button" data-x>Cancelar</button><button class="btn btn-brand" type="submit" form="avf" id="avOk">Salvar aviso</button></div>`);
+  const ler=()=>({ativo:$("avA").checked,titulo:$("avT").value.trim(),texto:$("avX").value.trim(),img:a.img||null,link:$("avL").value.trim(),botao:$("avB").value.trim()});
+  const prev=()=>{$("avImg").innerHTML=a.img?`<img src="${esc(a.img)}" alt="" style="display:block;width:100%;max-height:200px;object-fit:cover;border-radius:12px;border:1px solid var(--line)">`:"";$("avRm").hidden=!a.img;
+    const h=avisoHTML(ler());$("avPrev").innerHTML=h||'<span class="hint">Escreva um título, uma mensagem ou escolha uma imagem.</span>'};
+  prev();$("avf").oninput=prev;
+  $("avRm").onclick=()=>{a.img=null;prev()};
+  $("avIn").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;$("avMsg").textContent="Preparando a imagem…";
+    try{a.img=await fotoAviso(f);$("avMsg").textContent="Imagem pronta.";prev()}catch(err){$("avMsg").textContent="Não deu para usar essa imagem. Tente outra (JPG ou PNG)."}};
+  $("avf").onsubmit=async e=>{e.preventDefault();const d=ler();
+    if(d.link&&!linkOk(d.link)){$("avErr").textContent="O link precisa começar com https://";return}
+    if(d.ativo&&!(d.img||d.titulo||d.texto)){$("avErr").textContent="Coloque um título, uma mensagem ou uma imagem.";return}
+    $("avOk").disabled=true;
+    try{await setDoc(doc(db,"avisos","geral"),{...d,em:serverTimestamp()});AVISO=d;fechar();tGeral();toast(d.ativo?"Aviso publicado no painel das revendedoras.":"Aviso salvo (escondido).")}
+    catch(err){console.error(err);$("avErr").textContent="Não foi possível salvar. Confira a internet.";$("avOk").disabled=false}};
+}
 function tGeral(){
+  if(AVISO===null){lerAviso().then(()=>{if(ui.tab==="geral")tGeral()})}
   const ativas=LOJAS.filter(l=>l.status==="ativa"),sum=k=>LOJAS.reduce((s,l)=>s+ag(l.uid)[k],0);
   const top=LOJAS.filter(l=>ag(l.uid).valor>0).sort((a,b)=>ag(b.uid).valor-ag(a.uid).valor).slice(0,8),mx=top.length?ag(top[0].uid).valor:1;
   const att=ativas.filter(l=>{const n=diasDesde(l.ultimoAcesso);return n===null||n>=7||ag(l.uid).aband>=5});
-  $("main").innerHTML=`<div class="box"><h2>Últimos 30 dias</h2><div class="kpis">
+  const av=AVISO||{},temAv=av.img||av.titulo||av.texto;
+  $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h3>Aviso para as revendedoras</h3>
+        <span class="tg ${av.ativo&&temAv?"ok":""}">${AVISO===null?"carregando…":av.ativo&&temAv?"Aparecendo no painel":"Nenhum aviso no ar"}</span></div>
+      ${temAv?avisoHTML(av):'<span class="hint">Coloque um banner com recado, novidade ou campanha. Ele aparece no topo do Início de todas as revendedoras.</span>'}
+      <div class="row"><button class="btn btn-brand btn-sm" type="button" id="avEd">${temAv?"Editar aviso":"Criar aviso"}</button></div></div>
+    <div class="box"><h2>Últimos 30 dias</h2><div class="kpis">
       <div class="kpi"><span>Lojas ativas</span><b class="num">${ativas.length}</b><small>de ${LOJAS.length} cadastradas</small></div>
       <div class="kpi"><span>Acessos nas lojas</span><b class="num">${int(sum("acessos"))}</b><small>todas as lojas</small></div>
       <div class="kpi"><span>Pedidos enviados</span><b class="num">${int(sum("pedidos"))}</b><small>${brl(sum("valor"))} no preço das lojas</small></div>
@@ -374,7 +426,8 @@ function tGeral(){
       :`<p class="hint" style="margin:0">Todas as lojas ativas entraram no painel nesta semana.</p>`}
       <span class="hint">Aparecem aqui as lojas sem entrar no painel há 7 dias ou mais, ou com 5+ carrinhos abandonados.</span></div>
     <button class="btn btn-ghost btn-sm" type="button" id="reload">Atualizar números</button>`;
-  $("reload").onclick=()=>{loaded=false;ir("geral")};
+  $("reload").onclick=()=>{loaded=false;AVISO=null;ir("geral")};
+  $("avEd").onclick=formAviso;
 }
 
 /* ---------- REVENDEDORAS ---------- */

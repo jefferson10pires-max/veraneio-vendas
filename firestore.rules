@@ -69,6 +69,21 @@ service cloud.firestore {
         && d.get('pronta', []).size() <= 5000 && d.get('ocultas', []).size() <= 5000 && d.get('excluidas', []).size() <= 5000
         && d.get('modo', 'todo') in ['todo', 'pronta'];
     }
+    // Aviso da Veraneio no painel de todas as revendedoras (só o ADM escreve)
+    function avisoOk(d) {
+      return d.keys().hasOnly(['ativo', 'titulo', 'texto', 'img', 'link', 'botao', 'em'])
+        && d.get('ativo', false) is bool
+        && d.get('titulo', '') is string && d.get('titulo', '').size() <= 80
+        && d.get('texto', '') is string && d.get('texto', '').size() <= 600
+        && d.get('botao', '') is string && d.get('botao', '').size() <= 30
+        && (d.get('img', null) == null || isFoto(d.get('img', null)))
+        && (d.get('link', '') == '' || (d.get('link', '') is string && d.get('link', '').size() <= 500 && d.get('link', '').matches('^https://[^\\s"<>]+$')));
+    }
+    match /avisos/{id} {
+      allow read: if isRevendedora() || isAdmin();
+      allow write: if isAdmin() && id == 'geral' && avisoOk(request.resource.data);
+      allow delete: if isAdmin();
+    }
     match /precos/{uid} {
       allow read, delete: if dono(uid);
       allow create, update: if dono(uid) && precosOk(request.resource.data);

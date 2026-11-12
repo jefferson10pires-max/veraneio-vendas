@@ -189,6 +189,16 @@ test("R19 loja pausada não recebe carrinho novo", async () => {
   await assertSucceeds(setDoc(doc(visitante(), "lojas/rev/leads/abcdefghijABCDEFGHIK"), lead()));
 });
 
+test("R20 aviso do ADM: revendedora lê, visitante não; só ADM grava, com link https", async () => {
+  await assertSucceeds(setDoc(doc(adm(), "avisos/geral"), { ativo: true, titulo: "Oi", texto: "Novidade", img: "data:image/jpeg;base64,AAAA", link: "https://veraneio.com.br", botao: "Ver", em: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(rev(), "avisos/geral")));
+  await assertFails(getDoc(doc(visitante(), "avisos/geral")));
+  await assertFails(getDoc(doc(estranho(), "avisos/geral")));
+  await assertFails(setDoc(doc(rev(), "avisos/geral"), { ativo: false }));
+  await assertFails(setDoc(doc(adm(), "avisos/geral"), { ativo: true, link: "javascript:alert(1)" }));
+  await assertFails(setDoc(doc(adm(), "avisos/outro"), { ativo: true }));
+});
+
 // --- ADM ---
 test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertSucceeds(setDoc(doc(adm(), "atacado/p0"), { itens: [] }));
