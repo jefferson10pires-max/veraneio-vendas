@@ -139,11 +139,16 @@ label.f{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin:14
 .empty h3{color:var(--ink);margin-bottom:6px}
 
 .chat{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--bg)}
-.chead{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);min-height:62px}
+.chead{display:flex;flex-direction:column;background:var(--card);border-bottom:1px solid var(--line)}
+.chrow{display:flex;align-items:center;gap:10px;padding:10px 16px 8px;min-height:56px}
+.cbar{display:flex;align-items:center;gap:8px;padding:6px 16px;border-top:1px solid var(--line2);background:var(--hover);overflow-x:auto;scrollbar-width:none}
+.cbar::-webkit-scrollbar{display:none}
+.cbar .cbl{font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-left:6px;white-space:nowrap}
+.cbar select{max-width:170px;height:26px;min-height:26px;padding:0 22px 0 8px;font-size:12px;font-weight:600;border-radius:6px;flex:none}
 .chead .nm{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chead .sub{font-size:12px;color:var(--ink2);display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:1px}
 .chead .sub span{white-space:nowrap}
-.chead select{width:auto;min-height:32px;padding:4px 8px;font-size:12.5px}
+.chead select{width:auto}
 .back{display:none}
 .msgs{flex:1;overflow-y:auto;padding:20px 5% 10px;min-height:0;position:relative}
 .day{text-align:center;margin:16px 0 10px}
@@ -265,8 +270,8 @@ table.t td{padding:10px 8px;border-bottom:1px solid var(--line2);vertical-align:
 .seg small{color:var(--ink3);font-weight:500}
 
 /* modal, busca, toast */
-.ov{position:fixed;inset:0;background:rgba(23,26,31,.4);display:grid;place-items:start center;padding:7vh 16px 16px;z-index:60;overflow-y:auto}
-.md{background:var(--card);border-radius:var(--r2);box-shadow:var(--shadow);width:min(540px,100%)}
+.ov{position:fixed;inset:0;background:rgba(23,26,31,.4);display:grid;grid-template-columns:minmax(0,1fr);place-items:start center;padding:7vh 16px 16px;z-index:60;overflow-y:auto}
+.md{background:var(--card);border-radius:var(--r2);box-shadow:var(--shadow);width:min(540px,100%);max-width:100%;min-width:0}
 .md.wide{width:min(820px,100%)}
 .md .mh{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
 .md .mb{padding:4px 20px 18px}
@@ -312,7 +317,7 @@ mark{background:#F6DE8F;color:inherit;border-radius:3px;padding:0 1px}
   .brand,.navlbl,.nav .sp,#logout{display:none}
   .nav button[data-go]{flex-direction:column;flex:1;min-width:0;width:auto;height:50px;gap:2px;font-size:10px;justify-content:center;padding:0}
   .nav button[aria-current=page]{background:transparent}
-  .nav .lbl{display:block!important;flex:none}
+  .nav .lbl{display:block!important;flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;font-size:9.5px;letter-spacing:-.01em}
   .nav .badge{right:10px}
   .view{order:1}
   .conv,.conv.noinfo{grid-template-columns:1fr}
@@ -324,9 +329,10 @@ mark{background:#F6DE8F;color:inherit;border-radius:3px;padding:0 1px}
   .b{max-width:88%}
   .modes{grid-template-columns:1fr}
   .demo-flag{display:none}
-  .chead{padding:8px;gap:6px}
+  .chrow{padding:8px;gap:6px}
+  .cbar{padding:6px 8px}
   .chead .sub span:not(.pill){display:none}
-  .chead #assign,.chead #bStar{display:none}
+  .chead #bStar{display:none}
   .chead #bClose .lbl{display:none}
   .chead #bClose:has(.lbl){width:36px;padding:0}
   .cbox{gap:2px}
@@ -487,6 +493,97 @@ table.t tbody tr[data-rs]{cursor:pointer}
 .srcs b{font-size:20px;font-weight:800;margin-right:6px}
 table.t tr.sumrow td{font-weight:700;border-top:2px solid var(--line);background:var(--hover)}
 .ct tbody tr[data-ck]{cursor:pointer}
+/* ---- relatório do disparo ---- */
+.card.camp{cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.card.camp:hover{border-color:#D8C39B;box-shadow:0 4px 14px rgba(23,26,31,.06)}
+.card.camp .lnk{color:var(--gold);font-weight:700}
+.funnel{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;margin-top:12px}
+.funnel>div{background:var(--card);padding:10px 12px;display:flex;flex-direction:column;gap:1px}
+.funnel small{font-size:11.5px;color:var(--ink3);font-weight:600}.funnel b{font-size:18px;letter-spacing:-.01em}
+.seg2{display:inline-flex;background:var(--card2);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg2 button{border:0;background:transparent;border-radius:7px;padding:5px 10px;font-weight:600;font-size:12.5px;color:var(--ink2);display:inline-flex;align-items:center;gap:5px}
+.seg2 button svg{width:15px;height:15px}
+.seg2 button b{font-size:11.5px;color:var(--ink3)}
+.seg2 button[aria-selected=true],.seg2 button[aria-checked=true]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+tr.clk{cursor:pointer}tr.clk:hover td{background:var(--sel)}
+/* ---- funil ---- */
+.vtog{display:inline-flex;background:var(--card2);border-radius:8px;padding:2px;gap:2px}
+.vtog .btn{height:30px;width:32px;padding:0;border:0}
+.vtog .btn[aria-pressed=true]{background:var(--card);color:var(--gold);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.board-page{display:flex;flex-direction:column;height:100%;min-height:0}
+.bhead{padding:16px 20px 12px;border-bottom:1px solid var(--line);background:var(--card)}
+.kanban{flex:1;min-height:0;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(260px,1fr);gap:12px;padding:14px 20px 18px;overflow-x:auto}
+.kcol{display:flex;flex-direction:column;min-height:0;background:#ECEEF2;border-radius:var(--r2);border:1px solid transparent;transition:border-color .12s,background .12s}
+.kcol.over{border-color:var(--gold2);background:var(--goldsoft)}
+.kcol header{display:flex;align-items:center;gap:8px;padding:11px 12px 8px;font-size:13px}
+.kcol header i{width:8px;height:8px;border-radius:50%;flex:none}
+.kcol .kn{background:var(--card);border-radius:6px;padding:0 6px;font-size:11.5px;font-weight:700;color:var(--ink2)}
+.kcol .kt{margin-left:auto;font-size:12px;font-weight:700;color:var(--ink2)}
+.kbody{flex:1;overflow-y:auto;padding:2px 8px 10px;display:flex;flex-direction:column;gap:8px}
+.kcard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 10px 8px;cursor:pointer;box-shadow:0 1px 2px rgba(23,26,31,.04);transition:box-shadow .12s,transform .12s}
+.kcard:hover{box-shadow:0 4px 12px rgba(23,26,31,.08)}
+.kcard.kwait{border-left:3px solid var(--amber)}
+.kcard.drag{opacity:.5;transform:rotate(1deg)}
+.kcard .nm1{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ell{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kcard .ub{background:var(--green);color:#fff;font-size:11px;font-weight:700;border-radius:99px;min-width:20px;height:20px;display:grid;place-items:center;padding:0 5px}
+.kfoot{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.kfoot .pill svg{width:12px;height:12px}
+.kmove{width:auto;height:26px;min-height:26px;padding:0 22px 0 8px;font-size:11.5px;border-color:var(--line2);background-color:var(--hover);color:var(--ink2)}
+.kempty{border:1.5px dashed #D3D6DD;border-radius:10px;padding:16px;text-align:center;font-size:12.5px;color:var(--ink3)}
+.etsel{width:auto;max-width:190px;height:26px;min-height:26px;padding:0 20px 0 7px;font-size:11.5px;font-weight:700;border-radius:6px;background-color:var(--bluesoft);border-color:transparent;color:var(--blue);background-position:right 4px center}
+/* ---- pedido ---- */
+.md.xwide{width:min(1080px,100%)}
+.ordgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:18px;margin-top:10px}
+.ocat{display:flex;flex-direction:column;min-width:0}
+.oprods{display:grid;align-items:start;grid-auto-rows:max-content;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px;max-height:52vh;overflow-y:auto;padding:2px}
+.oprod{position:relative;height:auto;min-height:0;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:0;text-align:left;overflow:hidden;display:flex;flex-direction:column;transition:border-color .12s,box-shadow .12s}
+.oprod:hover{border-color:var(--gold2);box-shadow:0 3px 10px rgba(23,26,31,.07)}
+.oprod img,.oprod .ph2{flex:none;width:100%;height:130px;object-fit:cover;background:var(--card2);display:grid;place-items:center;font-size:30px}
+.oprod .pi{padding:7px 9px 9px;font-size:12px;display:flex;flex-direction:column;gap:1px}
+.oprod .pi b{font-size:12.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.oprod .padd{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;opacity:0;transition:opacity .12s}
+.oprod .padd svg{width:15px;height:15px}
+.oprod:hover .padd,.oprod.added .padd{opacity:1}.oprod.added{border-color:var(--green)}
+.oav{margin-top:10px;font-size:13px}.oav summary{cursor:pointer;color:var(--gold);font-weight:600}
+.ocart{border:1px solid var(--line);border-radius:var(--r2);padding:12px 14px;background:var(--hover);display:flex;flex-direction:column;min-width:0}
+.olt{background:transparent}.olt td{padding:7px 4px;vertical-align:middle;border-bottom:1px solid var(--line2)}
+.olt .oth{width:36px;height:36px;border-radius:6px;object-fit:cover;display:block}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:7px;background:var(--card);overflow:hidden}
+.qty button{border:0;background:transparent;width:26px;height:28px;font-size:15px;font-weight:700;color:var(--ink2)}
+.qty input{width:40px;height:28px;min-height:28px;border:0;text-align:center;padding:0;-moz-appearance:textfield;background:transparent}
+.qty input::-webkit-inner-spin-button{display:none}
+.oprice{width:80px;height:30px;min-height:30px;padding:0 6px;text-align:right}
+.ofields{display:grid;grid-template-columns:1fr;gap:0;margin-top:6px}
+.otot{margin-top:12px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:3px;font-size:13.5px}
+.otot>div{display:flex;justify-content:space-between}
+.otot .big{font-size:17px;margin-top:4px}.otot .big b{color:var(--gold)}
+/* ---- foto em modelo ---- */
+.pphoto{display:flex;gap:12px;align-items:center;border:1px dashed #D3D6DD;border-radius:10px;padding:10px}
+.pphoto img,.pphoto .ph2{width:72px;height:72px;border-radius:8px;object-fit:cover;background:var(--card2);display:grid;place-items:center;flex:none}
+.pphoto .col{display:flex;flex-direction:column;gap:6px}
+.timg{display:block;width:100%;aspect-ratio:1.6;object-fit:cover;border-radius:6px;margin-bottom:6px;background:var(--card2)}
+.timg.ph2{display:grid;place-items:center;color:var(--ink3)}
+/* ---- automações ---- */
+.autos .acard{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);padding:18px 20px;margin-bottom:14px;max-width:860px}
+.ahead{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.ahead h3{margin:0 0 2px}.ahead p{margin:0}
+.aic{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:none}
+.aic svg{width:20px;height:20px}
+.tgl{position:relative;display:inline-flex;cursor:pointer;flex:none;margin-top:4px}
+.tgl input{position:absolute;opacity:0;width:44px;height:24px;margin:0;cursor:pointer}
+.tgl span{width:44px;height:24px;border-radius:99px;background:#D5D8DE;position:relative;transition:background .15s}
+.tgl span::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:left .15s}
+.tgl input:checked+span{background:var(--green)}.tgl input:checked+span::after{left:23px}
+.tgl input:focus-visible+span{outline:2px solid var(--gold2);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.dias{display:flex;gap:4px}
+.dias label{position:relative}.dias input{position:absolute;opacity:0}
+.dias span{display:grid;place-items:center;width:42px;height:34px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--card);cursor:pointer}
+.dias input:checked+span{background:var(--goldsoft);border-color:#D8C39B;color:var(--gold)}
+.dias input:focus-visible+span{outline:2px solid var(--gold2)}
+@media (max-width:900px){.ordgrid{grid-template-columns:minmax(0,1fr)}.md.xwide .olt .oth{display:none}.md.xwide .oprice{width:66px}.md.xwide .olt td{padding:6px 2px}.md.xwide .olt tr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border-bottom:1px solid var(--line2);padding:6px 0}.md.xwide .olt td{border:0}.md.xwide .olt td.grow{flex:1 0 100%}.md.xwide .olt td.n{margin-left:auto}.md.xwide .mf{flex-wrap:wrap}.oprods{max-height:none;grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}.oprod img,.oprod .ph2{height:96px}.funnel{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:760px){.kanban{grid-auto-columns:82vw;padding:12px}.bhead{padding:12px}.etsel{max-width:120px}.dias span{width:38px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -516,6 +613,7 @@ table.t tr.sumrow td{font-weight:700;border-top:2px solid var(--line);background
     <button data-go="indicadores" title="Indicadores"><svg class="i"><use href="#i-chart"/></svg><span class="lbl">Indicadores</span></button>
     <div class="navlbl" style="margin-top:10px">Configurar</div>
     <button data-go="modelos" title="Modelos e respostas"><svg class="i"><use href="#i-file"/></svg><span class="lbl">Modelos</span></button>
+    <button data-go="automacoes" title="Respostas automáticas"><svg class="i"><use href="#i-bot"/></svg><span class="lbl">Automações</span></button>
     <button data-go="conexoes" title="Conexões do WhatsApp"><svg class="i"><use href="#i-plug"/></svg><span class="lbl">Conexões</span></button>
     <div class="sp"></div>
     <button id="logout" title="Sair"><div class="me" id="meAv">J</div><span class="lbl"><span id="meName">Jefferson</span><small>Sair</small></span></button>
@@ -526,7 +624,7 @@ table.t tr.sumrow td{font-weight:700;border-top:2px solid var(--line);background
 <div id="tip" class="hide" role="tooltip"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5M5.5 5h13L21 13v6H3v-6z"/></symbol><symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M9.5 16h5"/></symbol><symbol id="i-cols" viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="11" rx="1.5"/><rect x="17" y="4" width="4" height="7" rx="1.5"/></symbol><symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></symbol><symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol><symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol><symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5M5.5 5h13L21 13v6H3v-6z"/></symbol><symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
   <symbol id="i-mega" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
   <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/></symbol>
@@ -743,6 +841,10 @@ const Real = {
   startCampaign(data) { return this.call("waDisparo", data); },
   newConversation(data) { return this.call("waEnviar", data); },
   importYampi(mesAtras) { return this.call("waYampiImportar", { mesAtras }); },
+  async campaignDest(id) { const q = await this.db.collection("wa_campaigns").doc(id).collection("dest").limit(5000).get(); return q.docs.map(d => Object.assign({ id: d.id }, d.data())); },
+  resend(campaignId) { return this.call("waReenviar", { campaignId }); },
+  async loadAuto() { try { const s = await this.db.collection("wa_settings").doc("auto").get(); return s.exists ? s.data() : {}; } catch (e) { return {}; } },
+  saveAuto(cfg) { return this.db.collection("wa_settings").doc("auto").set(cfg); },
 };
 
 /* pedido da Yampi no mesmo formato das vendas do WhatsApp */
@@ -935,6 +1037,8 @@ const Demo = (() => {
     { name: "novidades_colecao", category: "MARKETING", status: "APPROVED", language: "pt_BR", body: "Oi {{1}}! Chegou coleção nova de colares ✨ Quer ver as fotos?", buttons: ["Quero ver", "Agora não"], vars: ["primeiroNome"] },
     { name: "saudades_revendedora", category: "MARKETING", status: "APPROVED", language: "pt_BR", body: "Oi {{1}}, tudo bem? Faz tempo que você não passa por aqui 💛 Separei umas novidades pra você", buttons: ["Quero ver", "Não quero receber"], vars: ["primeiroNome"] },
     { name: "retomar_conversa", category: "MARKETING", status: "APPROVED", language: "pt_BR", body: "Oi {{1}}! Aqui é da Veraneio Semijoias 💛 Vi sua mensagem e quero continuar te atendendo. Posso te ajudar?", buttons: ["Sim, pode falar"], vars: ["primeiroNome"] },
+    { name: "novidades_com_foto", category: "MARKETING", status: "APPROVED", language: "pt_BR", headerFormat: "IMAGE", headerExample: "", body: "Oi {{1}}! Olha que linda essa peça nova da Veraneio ✨ Quer que eu separe pra você?", buttons: ["Quero", "Não quero receber"], vars: ["primeiroNome"] },
+    { name: "obrigada_compra", category: "UTILITY", status: "APPROVED", language: "pt_BR", body: "Oi {{1}}! Recebemos seu pedido na Veraneio Semijoias 💛 Qualquer dúvida é só responder aqui.", vars: ["primeiroNome"] },
     { name: "rastreio_enviado", category: "UTILITY", status: "APPROVED", language: "pt_BR", body: "Olá, {{1}}! 💛 Seu pedido da Veraneio Semijoias já foi enviado. Código de rastreio: {{2}}", vars: ["primeiroNome", "rastreio"] },
     { name: "quiz_parou", category: "MARKETING", status: "PENDING", language: "pt_BR", body: "Oi {{1}}! Vi que você parou em \"{{2}}\" no nosso quiz. Ficou alguma dúvida? Te ajudo por aqui 💛", vars: ["primeiroNome", "etapa"] },
   ];
@@ -992,6 +1096,15 @@ const Demo = (() => {
     async upload(file) { return new Promise(r => { const fr = new FileReader(); fr.onload = () => r({ url: fr.result, mime: file.type || "application/octet-stream", name: file.name, size: file.size }); fr.readAsDataURL(file); }); },
     async loadContext() { window.CTX_SRC = { yampiEm: now - 40 * 60000, yampiN: yOut.length }; buildContext(allSales, leads, yOut); },
     async importYampi(mesAtras) { await new Promise(r => setTimeout(r, 300)); return { gravados: mesAtras ? 0 : yOut.length, paginas: 1 }; },
+    async campaignDest(id) {
+      const c = campaigns.find(x => x.id === id) || {}; const names = ["Mariana Souza", "Juliana Pereira", "Camila Rocha", "Patrícia Lima", "Renata Alves", "Fernanda Dias", "Aline Costa", "Bruna Santos", "Carla Mendes", "Débora Nunes", "Elaine Ramos", "Gabriela Faria"];
+      const erros = ["Mensagem não entregue: o número pode não ter WhatsApp.", "A pessoa bloqueou ou não aceita mensagens de empresas.", "Limite de mensagens de marketing para esta pessoa (regra da Meta)."];
+      return Array.from({ length: Math.min(c.total || 0, 60) }, (_, i) => { const wa = "55229" + String(81000000 + i * 7919).slice(0, 8); const f = i % 13 === 5 || i % 17 === 3; const st = f ? { status: i % 2 ? "falha" : "enviada", entrega: i % 2 ? null : "failed", erro: erros[i % 3] } : i >= (c.enviadas || 0) ? { status: "fila" } : { status: "enviada", entrega: i % 3 ? "read" : "delivered" }; return Object.assign({ id: wa, wa, name: names[i % names.length], em: now - (i + 1) * 3600e3 / 4, respondeuEm: !f && i % 5 === 0 && i < (c.enviadas || 0) ? now - i * 600e3 : null }, st); });
+    },
+    async resend(id) { const c = campaigns.find(x => x.id === id); const n = Math.min(c.falhas || 0, 9); if (c) { c.falhas -= n; c.status = "enviando"; emitCamps(); } return { ok: true, n }; },
+    _auto: { boasVindas: { on: true, texto: "Oi {primeiroNome}! Aqui é da Veraneio Semijoias 💛 Já já te respondo." }, foraHorario: { on: true, texto: "Oi {primeiroNome}! Nosso atendimento é de segunda a sexta, das 8h às 18h. Assim que abrirmos, te respondo 💛", dias: [1, 2, 3, 4, 5], ini: "08:00", fim: "18:00" }, posCompra: { on: false, horas: 2, yampi: true } },
+    async loadAuto() { return JSON.parse(JSON.stringify(this._auto)); },
+    async saveAuto(cfg) { this._auto = cfg; },
     watchGroups(cb) { setTimeout(emitGroups, 0); return sub(L.groups, cb); },
     async saveGroup(g) { const i = groups.findIndex(x => x.id === g.id); i >= 0 ? groups[i] = g : groups.push(g); emitGroups(); },
     async deleteGroup(id) { const i = groups.findIndex(x => x.id === id); if (i >= 0) groups.splice(i, 1); emitGroups(); },
@@ -1048,7 +1161,7 @@ async function start(me) {
   $("#meAv").textContent = U.initials(me.name); $("#meName").textContent = me.name; $("#logout").title = "Sair (" + me.name + ")";
   if (DEMO) { const f = document.createElement("div"); f.className = "demo-flag"; f.title = "Modo demonstração"; f.textContent = "Demonstração: nada é enviado de verdade"; $(".nav").insertBefore(f, $("#logout")); }
   await API.loadSettings();
-  API.watchLines(ls => { S.lines = ls; if (VIEW === "conexoes") renderConexoes(); if (VIEW === "conversas") renderListHead(); });
+  API.watchLines(ls => { const had = S.lines.length; S.lines = ls; if (VIEW === "conexoes") renderConexoes(); if (VIEW === "conversas") renderListHead(); if (VIEW === "automacoes" && !had && ls.length && !(document.querySelector(".autos") || {}).dataset?.dirty) renderAutomacoes(); });
   API.watchConvs(cs => { S.convs = cs; S.convsVer++; onConvs(); });
   API.watchGroups(gs => { S.groups = gs; if (VIEW === "clientes" && !CL.drawer && !$(".ov")) renderClientes(); });
   API.watchCampaigns(cs => { S.campaigns = cs; if (VIEW === "disparos") renderDisparos(); });
@@ -1081,9 +1194,10 @@ $$(".nav [data-go]").forEach(b => b.onclick = () => { location.hash = "#" + b.da
 function route() {
   if (!S.me) return;
   const h = location.hash.replace(/^#\/?/, "").split("/");
-  const v = ["conversas", "disparos", "clientes", "indicadores", "modelos", "conexoes"].includes(h[0]) ? h[0] : "conversas";
+  const v = ["conversas", "disparos", "clientes", "indicadores", "modelos", "automacoes", "conexoes"].includes(h[0]) ? h[0] : "conversas";
   $$(".nav [data-go]").forEach(b => b.setAttribute("aria-current", b.dataset.go === v ? "page" : "false"));
   if (v !== "conversas") { document.body.classList.remove("inchat"); if (S.unsubMsgs) { S.unsubMsgs(); S.unsubMsgs = null; } S.sel = null; }
+  if (v !== VIEW) $$(".ov").forEach(o => o.remove()); // trocar de tela fecha janelas abertas
   const was = VIEW; VIEW = v;
   if (v === "conversas") { if (was !== "conversas") mountConversas(); if (h[1] && h[1] !== S.sel) openConv(decodeURIComponent(h[1]), h[2]); }
   if (v === "disparos") renderDisparos();
@@ -1093,18 +1207,21 @@ function route() {
   $("#tip").classList.add("hide");
   if (v === "modelos") renderModelos();
   if (v === "conexoes") renderConexoes();
+  if (v === "automacoes") renderAutomacoes();
 }
 
 /* =========================================================
    CONVERSAS
    ========================================================= */
 function mountConversas() {
+  if (S.board) return mountBoard();
   const noLine = !S.lines.some(l => l.status === "conectado");
   $("#view").innerHTML = `
   <div class="conv ${S.showInfo ? "" : "noinfo"}" id="conv">
     <section class="list" aria-label="Lista de conversas">
       <div class="lhead">
         <div class="row"><h2 class="grow">Conversas</h2>
+          ${viewToggle()}
           <button class="btn icon ghost" id="bSearch" title="Buscar em todas as mensagens (Ctrl+K)" aria-label="Buscar em todas as mensagens">${icon("search")}</button>
           <button class="btn sm pri" id="bNew">${icon("plus")} Nova</button></div>
         <div class="row" style="margin-bottom:8px">
@@ -1122,6 +1239,7 @@ function mountConversas() {
   $("#lq").oninput = U.debounce(e => { S.q = e.target.value; renderList(); }, 120);
   $("#bSearch").onclick = openSearch;
   $("#bNew").onclick = () => openNewConv();
+  bindViewToggle();
   $("#conv").addEventListener("click", e => { if (e.target.id === "conv") e.target.classList.remove("showinfo"); });
   renderListHead(); renderList(); renderChat(); renderInfo();
   if (noLine && !DEMO && !S.convs.length) setTimeout(() => toast("Conecte um número em Conexões para começar"), 600);
@@ -1132,7 +1250,63 @@ function renderListHead() {
   sel.innerHTML = `<option value="all">Todos os números</option>` + ls.map(l => `<option value="${U.esc(l.id)}">${U.esc(l.nome)}</option>`).join("");
   sel.value = ls.some(l => l.id === S.line) ? S.line : "all";
   sel.classList.toggle("hide", ls.length < 2);
-  sel.onchange = () => { S.line = sel.value; renderList(); };
+  sel.onchange = () => { S.line = sel.value; S.board ? renderBoard() : renderList(); };
+}
+/* ---------- funil das conversas (colunas) ---------- */
+const ETAPAS = [["novo", "Novo", "#8B919C"], ["negociando", "Negociando", "#2361A3"], ["aguardando", "Aguardando pagamento", "#B7791F"], ["pago", "Pago", "#1E8452"], ["enviado", "Enviado", "#8F6118"]];
+const etapaOf = c => c.etapa || (c.status !== "encerrada" ? "novo" : null);
+const etapaNome = k => (ETAPAS.find(e => e[0] === k) || [k, k])[1];
+function viewToggle() { return `<div class="vtog" role="group" aria-label="Ver como"><button class="btn icon ghost" data-vw="lista" aria-pressed="${!S.board}" title="Lista de conversas" aria-label="Lista">${icon("list")}</button><button class="btn icon ghost" data-vw="funil" aria-pressed="${!!S.board}" title="Funil de vendas (colunas)" aria-label="Funil">${icon("cols")}</button></div>`; }
+function bindViewToggle() { $$("[data-vw]").forEach(b => b.onclick = () => { const want = b.dataset.vw === "funil"; if (want === !!S.board) return; S.board = want; if (want) { if (S.unsubMsgs) { S.unsubMsgs(); S.unsubMsgs = null; } S.sel = null; document.body.classList.remove("inchat"); history.replaceState(null, "", "#conversas"); } mountConversas(); }); }
+function setEtapa(c, k) {
+  if (etapaOf(c) === k) return;
+  const patch = { etapa: k, etapaEm: Date.now() };
+  if (c.status === "encerrada" && k !== "enviado") patch.status = "aberta";
+  if (c.pedido && ({ pago: "pago", enviado: "enviado", aguardando: "aguardando" })[k]) patch.pedido = Object.assign({}, c.pedido, { status: k });
+  API.updateConv(c.id, patch); toast(`${c.name || U.fmtPhone(c.id)} → ${etapaNome(k)}`);
+}
+function mountBoard() {
+  $("#view").innerHTML = `<div class="board-page">
+    <div class="bhead"><div class="row" style="gap:10px"><h2 class="grow" style="margin:0">Funil de vendas</h2>${viewToggle()}<button class="btn sm pri" id="bNew">${icon("plus")} Nova</button></div>
+      <div class="row" style="gap:8px;margin-top:10px"><div class="lsearch grow" style="max-width:360px">${icon("search")}<input type="search" id="lq" placeholder="Filtrar por nome, número ou tag" aria-label="Filtrar conversas"></div><select id="lline" style="width:auto" aria-label="Número"></select><span class="muted tiny" id="bsum"></span></div></div>
+    <div class="kanban" id="kanban"></div></div>`;
+  $("#lq").value = S.q;
+  $("#lq").oninput = U.debounce(e => { S.q = e.target.value; renderBoard(); }, 150);
+  $("#bNew").onclick = () => openNewConv();
+  bindViewToggle(); renderListHead(); renderBoard();
+  const lsel = $("#lline"); if (lsel) lsel.onchange = () => { S.line = lsel.value; renderBoard(); };
+}
+function renderBoard() {
+  const box = $("#kanban"); if (!box) return;
+  const base = S.convs.filter(convMatches);
+  const by = {}; ETAPAS.forEach(([k]) => by[k] = []);
+  base.forEach(c => { const k = etapaOf(c); if (k && by[k]) by[k].push(c); });
+  const ts = c => c.etapaEm || c.lastTs || 0;
+  ETAPAS.forEach(([k]) => by[k].sort((a, b) => k === "novo" ? (isWaiting(b) - isWaiting(a)) || (b.lastTs - a.lastTs) : ts(b) - ts(a)));
+  by.enviado = by.enviado.filter(c => Date.now() - ts(c) < 30 * DAY);
+  const tot = l => l.reduce((a, c) => a + (c.pedido && c.pedido.total || 0), 0);
+  const emAberto = by.negociando.concat(by.aguardando);
+  $("#bsum").innerHTML = `${emAberto.length} em negociação · <b>${U.brl(tot(by.aguardando))}</b> aguardando pagamento`;
+  box.innerHTML = ETAPAS.map(([k, label, cor]) => `<section class="kcol" data-col="${k}" aria-label="${label}">
+    <header><i style="background:${cor}"></i><b>${label}</b><span class="kn">${by[k].length}</span>${tot(by[k]) ? `<span class="kt">${U.brl(tot(by[k]))}</span>` : ""}</header>
+    <div class="kbody">${by[k].slice(0, 80).map(c => { const w = isWaiting(c); const mins = w ? Math.round((Date.now() - (c.waitingSince || c.lastTs)) / 60000) : 0; return `<article class="kcard${w ? " kwait" : ""}" draggable="true" data-id="${U.esc(c.id)}" tabindex="0" aria-label="${U.esc(c.name || U.fmtPhone(c.id))}">
+      <div class="row" style="gap:8px"><div class="av sm" style="background:${U.color(c.id)}">${U.esc(U.initials(c.name))}</div><div style="min-width:0" class="grow"><b class="nm1">${c.important ? "★ " : ""}${U.esc(c.name || U.fmtPhone(c.id))}</b><div class="tiny muted ell">${U.esc(c.lastText || "")}</div></div>${c.unread ? `<span class="ub">${c.unread}</span>` : ""}</div>
+      <div class="kfoot">${c.pedido && c.pedido.total ? `<span class="pill gold">${U.brl(c.pedido.total)}</span>` : ""}${w ? `<span class="pill ${mins > 60 ? "red" : "amber"}">${icon("clock")} ${mins < 60 ? mins + " min" : U.ago(mins * 60000)}</span>` : ""}<span class="grow"></span><span class="tiny muted">${c.assignedTo ? U.esc(U.first(c.assignedTo.name)) : ""}</span>
+        <select class="kmove" aria-label="Mover ${U.esc(c.name || "")} para outra etapa" title="Mover para">${ETAPAS.map(([k2, l2]) => `<option value="${k2}" ${k2 === k ? "selected" : ""}>${l2}</option>`).join("")}</select></div>
+    </article>`; }).join("") || `<div class="kempty">Arraste uma conversa para cá</div>`}${by[k].length > 80 ? `<div class="kempty">+${by[k].length - 80} conversas</div>` : ""}</div></section>`).join("");
+  $$(".kcard", box).forEach(el => {
+    const c = S.convs.find(x => x.id === el.dataset.id);
+    el.onclick = e => { if (e.target.closest("select")) return; location.hash = "#conversas/" + encodeURIComponent(c.id); };
+    el.onkeydown = e => { if (e.key === "Enter") el.click(); };
+    el.ondragstart = e => { e.dataTransfer.setData("text/plain", c.id); e.dataTransfer.effectAllowed = "move"; el.classList.add("drag"); };
+    el.ondragend = () => el.classList.remove("drag");
+    $(".kmove", el).onchange = e => setEtapa(c, e.target.value);
+  });
+  $$(".kcol", box).forEach(col => {
+    col.ondragover = e => { e.preventDefault(); col.classList.add("over"); };
+    col.ondragleave = e => { if (!col.contains(e.relatedTarget)) col.classList.remove("over"); };
+    col.ondrop = e => { e.preventDefault(); col.classList.remove("over"); const c = S.convs.find(x => x.id === e.dataTransfer.getData("text/plain")); if (c) setEtapa(c, col.dataset.col); };
+  });
 }
 function isWaiting(c) { return c.status !== "encerrada" && c.lastDir === "in" && !(c.dispensadaEm && c.dispensadaEm >= c.lastTs); }
 const FILTERS = [
@@ -1155,6 +1329,7 @@ function onConvs() {
   const nb = $("#navBadge"); nb.textContent = wait > 99 ? "99+" : wait; nb.classList.toggle("hide", !wait);
   document.title = (wait ? `(${wait}) ` : "") + "Conversas Veraneio";
   if (VIEW !== "conversas") return;
+  if (S.board) return renderBoard();
   renderList();
   if (S.sel) { renderChatHead(); renderComposerState(); renderInfo(true); const c = selConv(); if (c && c.unread && document.visibilityState === "visible") API.markRead(c.id); }
 }
@@ -1197,6 +1372,7 @@ setInterval(() => { if (VIEW === "conversas") { renderList(); renderChatHead(); 
 
 const selConv = () => S.convs.find(c => c.id === S.sel);
 function openConv(id, focusMsg) {
+  if (S.board) { S.board = false; mountConversas(); }
   if (S.sel && S.sel !== id) saveDraft();
   S.sel = id; S.replyTo = null; S.attach = null; S.msgs = []; S.focusMsg = focusMsg || null;
   if (S.unsubMsgs) S.unsubMsgs();
@@ -1223,6 +1399,7 @@ function renderChat() {
       <div class="cbox">
         <button class="btn icon ghost" id="bAttach" title="Anexar foto, áudio ou arquivo" aria-label="Anexar">${icon("clip")}</button>
         <button class="btn icon ghost" id="bProd" title="Enviar peça do catálogo" aria-label="Enviar peça do catálogo">${icon("gem")}</button>
+        <button class="btn icon ghost" id="bOrder" title="Montar pedido" aria-label="Montar pedido">${icon("cart")}</button>
         <button class="btn icon ghost" id="bQuick" title="Respostas rápidas (digite /)" aria-label="Respostas rápidas">${icon("bolt")}</button>
         <textarea id="ctext" rows="1" placeholder="Escreva uma mensagem…  ( / para respostas rápidas )" aria-label="Mensagem"></textarea>
         <button class="btn pri icon" id="bSend" title="Enviar (Enter)" aria-label="Enviar">${icon("send")}</button>
@@ -1239,6 +1416,7 @@ function renderChat() {
   $("#bAttach").onclick = () => $("#fileIn").click();
   $("#fileIn").onchange = e => { const f = e.target.files[0]; if (f) setAttach(f); e.target.value = ""; };
   $("#bProd").onclick = openCatalog;
+  $("#bOrder").onclick = () => openOrder(selConv());
   $("#bQuick").onclick = () => { const t = $("#ctext"); if (!t.value.startsWith("/")) t.value = "/" + t.value; t.focus(); quickMenu(); };
   $$(".ctab").forEach(b => b.onclick = () => { S.mode[c.id] = b.dataset.m; renderComposerState(); $("#ctext").focus(); });
   $("#tolast").onclick = () => { const m = $("#msgs"); m.scrollTop = m.scrollHeight; };
@@ -1254,18 +1432,19 @@ function renderChatHead() {
   const win = left > 0 ? `<span class="pill ${left < 2 * 3600000 ? "amber" : "green"}" title="Pode mandar mensagem livre até ${new Date(c.windowUntil).toLocaleString("pt-BR")}"><span class="dot"></span>Janela aberta · ${U.ago(left)}</span>` : `<span class="pill red" title="Mais de 24h desde a última mensagem dela: só modelo aprovado"><span class="dot"></span>Janela fechada</span>`;
   const line = S.lines.find(l => l.id === c.line);
   const mem = S.members.length ? S.members : [{ uid: S.me.uid, name: S.me.name }];
-  h.innerHTML = `
+  h.innerHTML = `<div class="chrow">
     <button class="btn icon ghost back" id="bBack" aria-label="Voltar">${icon("back")}</button>
     <div class="av sm" style="background:${U.color(c.id)}">${U.esc(U.initials(c.name))}</div>
-    <div class="grow"><div class="nm">${U.esc(c.name || U.fmtPhone(c.id))}</div>
-      <div class="sub"><span>${U.esc(U.fmtPhone(c.phone || c.id))}</span>${line && new Set(S.convs.map(x => x.line)).size > 1 ? `<span>· ${U.esc(line.nome)}</span>` : ""} ${win}</div></div>
-    <select id="assign" aria-label="Responsável" title="Responsável pela conversa"><option value="">Sem responsável</option>${mem.map(m => `<option value="${U.esc(m.uid)}" ${c.assignedTo && c.assignedTo.uid === m.uid ? "selected" : ""}>${U.esc(m.uid === S.me.uid ? m.name + " (eu)" : m.name)}</option>`).join("")}</select>
+    <div class="grow" style="min-width:0"><div class="nm">${U.esc(c.name || U.fmtPhone(c.id))}</div>
+      <div class="sub"><span>${U.esc(U.fmtPhone(c.phone || c.id))}</span>${line && new Set(S.convs.map(x => x.line)).size > 1 ? `<span>· ${U.esc(line.nome)}</span>` : ""}</div></div>
     <button class="btn icon ghost" id="bStar" aria-pressed="${!!c.important}" title="${c.important ? "Tirar de importantes" : "Marcar como importante"}" style="color:${c.important ? "var(--gold)" : "inherit"}">${icon("star")}</button>
     <button class="btn sm" id="bClose" title="${c.status === "encerrada" ? "Reabrir conversa" : "Encerrar conversa"}">${c.status === "encerrada" ? `<span>Reabrir</span>` : `${icon("check")}<span class="lbl">Encerrar</span>`}</button>
-    <button class="btn icon ghost" id="bInfo" title="Dados da cliente" aria-label="Dados da cliente">${icon("info")}</button>`;
+    <button class="btn icon ghost" id="bInfo" title="Dados da cliente" aria-label="Dados da cliente">${icon("info")}</button></div>
+    <div class="cbar">${win}<span class="cbl">Etapa</span><select id="etapa" class="etsel" aria-label="Etapa no funil" title="Etapa no funil de vendas" data-k="${etapaOf(c) || ""}">${ETAPAS.map(([k, l]) => `<option value="${k}" ${etapaOf(c) === k ? "selected" : ""}>${l}</option>`).join("")}${etapaOf(c) ? "" : `<option value="" selected>Fora do funil</option>`}</select><span class="cbl">·</span><select id="assign" aria-label="Responsável" title="Responsável pela conversa"><option value="">Sem responsável</option>${mem.map(m => `<option value="${U.esc(m.uid)}" ${c.assignedTo && c.assignedTo.uid === m.uid ? "selected" : ""}>${U.esc(m.uid === S.me.uid ? m.name + " (eu)" : m.name)}</option>`).join("")}</select></div>`;
   $("#bBack").onclick = () => { $("#conv").classList.remove("showchat"); document.body.classList.remove("inchat"); S.sel = null; history.replaceState(null, "", "#conversas"); if (S.unsubMsgs) { S.unsubMsgs(); S.unsubMsgs = null; } renderList(); };
   $("#assign").onchange = e => { const m = mem.find(x => x.uid === e.target.value); API.updateConv(c.id, { assignedTo: m ? { uid: m.uid, name: m.name } : null }); toast(m ? "Conversa com " + m.name : "Conversa sem responsável"); };
   $("#bStar").onclick = () => API.updateConv(c.id, { important: !c.important });
+  $("#etapa").onchange = e => e.target.value && setEtapa(c, e.target.value);
   $("#bClose").onclick = () => { const closing = c.status !== "encerrada"; API.updateConv(c.id, { status: closing ? "encerrada" : "aberta", unread: 0 }); toast(closing ? "Conversa encerrada" : "Conversa reaberta"); };
   $("#bInfo").onclick = toggleInfo;
 }
@@ -1285,6 +1464,7 @@ function renderComposerState() {
   t.placeholder = mode === "note" ? "Nota só para a equipe — a cliente não vê" : lockMsg ? "Janela fechada: envie um modelo para retomar a conversa" : matchMedia("(max-width:760px)").matches ? "Mensagem  ( / atalhos )" : "Escreva uma mensagem…  ( / para respostas rápidas )";
   t.disabled = lockMsg; $("#bSend").disabled = lockMsg;
   ["bAttach", "bProd", "bQuick"].forEach(id => $("#" + id).disabled = mode === "note" || lockMsg);
+  $("#bOrder").disabled = mode === "note";
   const bn = $("#banner");
   if (!lineOk && mode === "msg") bn.innerHTML = `<div class="banner warn">${icon("plug")}<span class="grow">O número desta conversa está desconectado. Reconecte em Conexões para enviar.</span><a class="btn sm" href="#conexoes">Conexões</a></div>`;
   else if (lockMsg) bn.innerHTML = `<div class="banner closed">${icon("info")}<span class="grow">${c.windowUntil ? `Faz mais de 24h que ${U.esc(U.first(c.name) || "a cliente")} escreveu.` : `${U.esc(U.first(c.name) || "A cliente")} ainda não respondeu.`} Pela regra da Meta só dá para mandar um <b>modelo aprovado</b> (cobrado). Quando ela responder, a conversa libera de novo.</span><button class="btn sm pri" id="bTpl">Enviar modelo</button></div>`;
@@ -1439,12 +1619,14 @@ function renderInfo(soft) {
       <div style="margin-top:6px"><span class="pill ${seg.cls}">${seg.label}</span></div>
     </div>
     <div class="sec mobile-only"><h4>Atendimento</h4><select id="iassign" aria-label="Responsável"><option value="">Sem responsável</option>${(S.members.length ? S.members : [{ uid: S.me.uid, name: S.me.name }]).map(m => `<option value="${U.esc(m.uid)}" ${c.assignedTo && c.assignedTo.uid === m.uid ? "selected" : ""}>${U.esc(m.name)}</option>`).join("")}</select>
-      <label class="switch" style="margin-top:8px"><span>Importante</span><input type="checkbox" id="istar" ${c.important ? "checked" : ""}></label></div>
+      <label class="switch" style="margin-top:8px"><span>Importante</span><input type="checkbox" id="istar" ${c.important ? "checked" : ""}></label>
+      <label class="f" for="ietapa">Etapa no funil</label><select id="ietapa">${ETAPAS.map(([k, l]) => `<option value="${k}" ${etapaOf(c) === k ? "selected" : ""}>${l}</option>`).join("")}${etapaOf(c) ? "" : `<option value="" selected>Fora do funil</option>`}</select></div>
     <div class="sec"><h4>Compras ${ctx ? `<a class="tiny" href="index.html" target="_blank" rel="noopener">abrir vendas ↗</a>` : ""}</h4>
       ${ctx ? `<div class="kv"><div><small>Total gasto</small><b>${U.brl(ctx.total)}</b></div><div><small>Pedidos</small><b>${ctx.orders}</b></div><div><small>Ticket médio</small><b>${U.brl(ctx.total / ctx.orders)}</b></div><div><small>Última compra</small><b>${ctx.days === 0 ? "hoje" : ctx.days === 1 ? "ontem" : ctx.days + " dias"}</b></div></div>
       <div style="margin-top:10px">${ctx.sales.slice(0, 3).map(s => `<div class="ord"><span>${new Date(s.date).toLocaleDateString("pt-BR")}<br><span class="muted tiny">${STATUS_PED[s.status] || s.status || ""}${s.tracking_code ? " · " + U.esc(s.tracking_code) : ""}</span></span><b>${U.brl(s.value)}</b></div>`).join("")}</div>`
       : `<p class="muted tiny" style="margin:0">${CTX.loaded ? "Nenhuma compra com este telefone no sistema de vendas." : "Carregando compras…"}</p>`}
     </div>
+    ${orderSec(c)}
     ${q ? `<div class="sec"><h4>Quiz</h4><div class="tiny"><b>${U.esc(quizStage(q))}</b>${(q.escolhas || []).length ? `<br><span class="muted">Escolhas: ${U.esc(q.escolhas.join(" · "))}</span>` : ""}${(q.carrinho || []).length ? `<br><span class="muted">Carrinho: ${q.carrinho.length} item(ns)</span>` : ""}</div></div>` : ""}
     <div class="sec"><h4>Etiquetas</h4><div class="tagbox" id="itags"></div></div>
     <div class="sec"><h4>Anotações <span class="tiny muted" id="isaved"></span></h4><textarea id="inotes" rows="3" placeholder="Ex.: revende em Petrópolis, prefere peças grandes">${U.esc(c.notes || "")}</textarea></div>
@@ -1455,11 +1637,13 @@ function renderInfo(soft) {
   $("#iclose").onclick = () => $("#conv").classList.remove("showinfo");
   $("#iassign").onchange = e => { const mm = S.members.find(x => x.uid === e.target.value) || (e.target.value === S.me.uid ? S.me : null); API.updateConv(c.id, { assignedTo: mm ? { uid: mm.uid, name: mm.name } : null }); };
   $("#istar").onchange = e => API.updateConv(c.id, { important: e.target.checked });
+  $("#ietapa").onchange = e => e.target.value && setEtapa(c, e.target.value);
   $("#iname").onchange = e => API.updateConv(c.id, { name: e.target.value.trim() });
   $("#icopy").onclick = () => navigator.clipboard.writeText(U.fmtPhone(c.phone || c.id)).then(() => toast("Número copiado"));
   const saveNotes = U.debounce(v => { API.updateConv(c.id, { notes: v }); const s = $("#isaved"); if (s) { s.textContent = "salvo"; setTimeout(() => s && (s.textContent = ""), 1500); } }, 700);
   $("#inotes").oninput = e => saveNotes(e.target.value);
   $("#iopt").onchange = e => { API.updateConv(c.id, { optOut: !e.target.checked, optOutEm: e.target.checked ? null : Date.now() }); toast(e.target.checked ? "Voltou a receber disparos" : "Não vai mais receber disparos"); };
+  bindOrderSec(c);
   renderTags(c);
 }
 function renderTags(c) {
@@ -1525,6 +1709,123 @@ async function openCatalog() {
   load("");
 }
 
+/* ---------- montar pedido na conversa ---------- */
+const PED_ST = { rascunho: ["Rascunho", ""], aguardando: ["Aguardando pagamento", "amber"], pago: ["Pago", "green"], enviado: ["Enviado", "gold"] };
+const PAGTO = { pix: "Pix", cartao: "Cartão (link de pagamento)", boleto: "Boleto", dinheiro: "Dinheiro na retirada" };
+function orderCalc(o) {
+  const sub = Math.round(o.itens.reduce((a, i) => a + i.qtd * i.preco, 0) * 100) / 100;
+  const fr = o.frete.tipo === "gratis" || o.frete.tipo === "retirada" ? 0 : o.frete.tipo === "valor" ? Number(o.frete.valor) || 0 : Number(S.settings.fretePadrao) || 15.75;
+  const desc = Math.min(sub, Math.max(0, Number(o.desconto) || 0));
+  return { subtotal: sub, freteValor: fr, desconto: desc, total: Math.round((sub - desc + fr) * 100) / 100, pecas: o.itens.reduce((a, i) => a + i.qtd, 0) };
+}
+function orderText(o, c) {
+  const k = orderCalc(o);
+  const fr = o.frete.tipo === "retirada" ? "Retirada na loja" : k.freteValor ? U.brl(k.freteValor) : "Grátis 🎁";
+  const pix = o.pagamento === "pix" ? (S.settings.pix ? `Chave Pix: ${S.settings.pix}` : ((S.quick.find(x => x.atalho === "pix") || {}).texto || "")) : "";
+  return [`*Seu pedido na Veraneio Semijoias* 💛`, ``, ...o.itens.map(i => `${i.qtd}x ${i.nome} — ${U.brl(i.qtd * i.preco)}`), ``,
+    `Subtotal (${k.pecas} peça${k.pecas === 1 ? "" : "s"}): ${U.brl(k.subtotal)}`, k.desconto ? `Desconto: −${U.brl(k.desconto)}` : null, `Frete: ${fr}`, `*Total: ${U.brl(k.total)}*`, ``,
+    `Pagamento: ${PAGTO[o.pagamento] || o.pagamento}`, pix ? expandQuick(pix, c) : null, o.obs ? `\n${o.obs}` : null, o.pagamento === "pix" && !/comprovante/i.test(pix) ? `Assim que pagar, me manda o comprovante por aqui 💛` : null].filter(x => x !== null).join("\n").replace(/\n{3,}/g, "\n\n");
+}
+async function openOrder(c) {
+  if (!c) return;
+  const o = c.pedido && c.pedido.status !== "enviado" ? JSON.parse(JSON.stringify(c.pedido)) : { itens: [], desconto: 0, frete: { tipo: "padrao" }, pagamento: "pix", obs: "" };
+  o.itens = o.itens || []; o.frete = o.frete || { tipo: "padrao" };
+  const m = modal(`Pedido · ${c.name || U.fmtPhone(c.id)}`, `<div class="ordgrid">
+      <div class="ocat"><div class="lsearch">${icon("search")}<input type="search" id="oq" placeholder="Buscar peça no catálogo" aria-label="Buscar peça"></div><div class="oprods" id="oprods"><div class="empty tiny">Carregando catálogo…</div></div>
+        <details class="oav"><summary>+ Item fora do catálogo</summary><div class="row" style="gap:6px;margin-top:6px"><input type="text" id="oan" placeholder="Nome da peça" class="grow"><input type="number" id="oap" placeholder="Preço" step="0.01" min="0" style="width:90px"><button class="btn sm" id="oaa">Adicionar</button></div></details></div>
+      <div class="ocart"><div id="olines"></div>
+        <div class="ofields">
+          <label class="f" for="odesc">Desconto (R$)</label><input type="number" id="odesc" step="0.01" min="0" value="${o.desconto || ""}" placeholder="0,00">
+          <label class="f" for="ofr">Frete</label><div class="row" style="gap:6px"><select id="ofr" class="grow"><option value="padrao">Padrão (${U.brl(S.settings.fretePadrao || 15.75)})</option><option value="gratis">Grátis</option><option value="retirada">Retirada na loja</option><option value="valor">Outro valor</option></select><input type="number" id="ofv" step="0.01" min="0" style="width:90px" class="hide" aria-label="Valor do frete"></div>
+          <label class="f" for="opg">Pagamento</label><select id="opg">${Object.entries(PAGTO).map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select>
+          <label class="f" for="oobs">Observação para a cliente (opcional)</label><textarea id="oobs" rows="2" placeholder="Ex.: separo hoje e envio amanhã"></textarea>
+        </div>
+        <div class="otot" id="otot"></div></div></div>`,
+    `<button class="btn ghost" id="oprev">Ver mensagem</button><span class="grow"></span><button class="btn" id="osave">Salvar</button><button class="btn pri" id="osend">${icon("send")} Enviar para a cliente</button>`, true);
+  m.el.querySelector(".md").classList.add("xwide");
+  $("#ofr", m.el).value = o.frete.tipo; $("#ofv", m.el).value = o.frete.valor || ""; $("#ofv", m.el).classList.toggle("hide", o.frete.tipo !== "valor");
+  $("#opg", m.el).value = o.pagamento; $("#oobs", m.el).value = o.obs || "";
+  const open = windowLeft(c) > 0;
+  if (!open) { const b = $("#osend", m.el); b.disabled = true; b.title = "Janela de 24h fechada: salve o pedido e envie um modelo para retomar a conversa"; }
+  let items = [];
+  const drawCart = () => {
+    const k = orderCalc(o);
+    $("#olines", m.el).innerHTML = o.itens.length ? `<table class="t olt"><tbody>${o.itens.map((i, ix) => `<tr><td>${i.foto ? `<img src="${U.esc(i.foto)}" alt="" class="oth">` : ""}</td><td class="grow"><b>${U.esc(i.nome)}</b></td>
+      <td><div class="qty"><button data-q="${ix}" data-d="-1" aria-label="Menos">−</button><input type="number" min="1" value="${i.qtd}" data-qi="${ix}" aria-label="Quantidade de ${U.esc(i.nome)}"><button data-q="${ix}" data-d="1" aria-label="Mais">+</button></div></td>
+      <td><input type="number" step="0.01" min="0" value="${i.preco}" data-pi="${ix}" class="oprice" aria-label="Preço de ${U.esc(i.nome)}"></td><td class="n"><b>${U.brl(i.qtd * i.preco)}</b></td><td><button class="btn icon ghost sm" data-rm="${ix}" aria-label="Tirar ${U.esc(i.nome)}">${icon("x")}</button></td></tr>`).join("")}</tbody></table>`
+      : `<div class="empty tiny">Escolha as peças no catálogo ao lado.</div>`;
+    $("#otot", m.el).innerHTML = `<div><span>${k.pecas} peça(s)</span><b>${U.brl(k.subtotal)}</b></div>${k.desconto ? `<div><span>Desconto</span><b>−${U.brl(k.desconto)}</b></div>` : ""}<div><span>Frete</span><b>${o.frete.tipo === "retirada" ? "Retirada" : k.freteValor ? U.brl(k.freteValor) : "Grátis"}</b></div><div class="big"><span>Total</span><b>${U.brl(k.total)}</b></div>`;
+    $$("[data-q]", m.el).forEach(b => b.onclick = () => { const i = o.itens[+b.dataset.q]; i.qtd = Math.max(1, i.qtd + +b.dataset.d); drawCart(); });
+    $$("[data-qi]", m.el).forEach(x => x.onchange = () => { o.itens[+x.dataset.qi].qtd = Math.max(1, Math.round(+x.value || 1)); drawCart(); });
+    $$("[data-pi]", m.el).forEach(x => x.onchange = () => { o.itens[+x.dataset.pi].preco = Math.max(0, Math.round((+x.value || 0) * 100) / 100); drawCart(); });
+    $$("[data-rm]", m.el).forEach(b => b.onclick = () => { o.itens.splice(+b.dataset.rm, 1); drawCart(); });
+    ["osave", "osend", "oprev"].forEach(id => { const b = $("#" + id, m.el); if (id !== "osend" || open) b.disabled = !o.itens.length; });
+  };
+  const add = p => { const i = o.itens.find(x => x.id && x.id === p.id); if (i) i.qtd++; else o.itens.push({ id: p.id || U.uid("av"), nome: p.nome, preco: Number(p.preco) || 0, qtd: 1, foto: p.foto || "" }); drawCart(); };
+  const drawCat = () => {
+    $("#oprods", m.el).innerHTML = items.length ? items.map(p => `<button class="oprod" data-id="${U.esc(p.id)}">${p.foto ? `<img src="${U.esc(p.foto)}" alt="" loading="lazy">` : `<span class="ph2">${p.emoji || icon("gem")}</span>`}<span class="pi"><b>${U.esc(p.nome)}</b>${U.brl(p.preco)}</span><span class="padd">${icon("plus")}</span></button>`).join("") : `<div class="empty tiny">Nenhuma peça encontrada.</div>`;
+    $$(".oprod", m.el).forEach(b => b.onclick = () => { add(items.find(x => x.id === b.dataset.id)); b.classList.add("added"); setTimeout(() => b.classList.remove("added"), 400); });
+  };
+  const load = async q => { try { items = await API.catalog(q); drawCat(); } catch (e) { $("#oprods", m.el).innerHTML = `<div class="empty tiny">Catálogo indisponível: ${U.esc(errMsg(e))}<br>Use “Item fora do catálogo”.</div>`; } };
+  $("#oq", m.el).oninput = U.debounce(e => load(e.target.value), 250);
+  $("#oaa", m.el).onclick = () => { const n = $("#oan", m.el).value.trim(), pr = +$("#oap", m.el).value; if (!n || !(pr >= 0)) return toast("Nome e preço"); add({ nome: n, preco: pr }); $("#oan", m.el).value = ""; $("#oap", m.el).value = ""; };
+  $("#odesc", m.el).oninput = e => { o.desconto = Math.max(0, +e.target.value || 0); drawCart(); };
+  $("#ofr", m.el).onchange = e => { o.frete.tipo = e.target.value; $("#ofv", m.el).classList.toggle("hide", o.frete.tipo !== "valor"); drawCart(); };
+  $("#ofv", m.el).oninput = e => { o.frete.valor = Math.max(0, +e.target.value || 0); drawCart(); };
+  $("#opg", m.el).onchange = e => { o.pagamento = e.target.value; };
+  $("#oobs", m.el).oninput = e => { o.obs = e.target.value; };
+  const save = async status => {
+    const k = orderCalc(o);
+    const ped = Object.assign({}, o, { subtotal: k.subtotal, freteValor: k.freteValor, desconto: k.desconto, total: k.total, pecas: k.pecas, status, criadoEm: o.criadoEm || Date.now(), atualizadoEm: Date.now(), por: S.me.name });
+    const patch = { pedido: ped };
+    if (status === "aguardando" && !["pago", "enviado"].includes(etapaOf(c))) Object.assign(patch, { etapa: "aguardando", etapaEm: Date.now() });
+    else if (status === "rascunho" && (!c.etapa || c.etapa === "novo")) Object.assign(patch, { etapa: "negociando", etapaEm: Date.now() });
+    await API.updateConv(c.id, patch);
+  };
+  $("#oprev", m.el).onclick = () => { const pv = modal("Mensagem do pedido", `<div class="phone" style="width:100%"><div class="m out"><div class="b"><div class="tx" style="white-space:pre-wrap">${U.esc(orderText(o, c))}</div></div></div></div>`, `<button class="btn" id="pvc">Copiar</button>`); $("#pvc", pv.el).onclick = () => navigator.clipboard.writeText(orderText(o, c)).then(() => toast("Copiado")); };
+  $("#osave", m.el).onclick = async () => { await save(c.pedido && c.pedido.status !== "rascunho" ? c.pedido.status : "rascunho"); m.close(); toast("Pedido salvo"); };
+  $("#osend", m.el).onclick = async () => {
+    const b = $("#osend", m.el); b.disabled = true;
+    try { await API.send(c, { kind: "text", text: orderText(o, c) }); await save("aguardando"); m.close(); toast("Pedido enviado · aguardando pagamento"); }
+    catch (e) { toast(errMsg(e), 6000); b.disabled = false; }
+  };
+  drawCart(); load("");
+}
+function orderSec(c) {
+  const p = c.pedido; if (!p || !(p.itens || []).length) return `<div class="sec"><h4>Pedido</h4><button class="btn sm" id="oNew">${icon("cart")} Montar pedido</button></div>`;
+  const st = PED_ST[p.status] || [p.status, ""];
+  return `<div class="sec"><h4>Pedido <span class="pill ${st[1]}">${st[0]}</span></h4>
+    <div class="tiny">${p.itens.slice(0, 6).map(i => `<div class="ord"><span>${i.qtd}x ${U.esc(i.nome)}</span><span>${U.brl(i.qtd * i.preco)}</span></div>`).join("")}${p.itens.length > 6 ? `<div class="muted">+${p.itens.length - 6} item(ns)</div>` : ""}</div>
+    <div class="ord" style="margin-top:4px"><span>Total${p.freteValor ? " c/ frete" : ""}</span><b>${U.brl(p.total)}</b></div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:8px">
+      ${p.status === "aguardando" ? `<button class="btn sm pri" data-ps="pago">Marcar pago</button>` : ""}${p.status === "pago" ? `<button class="btn sm pri" data-ps="enviado">Marcar enviado</button>` : ""}
+      ${p.status !== "enviado" ? `<button class="btn sm" id="oEdit">Editar</button>` : `<button class="btn sm" id="oNew">Novo pedido</button>`}
+      <button class="btn sm ghost" id="oCopy" title="Copiar o resumo para lançar no sistema de vendas">Copiar resumo</button></div></div>`;
+}
+function bindOrderSec(c) {
+  const n = $("#oNew"); if (n) n.onclick = () => { if (c.pedido && c.pedido.status === "enviado") API.updateConv(c.id, { pedido: null }).then(() => openOrder(Object.assign({}, c, { pedido: null }))); else openOrder(c); };
+  const e = $("#oEdit"); if (e) e.onclick = () => openOrder(c);
+  const cp = $("#oCopy"); if (cp) cp.onclick = () => navigator.clipboard.writeText(`${c.name || ""} · ${U.fmtPhone(c.phone || c.id)}\n` + orderText(c.pedido, c)).then(() => toast("Resumo copiado — cole no sistema de vendas"));
+  $$("[data-ps]").forEach(b => b.onclick = () => { const k = b.dataset.ps; API.updateConv(c.id, { pedido: Object.assign({}, c.pedido, { status: k, [k + "Em"]: Date.now() }), etapa: k, etapaEm: Date.now() }); toast(k === "pago" ? "Pedido pago ✓" : "Pedido enviado ✓"); });
+}
+
+/* foto do cabeçalho de modelo: enviar do computador ou escolher do catálogo da loja */
+function photoPicker(box, st, onChange) {
+  const draw = () => {
+    box.innerHTML = `<label class="f">Foto da mensagem</label><div class="pphoto">${st.url ? `<img src="${U.esc(st.url)}" alt="Foto escolhida">` : `<div class="ph2">${icon("image")}</div>`}
+      <div class="col"><div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn sm" type="button" data-pp="up">${icon("clip")} Do computador</button><button class="btn sm" type="button" data-pp="cat">${icon("gem")} Do catálogo</button></div><span class="muted tiny">${st.busy ? "Enviando foto…" : st.url ? "Essa foto vai no topo da mensagem." : "Obrigatória neste modelo. JPG ou PNG, até 5 MB."}</span></div>
+      <input type="file" accept="image/jpeg,image/png" class="hide" data-pp="file"></div>`;
+    $('[data-pp="up"]', box).onclick = () => $('[data-pp="file"]', box).click();
+    $('[data-pp="file"]', box).onchange = async e => { const f = e.target.files[0]; if (!f) return; if (f.size > 5 * 1024 * 1024) return toast("Foto acima de 5 MB"); st.busy = true; draw(); try { st.url = (await API.upload(f, "modelos")).url; } catch (er) { toast("Não subiu a foto: " + er.message); } st.busy = false; draw(); onChange && onChange(); };
+    $('[data-pp="cat"]', box).onclick = async () => {
+      const m = modal("Escolher foto do catálogo", `<input type="search" id="ppq" placeholder="Buscar peça"><div class="prods" id="ppl"><div class="empty tiny">Carregando…</div></div>`, "", true);
+      const load = async q => { try { const it = (await API.catalog(q)).filter(p => p.foto); $("#ppl", m.el).innerHTML = it.map(p => `<button class="prod" data-u="${U.esc(p.foto)}"><img src="${U.esc(p.foto)}" alt="" loading="lazy"><div class="pi"><b>${U.esc(p.nome)}</b>${U.brl(p.preco)}</div></button>`).join("") || `<div class="empty tiny">Nenhuma peça com foto.</div>`; $$(".prod", m.el).forEach(b => b.onclick = () => { st.url = b.dataset.u; m.close(); draw(); onChange && onChange(); }); } catch (er) { $("#ppl", m.el).innerHTML = `<div class="empty tiny">${U.esc(errMsg(er))}</div>`; } };
+      $("#ppq", m.el).oninput = U.debounce(e => load(e.target.value), 250); load("");
+    };
+  };
+  draw();
+}
+
 /* enviar modelo (janela fechada ou nova conversa) */
 async function openTemplateSend(c, isNew) {
   const lineId = c.line || (S.lines.find(l => l.status === "conectado") || {}).id;
@@ -1536,15 +1837,17 @@ async function openTemplateSend(c, isNew) {
   const ctx = ctxOf(c); const q = quizOf(c); const ship = ctx && ctx.sales.find(s => s.tracking_code);
   const auto = { primeiroNome: U.first(c.name), nome: c.name, rastreio: ship ? ship.tracking_code : "", etapa: quizStage(q), atendente: U.first(S.me.name) };
   $(".mb", m.el).innerHTML = `<div style="display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px" class="tgrid">
-      <div><label class="f" for="tsel">Modelo</label><select id="tsel">${list.map((t, i) => `<option value="${i}">${U.esc(t.name)} · ${t.category === "UTILITY" ? "utilidade" : "marketing"}</option>`).join("")}</select><div id="tvars"></div>
+      <div><label class="f" for="tsel">Modelo</label><select id="tsel">${list.map((t, i) => `<option value="${i}">${U.esc(t.name)} · ${t.category === "UTILITY" ? "utilidade" : "marketing"}${t.headerFormat === "IMAGE" ? " · com foto" : ""}</option>`).join("")}</select><div id="tvars"></div><div id="tphoto"></div>
       ${c.optOut ? `<div class="banner warn" style="margin:12px 0 0">Ela pediu para não receber disparos. Use só se ela tiver te pedido algo.</div>` : ""}</div>
       <div><label class="f">Prévia</label><div class="phone"><div class="m out"><div class="b" id="tprev"></div></div></div></div></div>`;
   if (matchMedia("(max-width:760px)").matches) $(".tgrid", m.el).style.gridTemplateColumns = "1fr";
+  const ph = { url: "" };
   const draw = () => {
     const t = list[+$("#tsel", m.el).value]; const n = (t.body.match(/\{\{\d+\}\}/g) || []).length;
+    const pbox = $("#tphoto", m.el); if (t.headerFormat === "IMAGE") photoPicker(pbox, ph, () => draw()); else pbox.innerHTML = "";
     const old = $$("[data-v]", m.el).map(x => x.value);
     $("#tvars", m.el).innerHTML = Array.from({ length: n }, (_, i) => { const key = (t.vars || [])[i]; const v = old[i] || auto[key] || ""; return `<label class="f">Variável {{${i + 1}}}${key ? ` · ${U.esc(key)}` : ""}</label><input type="text" data-v="${i}" value="${U.esc(v)}">`; }).join("");
-    const upd = () => { const vals = $$("[data-v]", m.el).map(x => x.value); const txt = t.body.replace(/\{\{(\d+)\}\}/g, (k, d) => vals[d - 1] || k); $("#tprev", m.el).innerHTML = `<div class="tx">${U.esc(txt)}</div>${t.buttons ? `<div class="tbtns">${t.buttons.map(b => `<span>${U.esc(b)}</span>`).join("")}</div>` : ""}`; $("#tsend", m.el).disabled = vals.some(v => !v.trim()); $("#tcost", m.el).textContent = "Custo ≈ " + U.brl(t.category === "UTILITY" ? S.settings.precoUtilidade : S.settings.precoMarketing) + " (cobrado pela Meta)"; return txt; };
+    const upd = () => { const vals = $$("[data-v]", m.el).map(x => x.value); const txt = t.body.replace(/\{\{(\d+)\}\}/g, (k, d) => vals[d - 1] || k); $("#tprev", m.el).innerHTML = `${t.headerFormat === "IMAGE" ? (ph.url ? `<img class="timg" src="${U.esc(ph.url)}" alt="">` : `<div class="timg ph2">${icon("image")}</div>`) : ""}<div class="tx">${U.esc(txt)}</div>${t.buttons ? `<div class="tbtns">${t.buttons.map(b => `<span>${U.esc(b)}</span>`).join("")}</div>` : ""}`; $("#tsend", m.el).disabled = vals.some(v => !v.trim()) || (t.headerFormat === "IMAGE" && !ph.url); $("#tcost", m.el).textContent = "Custo ≈ " + U.brl(t.category === "UTILITY" ? S.settings.precoUtilidade : S.settings.precoMarketing) + " (cobrado pela Meta)"; return txt; };
     $$("[data-v]", m.el).forEach(x => x.oninput = upd); upd();
   };
   $("#tsel", m.el).onchange = draw; draw();
@@ -1554,6 +1857,7 @@ async function openTemplateSend(c, isNew) {
     $("#tsend", m.el).disabled = true; $("#tsend", m.el).textContent = "Enviando…";
     try {
       const payload = { kind: "template", template: t.name, language: t.language || "pt_BR", vars, preview };
+      if (t.headerFormat === "IMAGE") payload.headerImage = ph.url;
       if (isNew) { const r = await API.newConversation(Object.assign(payload, { to: c.phone, name: c.name, line: lineId })); m.close(); toast("Modelo enviado"); location.hash = "#conversas/" + encodeURIComponent(r.convId || U.toWa(c.phone)); }
       else { await API.send(c, payload); m.close(); toast("Modelo enviado. Quando ela responder, a conversa libera."); }
     } catch (e) { toast(errMsg(e), 6000); $("#tsend", m.el).disabled = false; $("#tsend", m.el).textContent = "Enviar modelo"; }
@@ -2140,18 +2444,64 @@ function renderDisparos() {
   const pct = (a, b) => b ? Math.round(a / b * 100) + "%" : "—";
   $("#view").innerHTML = `<div class="page">
     <div class="ph"><div><h1>Disparos</h1><p>Pela API (modelo aprovado, respostas caem nas Conversas) ou pelo WhatsApp Web (você confirma cada envio).</p></div><button class="btn pri" id="dNew">${icon("plus")} Novo disparo</button></div>
-    ${camps.length ? `<div class="cards">${camps.map(c => `<div class="card">
+    ${camps.length ? `<div class="cards">${camps.map(c => `<div class="card camp" data-camp="${U.esc(c.id)}" tabindex="0" role="button" aria-label="Ver relatório de ${U.esc(c.nome)}">
       <div class="row"><h3 class="grow">${U.esc(c.nome)}</h3><span class="pill ${c.status === "concluida" ? "green" : c.status === "enviando" ? "blue" : c.status === "pausada" ? "amber" : ""}">${{ concluida: "Concluído", enviando: "Enviando", agendada: "Agendado", pausada: "Pausado", rascunho: "Rascunho" }[c.status] || c.status}</span></div>
       <div class="muted tiny">${U.esc(c.modelo)} · ${new Date(c.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
       ${c.status === "enviando" ? `<div class="bar" style="margin-top:10px"><i style="width:${pct(c.enviadas, c.total)}"></i></div>` : ""}
       <div class="stats"><div><small>Enviadas</small><b>${c.enviadas || 0}/${c.total || 0}</b></div><div><small>Lidas</small><b>${pct(c.lidas, c.entregues)}</b></div><div><small>Responderam</small><b>${c.respondidas || 0}</b></div><div><small>Pedidos</small><b>${c.pedidos || 0}</b></div><div><small>Receita</small><b>${U.brl(c.receita)}</b></div><div><small>Custo</small><b>${U.brl(c.custo)}</b></div></div>
-      ${(c.falhas || c.sairam) ? `<div class="muted tiny" style="margin-top:8px">${c.falhas || 0} não entregues · ${c.sairam || 0} pediram para sair</div>` : ""}
+      <div class="row tiny" style="margin-top:10px"><span class="muted grow">${(c.falhas || c.sairam) ? `${c.falhas || 0} não entregues · ${c.sairam || 0} pediram para sair` : c.motivo ? U.esc(c.motivo) : ""}</span><span class="lnk">Ver relatório →</span></div>
     </div>`).join("")}</div>` : `<div class="card empty"><h3>Nenhum disparo ainda</h3><p>Comece pelas revendedoras em risco: é onde mais volta pedido.</p></div>`}
     ${webCampsHtml()}
     <p class="muted tiny" style="margin-top:16px">Venda atribuída: pedido da mesma cliente até ${S.settings.atribuicaoHoras}h depois da mensagem. Ajuste em Conexões › Configurações.</p>
   </div>`;
   $("#dNew").onclick = () => openNewCampaign();
   $$("[data-wq]").forEach(b => b.onclick = () => runWebQueue(b.dataset.wq));
+  $$("[data-camp]").forEach(b => { const go = () => openCampaignReport(S.campaigns.find(x => x.id === b.dataset.camp)); b.onclick = go; b.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } }; });
+}
+/* relatório do disparo por pessoa */
+const DEST_ST = { respondeu: ["Respondeu", "green"], lida: ["Lida", "blue"], entregue: ["Entregue", ""], enviada: ["Enviada", ""], falhou: ["Falhou", "red"], fila: ["Na fila", "amber"] };
+function destStatus(d) { if (d.status === "falha" || d.entrega === "failed") return "falhou"; if (d.respondeuEm) return "respondeu"; if (d.entrega === "read") return "lida"; if (d.entrega === "delivered") return "entregue"; if (d.status === "fila") return "fila"; return "enviada"; }
+async function openCampaignReport(c) {
+  if (!c) return;
+  const m = modal(c.nome, `<div class="empty tiny">Carregando…</div>`, "", true);
+  let list = [];
+  try { list = await API.campaignDest(c.id); } catch (e) { $(".mb", m.el).innerHTML = `<div class="empty">Não consegui carregar: ${U.esc(errMsg(e))}</div>`; return; }
+  list.forEach(d => { d.st = destStatus(d); const cv = S.convs.find(x => U.telKey(x.id) === U.telKey(d.wa)); d.nome = d.name || (cv && cv.name) || ""; d.conv = cv ? cv.id : null; });
+  let f = "todos", q = "";
+  const cnt = k => k === "todos" ? list.length : list.filter(d => d.st === k).length;
+  const pct = (a, b) => b ? Math.round(a / b * 100) + "%" : "—";
+  const draw = () => {
+    const n = U.norm(q), dg = U.digits(q);
+    const rows = list.filter(d => (f === "todos" || d.st === f) && (!q || U.norm(d.nome).includes(n) || (dg && d.wa.includes(dg)))).sort((a, b) => ["falhou", "respondeu", "lida", "entregue", "enviada", "fila"].indexOf(a.st) - ["falhou", "respondeu", "lida", "entregue", "enviada", "fila"].indexOf(b.st));
+    const falhas = cnt("falhou");
+    $(".mb", m.el).innerHTML = `
+      <div class="muted tiny" style="margin-top:4px">${U.esc(c.modelo)} · ${new Date(c.criadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}${c.criadoPor ? " · por " + U.esc(c.criadoPor) : ""}</div>
+      <div class="funnel">${[["Enviadas", c.enviadas || 0, c.total], ["Entregues", c.entregues || 0, c.enviadas], ["Lidas", c.lidas || 0, c.entregues], ["Responderam", c.respondidas || 0, c.entregues], ["Pedidos", c.pedidos || 0, c.respondidas]].map(([l, v, b]) => `<div><small>${l}</small><b>${v.toLocaleString("pt-BR")}</b><span class="tiny muted">${pct(v, b)}</span></div>`).join("")}<div><small>Receita</small><b>${U.brl(c.receita)}</b><span class="tiny muted">custo ${U.brl(c.custo)}</span></div></div>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin:14px 0 8px">
+        <div class="seg2" role="tablist">${["todos", "respondeu", "lida", "entregue", "enviada", "falhou", "fila"].filter(k => k === "todos" || cnt(k)).map(k => `<button role="tab" data-f="${k}" aria-selected="${f === k}">${k === "todos" ? "Todos" : DEST_ST[k][0]} <b>${cnt(k)}</b></button>`).join("")}</div>
+        <span class="grow"></span>
+        <div class="lsearch" style="width:200px">${icon("search")}<input type="search" id="rq" placeholder="Nome ou número" value="${U.esc(q)}" aria-label="Buscar no disparo"></div>
+      </div>
+      <div class="tablewrap" style="max-height:46vh" tabindex="0" role="region" aria-label="Destinatários"><table class="t"><thead><tr><th>Cliente</th><th>Status</th><th>Detalhe</th><th class="n">Quando</th></tr></thead><tbody>
+        ${rows.slice(0, 400).map(d => `<tr ${d.conv ? `data-go="${U.esc(d.conv)}" class="clk"` : ""}><td><b>${U.esc(d.nome || "Sem nome")}</b><div class="muted tiny">${U.esc(U.fmtPhone(d.wa))}</div></td><td><span class="pill ${DEST_ST[d.st][1]}">${DEST_ST[d.st][0]}</span></td><td class="tiny">${d.st === "falhou" ? `<span style="color:var(--red)">${U.esc(d.erro || "Não entregue")}</span>` : d.respondeuEm ? "Respondeu " + U.short(d.respondeuEm) : d.reenviadaEm ? "Reenviada" : ""}</td><td class="n tiny muted">${d.em ? U.short(d.em) : ""}</td></tr>`).join("") || `<tr><td colspan="4" class="muted">Ninguém aqui.</td></tr>`}
+      </tbody></table></div>
+      ${rows.length > 400 ? `<p class="muted tiny">Mostrando 400 de ${rows.length}. Use a busca ou exporte.</p>` : ""}`;
+    $(".mf", m.el).innerHTML = `<button class="btn" id="rcsv">${icon("dl")} Exportar planilha</button><span class="grow"></span>${falhas && S.me.gestor ? `<button class="btn pri" id="rre">${icon("redo")} Reenviar para quem falhou (${falhas})</button>` : ""}`;
+    $$("[data-f]", m.el).forEach(b => b.onclick = () => { f = b.dataset.f; draw(); });
+    const rq = $("#rq", m.el); rq.oninput = U.debounce(() => { q = rq.value; draw(); const r2 = $("#rq", m.el); r2.focus(); r2.setSelectionRange(r2.value.length, r2.value.length); }, 200);
+    $$("tr[data-go]", m.el).forEach(tr => tr.onclick = () => { m.close(); location.hash = "#conversas/" + encodeURIComponent(tr.dataset.go); });
+    $("#rcsv", m.el).onclick = () => downloadCsv(`disparo-${c.nome}.csv`, [["Nome", "Telefone", "Status", "Motivo da falha", "Respondeu em", "Enviada em"]].concat(list.map(d => [d.nome, U.fmtPhone(d.wa), DEST_ST[d.st][0], d.st === "falhou" ? d.erro || "" : "", d.respondeuEm ? new Date(d.respondeuEm).toLocaleString("pt-BR") : "", d.em ? new Date(d.em).toLocaleString("pt-BR") : ""])));
+    const rr = $("#rre", m.el); if (rr) rr.onclick = async () => {
+      if (!await ask("Reenviar", `Colocar de novo na fila as ${falhas} pessoas que não receberam? Quem não tem WhatsApp ou bloqueou vai falhar de novo.`, "Reenviar")) return;
+      rr.disabled = true; try { const r = await API.resend(c.id); toast(`${r.n} de volta na fila`); m.close(); } catch (e) { toast(errMsg(e), 6000); rr.disabled = false; }
+    };
+  };
+  if (!$(".mf", m.el)) { const mf = document.createElement("div"); mf.className = "mf"; $(".md", m.el).appendChild(mf); }
+  draw();
+}
+function downloadCsv(name, rows) {
+  const csv = "﻿" + rows.map(r => r.map(v => { const t = String(v == null ? "" : v); return /[";\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); a.download = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w.-]+/g, "-").toLowerCase(); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 function webLinesList() { const w = S.settings.webLines || {}; return Object.keys(w).filter(id => !S.lines.some(l => l.id === id && l.status === "conectado")).map(id => Object.assign({ id }, w[id])); }
 async function openNewCampaign(preset) {
@@ -2168,7 +2518,7 @@ async function openNewCampaign(preset) {
   let tpls = [];
   try { tpls = (await API.templates(lines[0].id)).filter(t => t.status === "APPROVED"); } catch (e) { $(".mb", m.el).innerHTML = `<div class="empty">${U.esc(errMsg(e))}</div>`; return; }
   let sel = [], paste = [], porGrupo = !!(preset && preset.porGrupo), tplBy = {};
-  const tplOpts = cur => tpls.map((t, i) => `<option value="${i}" ${String(cur) === String(i) ? "selected" : ""}>${U.esc(t.name)} · ${t.category === "UTILITY" ? "utilidade" : "marketing"}</option>`).join("");
+  const tplOpts = cur => tpls.map((t, i) => `<option value="${i}" ${String(cur) === String(i) ? "selected" : ""}>${U.esc(t.name)} · ${t.category === "UTILITY" ? "utilidade" : "marketing"}${t.headerFormat === "IMAGE" ? " · com foto" : ""}</option>`).join("");
   const sec = (title, list) => list.length ? `<div class="sgh">${title}</div><div class="segs">${list.map(s => `<button class="seg" data-k="${U.esc(s.k)}" aria-pressed="false"><b>${s.list.length}</b>${U.esc(s.label)}<br><small>${U.esc(s.desc)}${s.blocked ? ` · ${s.blocked} pediram p/ sair` : ""}</small></button>`).join("")}</div>` : "";
   $(".mb", m.el).innerHTML = `
     <label class="f" for="cn">Nome</label><input type="text" id="cn" placeholder="Ex.: Reposição novembro">
@@ -2180,7 +2530,7 @@ async function openNewCampaign(preset) {
     <div class="sgh">Outros</div><div class="segs">${sets.filter(s => s.k === "quiz" || s.k === "todas").map(s => `<button class="seg" data-k="${s.k}" aria-pressed="false"><b>${s.list.length}</b>${U.esc(s.label)}<br><small>${U.esc(s.desc)}</small></button>`).join("")}<button class="seg" data-k="colar" aria-pressed="false"><b>✎</b>Colar números<br><small>um por linha</small></button></div>
     <textarea id="cpaste" class="hide" rows="4" placeholder="22999998888&#10;21988887777" style="margin-top:8px"></textarea>
     <div id="cmix"></div>
-    <label class="f">2. Mensagem (modelo aprovado)</label><div id="cmsg"></div>
+    <label class="f">2. Mensagem (modelo aprovado)</label><div id="cmsg"></div><div id="cphoto"></div>
     <label class="f">3. Quando</label><div class="row"><label class="row" style="gap:4px"><input type="radio" name="cw" value="agora" checked> Agora</label><label class="row" style="gap:4px;margin-left:12px"><input type="radio" name="cw" value="agendar"> Agendar</label><input type="datetime-local" id="cwhen" class="hide" style="width:auto;margin-left:8px"></div>
     <label class="f" for="cl">Pelo número</label><select id="cl">${lines.map(l => `<option value="${U.esc(l.id)}">${U.esc(l.nome)}</option>`).join("")}</select>
     <p class="muted tiny" style="margin-top:12px">Quem pediu para não receber fica de fora. Cliente que está em mais de um público recebe uma mensagem só (vale o primeiro marcado). Os envios saem aos poucos, respeitando o limite diário do número.</p>`;
@@ -2191,7 +2541,8 @@ async function openNewCampaign(preset) {
     return sel.map(k => { const s = sets.find(x => x.k === k); const list = s.list.filter(c => { const key = U.telKey(c.tel); if (!key || seen.has(key)) return false; seen.add(key); return true; }); return { k, label: s.label, list }; });
   };
   const priceOf = t => t && t.category === "UTILITY" ? S.settings.precoUtilidade : S.settings.precoMarketing;
-  const prevHtml = t => t ? `<div class="tx">${U.esc(t.body.replace("{{1}}", "Mariana"))}</div>${t.buttons ? `<div class="tbtns">${t.buttons.map(b => `<span>${U.esc(b)}</span>`).join("")}</div>` : ""}` : "";
+  const photo = { url: "" };
+  const prevHtml = t => t ? `${t.headerFormat === "IMAGE" ? (photo.url ? `<img class="timg" src="${U.esc(photo.url)}" alt="">` : `<div class="timg ph2">${icon("image")}</div>`) : ""}<div class="tx">${U.esc(t.body.replace("{{1}}", "Mariana"))}</div>${t.buttons ? `<div class="tbtns">${t.buttons.map(b => `<span>${U.esc(b)}</span>`).join("")}</div>` : ""}` : "";
   const drawMsg = () => {
     const box = $("#cmsg", m.el);
     if (!tpls.length) { box.innerHTML = `<div class="banner warn" style="margin:0">Nenhum modelo aprovado. Crie em Modelos.</div>`; return; }
@@ -2215,9 +2566,11 @@ async function openNewCampaign(preset) {
     return [{ k: sel.join("+"), label: ps.map(p => p.label).join(" + "), list: all, tpl: t }];
   };
   const upd = () => {
-    const pl = plan(); const n = pl.reduce((a, p) => a + p.list.length, 0); const cost = pl.reduce((a, p) => a + p.list.length * priceOf(p.tpl), 0);
+    const pl = plan(); const n = pl.reduce((a, p) => a + p.list.length, 0);
+    const needPhoto = pl.some(p => p.tpl && p.tpl.headerFormat === "IMAGE"); const pb = $("#cphoto", m.el);
+    if (needPhoto && !pb.dataset.on) { pb.dataset.on = "1"; photoPicker(pb, photo, () => { drawMsg(); upd(); }); } else if (!needPhoto && pb.dataset.on) { pb.dataset.on = ""; pb.innerHTML = ""; } const cost = pl.reduce((a, p) => a + p.list.length * priceOf(p.tpl), 0);
     $("#ncost", m.el).innerHTML = n ? `<b>${n}</b> contatos${pl.length > 1 ? ` em ${pl.length} mensagens` : ""} · custo ≈ <b>${U.brl(cost)}</b>` : "Escolha o público";
-    $("#ngo", m.el).disabled = !n || !tpls.length || !$("#cn", m.el).value.trim();
+    $("#ngo", m.el).disabled = !n || !tpls.length || !$("#cn", m.el).value.trim() || (needPhoto && !photo.url);
   };
   const setSel = k => {
     if (k === "colar") sel = sel[0] === "colar" ? [] : ["colar"];
@@ -2237,7 +2590,8 @@ async function openNewCampaign(preset) {
     if (!n || U.digits(n).length < 10) return;
     if (DEMO) return toast("Teste enviado (demonstração)");
     const ts = [...new Map(pl.map(p => [p.tpl.name, p.tpl])).values()];
-    try { for (const t of ts) await Real.call("waEnviar", { to: U.toWa(n), line: $("#cl", m.el).value, kind: "template", template: t.name, language: t.language, vars: ["Teste"], preview: t.body, teste: true }); toast("Teste enviado"); } catch (e) { toast(errMsg(e), 6000); }
+    if (ts.some(t => t.headerFormat === "IMAGE") && !photo.url) return toast("Escolha a foto primeiro");
+    try { for (const t of ts) await Real.call("waEnviar", { to: U.toWa(n), line: $("#cl", m.el).value, kind: "template", template: t.name, language: t.language, vars: ["Teste"], preview: t.body, teste: true, headerImage: t.headerFormat === "IMAGE" ? photo.url : undefined }); toast("Teste enviado"); } catch (e) { toast(errMsg(e), 6000); }
   };
   $("#ngo", m.el).onclick = async () => {
     const pl = plan().filter(p => p.list.length); const n = pl.reduce((a, p) => a + p.list.length, 0); const cost = pl.reduce((a, p) => a + p.list.length * priceOf(p.tpl), 0);
@@ -2250,7 +2604,7 @@ async function openNewCampaign(preset) {
     try {
       for (const p of pl) {
         const dest = p.list.map(x => ({ tel: U.toWa(x.tel), name: x.name }));
-        await API.startCampaign({ nome: pl.length > 1 ? `${nome} · ${p.label}` : nome, modelo: p.tpl.name, language: p.tpl.language || "pt_BR", categoria: p.tpl.category, line: $("#cl", m.el).value, publico: p.k, total: dest.length, destinatarios: dest, agendarPara: quando, custoEstimado: dest.length * priceOf(p.tpl) });
+        await API.startCampaign({ nome: pl.length > 1 ? `${nome} · ${p.label}` : nome, headerImage: p.tpl.headerFormat === "IMAGE" ? photo.url : null, modelo: p.tpl.name, language: p.tpl.language || "pt_BR", categoria: p.tpl.category, line: $("#cl", m.el).value, publico: p.k, total: dest.length, destinatarios: dest, agendarPara: quando, custoEstimado: dest.length * priceOf(p.tpl) });
       }
       m.close(); toast(pl.length > 1 ? `${pl.length} disparos ${quando ? "agendados" : "começaram"}` : quando ? "Disparo agendado" : "Disparo começou");
     } catch (e) { toast(errMsg(e), 6000); $("#ngo", m.el).disabled = false; }
@@ -2361,6 +2715,70 @@ function runWebQueue(id) {
 }
 
 /* =========================================================
+   AUTOMAÇÕES — boas-vindas, fora do horário e pós-compra
+   ========================================================= */
+const DIAS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+async function renderAutomacoes() {
+  if (VIEW !== "automacoes") return;
+  $("#view").innerHTML = `<div class="page"><div class="ph"><div><h1>Automações</h1><p>Mensagens que saem sozinhas. Funcionam nos números conectados pela API (oficial ou híbrida).</p></div></div><div class="empty tiny">Carregando…</div></div>`;
+  const cfg = Object.assign({ boasVindas: {}, foraHorario: {}, posCompra: {} }, await API.loadAuto());
+  const bv = cfg.boasVindas, fh = Object.assign({ dias: [1, 2, 3, 4, 5], ini: "08:00", fim: "18:00" }, cfg.foraHorario), pc = Object.assign({ horas: 2, yampi: true }, cfg.posCompra);
+  if (VIEW !== "automacoes") return;
+  const lines = S.lines.filter(l => l.status === "conectado");
+  const gest = S.me.gestor;
+  const noApi = !lines.length;
+  $("#view").innerHTML = `<div class="page autos">
+    <div class="ph"><div><h1>Automações</h1><p>Mensagens que saem sozinhas, sem tirar a cliente da fila de atendimento.</p></div>${gest ? `<button class="btn pri" id="asave">Salvar automações</button>` : ""}</div>
+    ${noApi ? `<div class="banner warn" style="margin:0 0 16px">${icon("plug")}<span class="grow">Nenhum número conectado pela API ainda. Você já pode deixar tudo pronto; começa a funcionar quando conectar em Conexões.</span><a class="btn sm" href="#conexoes">Conexões</a></div>` : ""}
+    <div class="acard"><div class="ahead"><div class="aic" style="background:#E5EEF8;color:#2361A3">${icon("chat")}</div><div class="grow"><h3>Boas-vindas</h3><p class="muted tiny">Na primeira mensagem de uma cliente nova.</p></div><label class="tgl"><input type="checkbox" id="bvOn" ${bv.on ? "checked" : ""} ${gest ? "" : "disabled"}><span></span><b class="sr">Ligar boas-vindas</b></label></div>
+      <textarea id="bvTx" rows="3" ${gest ? "" : "disabled"} placeholder="Oi {primeiroNome}! Aqui é da Veraneio Semijoias 💛 Já já te respondo.">${U.esc(bv.texto || "")}</textarea>
+      <p class="muted tiny">Use {primeiroNome}. Sai uma vez por cliente.</p></div>
+    <div class="acard"><div class="ahead"><div class="aic" style="background:#FCEFD8;color:#9C5A06">${icon("clock")}</div><div class="grow"><h3>Fora do horário</h3><p class="muted tiny">Quando escrevem fora do horário de atendimento (horário de Brasília). No máximo 1 vez a cada 12h por cliente.</p></div><label class="tgl"><input type="checkbox" id="fhOn" ${fh.on ? "checked" : ""} ${gest ? "" : "disabled"}><span></span><b class="sr">Ligar fora do horário</b></label></div>
+      <div class="row" style="flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:10px">
+        <div><label class="f">Dias de atendimento</label><div class="dias">${DIAS.map((d, i) => `<label><input type="checkbox" data-dia="${i}" ${fh.dias.includes(i) ? "checked" : ""} ${gest ? "" : "disabled"}><span>${d}</span></label>`).join("")}</div></div>
+        <div><label class="f" for="fhIni">Abre</label><input type="time" id="fhIni" value="${U.esc(fh.ini)}" ${gest ? "" : "disabled"}></div>
+        <div><label class="f" for="fhFim">Fecha</label><input type="time" id="fhFim" value="${U.esc(fh.fim)}" ${gest ? "" : "disabled"}></div>
+        <div><label class="f" for="fhSab">Sábado fecha às (opcional)</label><input type="time" id="fhSab" value="${U.esc(fh.sabFim || "")}" ${gest ? "" : "disabled"}></div>
+      </div>
+      <textarea id="fhTx" rows="3" ${gest ? "" : "disabled"} placeholder="Oi {primeiroNome}! Nosso atendimento é de segunda a sexta, das 8h às 18h. Assim que abrirmos, te respondo 💛">${U.esc(fh.texto || "")}</textarea>
+      <p class="muted tiny" id="fhNow"></p></div>
+    <div class="acard"><div class="ahead"><div class="aic" style="background:#E3F3EA;color:#1E8452">${icon("cart")}</div><div class="grow"><h3>Depois da compra</h3><p class="muted tiny">Um modelo aprovado (de utilidade, ex.: agradecimento) algumas horas depois de cada pedido do sistema de vendas e da Yampi. Uma vez por pedido; quem pediu para sair fica de fora.</p></div><label class="tgl"><input type="checkbox" id="pcOn" ${pc.on ? "checked" : ""} ${gest ? "" : "disabled"}><span></span><b class="sr">Ligar pós-compra</b></label></div>
+      <div class="row" style="flex-wrap:wrap;gap:14px;align-items:flex-end">
+        <div><label class="f" for="pcLn">Pelo número</label><select id="pcLn" ${gest && lines.length ? "" : "disabled"}>${lines.map(l => `<option value="${U.esc(l.id)}" ${pc.line === l.id ? "selected" : ""}>${U.esc(l.nome)}</option>`).join("") || `<option value="">Conecte um número</option>`}</select></div>
+        <div style="min-width:240px;flex:1"><label class="f" for="pcTp">Modelo</label><select id="pcTp" ${gest && lines.length ? "" : "disabled"}><option value="">${lines.length ? "Carregando…" : "—"}</option></select></div>
+        <div><label class="f" for="pcH">Horas depois</label><input type="number" id="pcH" min="0" max="72" value="${pc.horas}" style="width:100px" ${gest ? "" : "disabled"}></div>
+        <label class="row tiny" style="gap:6px;margin-bottom:10px"><input type="checkbox" id="pcY" ${pc.yampi !== false ? "checked" : ""} ${gest ? "" : "disabled"}> Incluir pedidos do site (Yampi)</label>
+      </div><div id="pcPrev"></div></div>
+    ${gest ? "" : `<p class="muted tiny">Só o gestor altera as automações.</p>`}
+  </div>`;
+  const pg = $(".autos"); pg.addEventListener("input", () => pg.dataset.dirty = "1"); pg.addEventListener("change", () => pg.dataset.dirty = "1");
+  const dentro = () => { const d = new Date(), dia = d.getDay(), min = d.getHours() * 60 + d.getMinutes(), tm = t => { const [a, b] = String(t || "0:0").split(":").map(Number); return a * 60 + (b || 0); }; const dias = $$("[data-dia]").filter(x => x.checked).map(x => +x.dataset.dia); const fim = dia === 6 && $("#fhSab").value ? $("#fhSab").value : $("#fhFim").value; return dias.includes(dia) && min >= tm($("#fhIni").value) && min < tm(fim); };
+  const now = () => { const e = $("#fhNow"); if (e) e.innerHTML = dentro() ? "Agora: <b>dentro</b> do horário — não sairia mensagem." : "Agora: <b>fora</b> do horário — a mensagem sairia."; };
+  $$("#fhIni,#fhFim,#fhSab,[data-dia]").forEach(x => x.onchange = now); now();
+  let tpls = [];
+  const fillTpl = async () => {
+    const sel = $("#pcTp"); if (!sel || !lines.length) return;
+    try { tpls = (await API.templates($("#pcLn").value)).filter(t => t.status === "APPROVED"); } catch (e) { sel.innerHTML = `<option value="">Não carregou: ${U.esc(errMsg(e))}</option>`; return; }
+    sel.innerHTML = `<option value="">Escolha…</option>` + tpls.map(t => `<option value="${U.esc(t.name)}" ${pc.modelo === t.name ? "selected" : ""}>${U.esc(t.name)} · ${t.category === "UTILITY" ? "utilidade" : "marketing"}</option>`).join("");
+    const prev = () => { const t = tpls.find(x => x.name === sel.value); $("#pcPrev").innerHTML = t ? `<div class="phone mini" style="margin-top:10px;max-width:360px"><div class="m out"><div class="b"><div class="tx">${U.esc(t.body.replace("{{1}}", "Mariana"))}</div></div></div></div>${(t.body.match(/\{\{\d+\}\}/g) || []).length > 1 ? `<div class="banner warn">Esse modelo tem mais de uma variável; o automático só preenche o {{1}} (primeiro nome).</div>` : ""}` : ""; };
+    sel.onchange = prev; prev();
+  };
+  if ($("#pcLn")) $("#pcLn").onchange = fillTpl;
+  fillTpl();
+  const sv = $("#asave"); if (sv) sv.onclick = async () => {
+    const c2 = {
+      boasVindas: { on: $("#bvOn").checked, texto: $("#bvTx").value.trim() },
+      foraHorario: { on: $("#fhOn").checked, texto: $("#fhTx").value.trim(), dias: $$("[data-dia]").filter(x => x.checked).map(x => +x.dataset.dia), ini: $("#fhIni").value || "08:00", fim: $("#fhFim").value || "18:00", sabFim: $("#fhSab").value || null, sabIni: $("#fhSab").value ? $("#fhIni").value : null },
+      posCompra: { on: $("#pcOn").checked, line: $("#pcLn") ? $("#pcLn").value || null : null, modelo: $("#pcTp") ? $("#pcTp").value || null : null, language: (tpls.find(t => t.name === ($("#pcTp") || {}).value) || {}).language || "pt_BR", horas: Math.max(0, Math.min(72, +$("#pcH").value || 0)), yampi: $("#pcY").checked },
+    };
+    if (c2.boasVindas.on && !c2.boasVindas.texto) return toast("Escreva o texto de boas-vindas");
+    if (c2.foraHorario.on && (!c2.foraHorario.texto || !c2.foraHorario.dias.length)) return toast("Fora do horário: escreva o texto e marque os dias");
+    if (c2.posCompra.on && (!c2.posCompra.line || !c2.posCompra.modelo)) return toast("Pós-compra: escolha o número e o modelo");
+    sv.disabled = true; try { await API.saveAuto(c2); toast("Automações salvas"); } catch (e) { toast("Não salvou: " + e.message); } sv.disabled = false;
+  };
+}
+
+/* =========================================================
    MODELOS + RESPOSTAS RÁPIDAS
    ========================================================= */
 async function renderModelos() {
@@ -2380,7 +2798,7 @@ async function renderModelos() {
     const list = await API.templates(lines[0].id);
     if (VIEW !== "modelos") return;
     const stt = { APPROVED: ["Aprovado", "green"], PENDING: ["Em análise", "amber"], REJECTED: ["Rejeitado", "red"], PAUSED: ["Pausado pela Meta", "red"], DISABLED: ["Desativado", "red"] };
-    $("#mList").innerHTML = list.length ? `<table class="t"><thead><tr><th>Modelo</th><th>Tipo</th><th>Status</th></tr></thead><tbody>${list.map(t => `<tr><td><b>${U.esc(t.name)}</b><div class="muted tiny" style="max-width:360px">${U.esc(t.body)}</div></td><td>${t.category === "UTILITY" ? "Utilidade" : "Marketing"}</td><td><span class="pill ${(stt[t.status] || ["", ""])[1]}">${(stt[t.status] || [t.status])[0]}</span></td></tr>`).join("")}</tbody></table>` : `<div class="empty tiny">Nenhum modelo ainda.</div>`;
+    $("#mList").innerHTML = list.length ? `<table class="t"><thead><tr><th>Modelo</th><th>Tipo</th><th>Status</th></tr></thead><tbody>${list.map(t => `<tr><td><b>${U.esc(t.name)}</b>${t.headerFormat === "IMAGE" ? ` <span class="pill">${icon("image")} com foto</span>` : ""}<div class="muted tiny" style="max-width:360px">${U.esc(t.body)}</div></td><td>${t.category === "UTILITY" ? "Utilidade" : "Marketing"}</td><td><span class="pill ${(stt[t.status] || ["", ""])[1]}">${(stt[t.status] || [t.status])[0]}</span></td></tr>`).join("")}</tbody></table>` : `<div class="empty tiny">Nenhum modelo ainda.</div>`;
   } catch (e) { $("#mList").innerHTML = `<div class="empty tiny">Não consegui carregar: ${U.esc(errMsg(e))}</div>`; }
 }
 function drawQuick() {
@@ -2405,17 +2823,22 @@ function newTemplate(line) {
   const m = modal("Novo modelo para a Meta", `
     <label class="f" for="tn">Nome (minúsculas e _)</label><input type="text" id="tn" placeholder="ex.: novidades_semana">
     <label class="f" for="tc">Tipo</label><select id="tc"><option value="MARKETING">Marketing — novidades, promoções, saudades</option><option value="UTILITY">Utilidade — pedido, pagamento, rastreio (mais barato)</option></select>
+    <label class="f">Topo da mensagem</label><div class="seg2" role="radiogroup" aria-label="Topo da mensagem"><button type="button" role="radio" data-hd="" aria-checked="true">Só texto</button><button type="button" role="radio" data-hd="IMAGE" aria-checked="false">${icon("image")} Com foto</button></div>
+    <div id="thph" class="hide"></div><p class="muted tiny hide" id="thtip">A foto escolhida aqui é só o exemplo para a Meta aprovar. Em cada disparo você escolhe a foto da peça.</p>
     <label class="f" for="tb">Texto</label><textarea id="tb" rows="4" placeholder="Oi {{1}}! Chegaram as novidades da semana ✨"></textarea>
     <p class="muted tiny">{{1}} = primeiro nome. A Meta rejeita modelo de utilidade com cara de promoção.</p>
     <label class="f" for="tbt">Botões de resposta (opcional, um por linha, até 3)</label><textarea id="tbt" rows="2" placeholder="Quero ver&#10;Não quero receber"></textarea>
     <p class="muted tiny">Dica: um botão “Não quero receber” ajuda a manter o número com boa qualidade — quem toca nele sai das campanhas sozinho.</p>`,
     `<button class="btn" data-x2>Cancelar</button><button class="btn pri" id="tok">Enviar para aprovação</button>`);
   $("[data-x2]", m.el).onclick = m.close;
+  let hd = ""; const ex = { url: "" };
+  $$("[data-hd]", m.el).forEach(b => b.onclick = () => { hd = b.dataset.hd; $$("[data-hd]", m.el).forEach(x => x.setAttribute("aria-checked", x === b)); $("#thph", m.el).classList.toggle("hide", !hd); $("#thtip", m.el).classList.toggle("hide", !hd); if (hd) photoPicker($("#thph", m.el), ex); });
   $("#tok", m.el).onclick = async () => {
     const name = $("#tn", m.el).value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"); const body = $("#tb", m.el).value.trim();
+    if (hd === "IMAGE" && !ex.url) return toast("Escolha a foto de exemplo");
     const buttons = $("#tbt", m.el).value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3);
     if (!name || !body) return toast("Preencha nome e texto");
-    try { await API.createTemplate(line, { name, category: $("#tc", m.el).value, body, buttons: buttons.length ? buttons : undefined, vars: /\{\{1\}\}/.test(body) ? ["primeiroNome"] : [] }); m.close(); toast("Enviado para a Meta"); renderModelos(); } catch (e) { toast(errMsg(e), 6000); }
+    try { await API.createTemplate(line, { name, category: $("#tc", m.el).value, body, headerImage: hd === "IMAGE" ? ex.url : undefined, headerFormat: hd || undefined, buttons: buttons.length ? buttons : undefined, vars: /\{\{1\}\}/.test(body) ? ["primeiroNome"] : [] }); m.close(); toast("Enviado para a Meta"); renderModelos(); } catch (e) { toast(errMsg(e), 6000); }
   };
 }
 
@@ -2439,6 +2862,7 @@ function renderConexoes() {
         <div><label class="f" for="pm">Preço por mensagem de marketing</label><input type="number" id="pm" step="0.01" min="0" value="${S.settings.precoMarketing}" style="width:140px"></div>
         <div><label class="f" for="pu">Preço por mensagem de utilidade</label><input type="number" id="pu" step="0.01" min="0" value="${S.settings.precoUtilidade}" style="width:140px"></div>
         <div><label class="f" for="pa">Atribuir venda até (horas)</label><input type="number" id="pa" min="1" max="720" value="${S.settings.atribuicaoHoras}" style="width:120px"></div>
+        <div><label class="f" for="ppix">Chave Pix (vai no pedido)</label><input type="text" id="ppix" value="${U.esc(S.settings.pix || "")}" placeholder="CNPJ, e-mail ou celular" style="width:220px"></div>
         <div style="flex:1;min-width:220px"><label class="f" for="pmeta">App da Meta (App ID · Configuration ID)</label><div class="row"><input type="text" id="pmeta" placeholder="App ID" value="${U.esc(S.settings.metaAppId || "")}"><input type="text" id="pcfg" placeholder="Configuration ID" value="${U.esc(S.settings.metaConfigId || "")}"></div></div>
         <button class="btn pri" id="psave">Salvar</button>
       </div>
@@ -2450,7 +2874,7 @@ function renderConexoes() {
   $$("[data-webon]").forEach(b => b.onclick = async () => { const w = Object.assign({}, S.settings.webLines || {}); delete w[b.dataset.webon]; await API.saveSettings({ webLines: w }); toast("WhatsApp Web desligado neste número"); renderConexoes(); });
   $$("[data-disc]").forEach(b => b.onclick = async () => { if (!await ask("Desconectar", "Desconectar este número do CRM? As conversas ficam salvas.", "Desconectar")) return; try { await API.disconnect(b.dataset.disc); toast("Desconectado"); } catch (e) { toast(errMsg(e)); } });
   const yi = $("#yimp"); if (yi) yi.onclick = async () => { yi.disabled = true; yi.textContent = "Importando…"; try { const n = +$("#ymes").value === 13 ? 12 : +$("#ymes").value; let tot = 0; for (let k = 0; k < n; k++) { yi.textContent = `Importando mês ${k + 1} de ${n}…`; const r = await API.importYampi(k); tot += r.gravados || 0; } toast(`${tot} pedidos da Yampi importados`); await API.loadContext(); renderConexoes(); } catch (e) { toast(errMsg(e), 6000); yi.disabled = false; yi.textContent = "Importar agora"; } };
-  const ps = $("#psave"); if (ps) ps.onclick = async () => { await API.saveSettings({ precoMarketing: +$("#pm").value || 0, precoUtilidade: +$("#pu").value || 0, atribuicaoHoras: +$("#pa").value || 72, metaAppId: $("#pmeta").value.trim(), metaConfigId: $("#pcfg").value.trim() }); toast("Configurações salvas"); };
+  const ps = $("#psave"); if (ps) ps.onclick = async () => { await API.saveSettings({ precoMarketing: +$("#pm").value || 0, precoUtilidade: +$("#pu").value || 0, atribuicaoHoras: +$("#pa").value || 72, metaAppId: $("#pmeta").value.trim(), metaConfigId: $("#pcfg").value.trim(), pix: $("#ppix").value.trim() }); toast("Configurações salvas"); };
 }
 function addLine() {
   const m = modal("Adicionar número", `<label class="f" for="lnn">Nome</label><input type="text" id="lnn" placeholder="Ex.: Atacado 2, Loja física">

@@ -7,35 +7,85 @@ service cloud.firestore {
     function isManager() {
       return isMember() && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.type == 'manager';
     }
+
+    // ───────── QUIZ ─────────
+    // Rascunhos e pastas: só a equipe
+    match /quiz_projects/{id} {
+      allow read, create, update: if isMember();
+      allow delete: if isManager();
+    }
+    match /quiz_folders/{id} {
+      allow read, write: if isMember();
+    }
+    // Versão publicada: qualquer um lê (o quiz público precisa), só a equipe publica
+    match /quiz_public/{slug} {
+      allow read: if true;
+      allow write: if isMember();
+    }
+    // Respostas / clientes do quiz
+    match /quiz_leads/{id} {
+      function quizFields() {
+        return ['projectId','nome','whatsapp','email','criadoEm','atualizadoEm','etapa','etapaNome','vistas',
+                'respostas','vars','escolhas','carrinho','cupom','ab','tags','finalizado','destino','finalizadoEm','origem','status'];
+      }
+      function okSizes(d) {
+        return (!('nome' in d) || (d.nome is string && d.nome.size() < 80))
+            && (!('whatsapp' in d) || (d.whatsapp is string && d.whatsapp.size() < 20))
+            && (!('email' in d) || (d.email is string && d.email.size() < 121));
+      }
+      // a cliente (sem login) cria a própria resposta e só atualiza campos do quiz; nunca lê a lista
+      allow create: if isMember() || (
+        request.resource.data.keys().hasOnly(quizFields())
+        && request.resource.data.projectId is string
+        && request.resource.data.get('status', 'novo') == 'novo'
+        && okSizes(request.resource.data));
+      allow update: if isMember() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(quizFields().removeAll(['status','criadoEm','origem','projectId']))
+        && okSizes(request.resource.data));
+      allow read: if isMember();
+      allow delete: if isManager();
+    }
+
+    // ───────── ESTOQUE (app estoque.html) ─────────
+    // Peças, contagens e fotos: toda a equipe com login seguro
+    match /estoque_produtos/{id} {
+      allow read, write: if isMember();
+    }
+    // Configuração (valor da grama, kits…): equipe lê; só o gestor altera, menos os códigos vinculados
+    match /estoque_config/{id} {
+      allow read: if isMember();
+      allow write: if isManager()
+        || (isMember() && resource != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['apelidos']));
+    }
+    // Pedidos de compra a fornecedor: só o gestor
+    match /estoque_compras/{id} {
+      allow read, write: if isManager();
+    }
+    // Vendas da Yampi: gravadas só pela função do Firebase
+    match /estoque_vendas/{id} {
+      allow read: if isMember();
+      allow write: if false;
+    }
+    // Pedidos de tarefa para a função (importar catálogo, fotos, sincronizar)
+    match /estoque_jobs/{id} {
+      allow read, create: if isManager();
+      allow update, delete: if false;
+    }
+
+    // ───────── CRM CONVERSAS (crm.html) ─────────
     function isAgent() { // gestor ou atendente (expedição não vê conversas)
       return isMember() && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.type != 'expedicao';
     }
-    // Configuração: leitura pública (tela de login), escrita só do gestor
-    match /app/{doc} {
-      allow read: if doc == 'config' || isMember();
-      allow write: if isManager() || (doc == 'counter' && isMember());
-    }
-    // Pedidos: só usuários do sistema
-    match /sales/{id} {
-      allow read, write: if isMember();
-    }
-    match /members/{uid} {
-      allow read: if isMember();
-      allow write: if isManager();
-    }
-
-    // ===== Conversas Veraneio (WhatsApp) =====
     match /wa_conversations/{id} {
       allow read: if isAgent();
-      // a equipe só mexe na organização; quem grava mensagem/janela é o servidor
       allow update: if isAgent() && request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['assignedTo', 'important', 'status', 'unread', 'tags', 'notes', 'optOut', 'optOutEm', 'name', 'dispensadaEm']);
+        .hasOnly(['assignedTo', 'important', 'status', 'unread', 'tags', 'notes', 'optOut', 'optOutEm', 'name', 'dispensadaEm', 'etapa', 'etapaEm', 'pedido']);
       match /messages/{mid} {
         allow read: if isAgent();
         allow create: if isAgent() && request.resource.data.dir == 'note' && request.resource.data.byUid == request.auth.uid;
       }
     }
-    match /{path=**}/messages/{mid} { allow read: if isAgent(); } // busca em todo o histórico
+    match /{path=**}/messages/{mid} { allow read: if isAgent(); }
     match /wa_lines/{id} { allow read: if isAgent(); }
     match /wa_campaigns/{id} {
       allow read: if isAgent();
@@ -46,23 +96,18 @@ service cloud.firestore {
       allow write: if isManager() || (doc == 'respostas' && isAgent());
     }
     match /wa_contacts/{id} { allow read: if isAgent(); }
-    match /wa_groups/{id} { allow read, write: if isAgent(); } // grupos de clientes
+    match /wa_groups/{id} { allow read, write: if isAgent(); }
     match /wa_private/{id} { allow read, write: if false; } // tokens da Meta: só o servidor
     match /wa_index/{id} { allow read, write: if false; }
-    match /yampi_orders/{id} { allow read: if isAgent(); allow write: if false; } // gravado pelo servidor
+    // Pedidos da Yampi para os indicadores: gravados só pela função
+    match /yampi_orders/{id} { allow read: if isAgent(); allow write: if false; }
 
-    // Quiz: a cliente grava o próprio lead pelo link, mas só a equipe lê a lista
-    match /quiz_leads/{id} {
-      allow create, update: if true;
-      allow read, delete: if isMember();
-    }
-    match /quiz_public/{id} { allow read: if true; allow write: if isMember(); }
-    match /quiz_projects/{id} { allow read, write: if isMember(); }
-    match /quiz_folders/{id} { allow read, write: if isMember(); }
-
-    // Outras ferramentas (estoque, quiz…) continuam como estavam — exceto as coleções do WhatsApp
+    // Demais coleções (sistema de vendas, estoque, conector…): continuam COMO ESTAVAM (abertas).
+    // Para fechar o sistema de vendas, use a versão firestore-completo.rules depois que todos tiverem login seguro.
     match /{col}/{document=**} {
-      allow read, write: if !(col in ['app', 'sales', 'members', 'yampi_orders', 'quiz_leads', 'quiz_public', 'quiz_projects', 'quiz_folders']) && !col.matches('wa_.*');
+      allow read, write: if !(col in ['quiz_projects', 'quiz_folders', 'quiz_public', 'quiz_leads',
+                                      'estoque_produtos', 'estoque_config', 'estoque_compras', 'estoque_vendas', 'estoque_jobs',
+                                      'yampi_orders']) && !col.matches('wa_.*');
     }
   }
 }

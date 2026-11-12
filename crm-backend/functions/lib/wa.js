@@ -151,10 +151,13 @@ function buildSendPayload(to, p) {
   if (p.kind === "template") {
     const t = { name: p.template, language: { code: p.language || "pt_BR" } };
     const vars = (p.vars || []).map(v => String(v == null ? "" : v).trim());
+    const comps = [];
+    if (p.headerImage) comps.push({ type: "header", parameters: [{ type: "image", image: { link: String(p.headerImage) } }] }); // modelo com foto
     if (vars.length) {
       if (vars.some(v => !v)) throw new Error("Preencha todas as variáveis do modelo");
-      t.components = [{ type: "body", parameters: vars.map(text => ({ type: "text", text })) }];
+      comps.push({ type: "body", parameters: vars.map(text => ({ type: "text", text })) });
     }
+    if (comps.length) t.components = comps;
     return Object.assign(base, { type: "template", template: t });
   }
   throw new Error("Tipo de envio desconhecido: " + p.kind);
@@ -169,6 +172,8 @@ function templateFromMeta(t) {
   return {
     name: t.name, status: t.status, category: t.category, language: t.language, body,
     header: (comps.find(c => c.type === "HEADER") || {}).text || "",
+    headerFormat: ((comps.find(c => c.type === "HEADER") || {}).format || "").toUpperCase() || null,
+    headerExample: (((comps.find(c => c.type === "HEADER") || {}).example || {}).header_handle || [])[0] || null,
     footer: (comps.find(c => c.type === "FOOTER") || {}).text || "",
     buttons: btn ? (btn.buttons || []).map(b => b.text) : undefined,
     vars: n ? ["primeiroNome"].concat(Array(Math.max(0, n - 1)).fill("")) : [],
@@ -176,8 +181,9 @@ function templateFromMeta(t) {
 }
 
 /** Componentes para criar modelo na Meta. */
-function templateToMeta({ name, category, body, buttons, language }) {
+function templateToMeta({ name, category, body, buttons, language, headerHandle }) {
   const comps = [];
+  if (headerHandle) comps.push({ type: "HEADER", format: "IMAGE", example: { header_handle: [headerHandle] } });
   const nVars = (body.match(/\{\{\d+\}\}/g) || []).length;
   const bodyC = { type: "BODY", text: body };
   if (nVars) bodyC.example = { body_text: [Array.from({ length: nVars }, (_, i) => (i === 0 ? "Mariana" : "exemplo"))] };

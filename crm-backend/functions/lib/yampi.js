@@ -22,7 +22,7 @@ function normalizeYampiOrder(o) {
   const promo = dataOf(o.promocode) || null;
   const items = (dataOf(o.items) || []).map(i => {
     const sku = dataOf(i.sku) || {}; const prod = dataOf(i.product) || {};
-    return { nome: sku.title || prod.name || i.name || i.title || "Peça", sku: sku.sku || i.sku_code || "", qtd: num(i.quantity || i.qty || 1), preco: num(i.price || i.price_sale || sku.price_sale) };
+    return { nome: i.name || sku.title || prod.name || i.title || "Peça", sku: i.item_sku || sku.sku || i.sku_code || "", qtd: num(i.quantity || i.qty || 1), preco: num(i.price || i.price_sale || sku.price_sale) };
   });
   const trans = dataOf(o.transactions) || [];
   const pay = trans.length ? (dataOf(trans[0].payment) || {}) : {};

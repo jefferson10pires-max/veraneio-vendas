@@ -63,7 +63,13 @@ const fakeAdmin = {
   storage: () => ({ bucket: () => ({ name: "bucket-teste", file: p => ({ save: async (buf, o) => files.set(p, { size: buf.length, o }) }) }) }),
 };
 const origLoad = Module._load;
-Module._load = function (req, ...a) { if (req === "firebase-admin") return fakeAdmin; return origLoad.call(this, req, ...a); };
+const modular = {
+  "firebase-admin": fakeAdmin,
+  "firebase-admin/app": { initializeApp() { } },
+  "firebase-admin/firestore": { getFirestore: () => fakeDb, FieldValue: fakeAdmin.firestore.FieldValue },
+  "firebase-admin/storage": { getStorage: () => fakeAdmin.storage() },
+};
+Module._load = function (req, ...a) { if (modular[req]) return modular[req]; return origLoad.call(this, req, ...a); };
 
 /* ---------- Meta simulada ---------- */
 const sent = [];
@@ -87,7 +93,7 @@ global.fetch = async (url, opt = {}) => {
   throw new Error("URL não simulada: " + url);
 };
 
-process.env.META_APP_SECRET = "segredo"; process.env.WA_VERIFY_TOKEN = "verifica"; process.env.META_APP_ID = "123";
+process.env.WA_TEST = "1"; process.env.META_APP_SECRET = "segredo"; process.env.WA_VERIFY_TOKEN = "verifica"; process.env.META_APP_ID = "123";
 process.env.GCLOUD_PROJECT = "veraneio-vendas"; process.env.FIREBASE_CONFIG = JSON.stringify({ projectId: "veraneio-vendas", storageBucket: "bucket-teste" });
 const F = require("../index.js");
 
@@ -212,4 +218,54 @@ test("disparo: tira quem saiu, envia pela fila, conta resposta, opt-out e venda"
   await F.waAtribuir.run({}); // não conta duas vezes
   const fin = store.get(camp[0]);
   assert.strictEqual(fin.pedidos, 1); assert.strictEqual(fin.receita, 742.3);
+});
+
+test("respostas automáticas: boas-vindas na 1ª mensagem e fora do horário sem tirar da fila", async () => {
+  store.set("wa_settings/auto", { boasVindas: { on: true, texto: "Oi {primeiroNome}! Bem-vinda à Veraneio 💛" }, foraHorario: { on: true, texto: "Estamos fora do horário, respondemos amanhã cedo.", dias: [] } });
+  const ts = () => String(Math.floor(Date.now() / 1000));
+  const n0 = sent.length;
+  await hook(ch("messages", { contacts: [{ wa_id: "5524999990000", profile: { name: "Lívia Prado" } }], messages: [{ from: "5524999990000", id: "wamid.AUTO1", timestamp: ts(), type: "text", text: { body: "Oi, quero ver o catálogo" } }] }));
+  const out = sent.slice(n0);
+  assert.strictEqual(out.length, 1, "uma mensagem só, juntando as duas");
+  assert.match(out[0].text.body, /^Oi Lívia! Bem-vinda/); assert.match(out[0].text.body, /fora do horário/);
+  const c = store.get("wa_conversations/5524999990000");
+  assert.strictEqual(c.lastDir, "in", "automático não conta como respondida"); assert.ok(c.waitingSince); assert.ok(c.autoForaEm);
+  await hook(ch("messages", { messages: [{ from: "5524999990000", id: "wamid.AUTO2", timestamp: ts(), type: "text", text: { body: "Alguém?" } }] }));
+  assert.strictEqual(sent.length, n0 + 1, "não repete boas-vindas nem fora do horário em 12h");
+  // dentro do horário (todos os dias, o dia inteiro): nada sai
+  store.set("wa_settings/auto", { foraHorario: { on: true, texto: "fora", dias: [0, 1, 2, 3, 4, 5, 6], ini: "00:00", fim: "24:00" } });
+  await hook(ch("messages", { messages: [{ from: "5524988880000", id: "wamid.AUTO3", timestamp: ts(), type: "text", text: { body: "oi" } }] }));
+  assert.strictEqual(sent.length, n0 + 1);
+  store.delete("wa_settings/auto");
+});
+
+test("relatório do disparo por pessoa: falha com motivo e reenviar", async () => {
+  const r = await call("waDisparo", { nome: "Fotos novas", modelo: "saudades", line: "ln_revenda", destinatarios: [{ tel: "22981110001", name: "Ana Paula" }, { tel: "22981110002", name: "Bia" }] });
+  const n0 = sent.length;
+  failNext = { code: 131026, message: "Message undeliverable" };
+  await F.waFila.run({});
+  const dests = [...store.entries()].filter(([p]) => p.startsWith(`wa_campaigns/${r.id}/dest/`));
+  const falhou = dests.find(([, d]) => d.status === "falha"), foi = dests.find(([, d]) => d.status === "enviada");
+  assert.ok(falhou && /WhatsApp|entregue/i.test(falhou[1].erro), "falha guarda o motivo");
+  // a que foi enviada volta como lida e depois outra como falha na entrega
+  await hook(ch("messages", { statuses: [{ id: foi[1].wamid, status: "read", timestamp: String(Math.floor(Date.now() / 1000)), recipient_id: foi[1].wa }] }));
+  assert.strictEqual(store.get(foi[0]).entrega, "read");
+  assert.strictEqual(sent.length, n0 + 1);
+  await assert.rejects(call("waReenviar", { campaignId: r.id }, atendente), /gestor/);
+  const rr = await call("waReenviar", { campaignId: r.id });
+  assert.strictEqual(rr.n, 1);
+  assert.strictEqual(store.get(falhou[0]).status, "fila");
+  assert.strictEqual(store.get(`wa_campaigns/${r.id}`).falhas, 0);
+  await F.waFila.run({});
+  assert.strictEqual(store.get(falhou[0]).status, "enviada");
+});
+
+test("modelo com foto: cabeçalho de imagem no envio", async () => {
+  const p = require("../lib/wa").buildSendPayload("22999998888", { kind: "template", template: "fotos", vars: ["Ana"], headerImage: "https://x/foto.jpg" });
+  assert.deepStrictEqual(p.template.components[0], { type: "header", parameters: [{ type: "image", image: { link: "https://x/foto.jpg" } }] });
+  assert.strictEqual(p.template.components[1].parameters[0].text, "Ana");
+  const m = require("../lib/wa").templateToMeta({ name: "fotos", body: "Oi {{1}}", headerHandle: "4::aGFuZGxl" });
+  assert.deepStrictEqual(m.components[0], { type: "HEADER", format: "IMAGE", example: { header_handle: ["4::aGFuZGxl"] } });
+  const back = require("../lib/wa").templateFromMeta({ name: "fotos", status: "APPROVED", components: [{ type: "HEADER", format: "IMAGE", example: { header_handle: ["https://cdn/x.jpg"] } }, { type: "BODY", text: "Oi {{1}}" }] });
+  assert.strictEqual(back.headerFormat, "IMAGE"); assert.strictEqual(back.headerExample, "https://cdn/x.jpg");
 });

@@ -85,3 +85,14 @@ Bugs achados e corrigidos:
   - *Descontos e frete*: cupons (por código), promoções do site, descontos do WhatsApp e **frete por mês** (padrão R$ 15,75: quanto as clientes pagaram, desconto dado, pago acima do padrão, desconto líquido, fretes grátis, média paga). O frete padrão é editável na própria tela.
 - **Regras do Firestore**: publique `firebase/firestore.rules` (corrige a leitura pública dos leads do quiz — ver `replica/bugs.md`, B01).
 - **Testes**: `npm i && npx playwright test` (27 testes de tela, computador e celular, com acessibilidade) e `cd functions && npm test` (21 testes do servidor). Plano em `replica/test-plan.md`, bugs em `replica/bugs.md`.
+
+## Atualização 12/11 — funil, pedido, relatório do disparo, modelo com foto e automações
+
+- **Funil de vendas** (Conversas › botão de colunas): Novo → Negociando → Aguardando pagamento → Pago → Enviado. Arrasta o cartão ou usa o seletor; a etapa também fica na barra do chat.
+- **Montar pedido** (ícone do carrinho no chat ou painel da cliente): peças do catálogo Yampi ou avulsas, quantidade, preço editável, desconto, frete (padrão, grátis, retirada ou outro valor) e pagamento. "Enviar para a cliente" manda o resumo com a chave Pix (Conexões › Configurações) e move a conversa para "Aguardando pagamento". "Marcar pago" e "Marcar enviado" movem no funil. "Copiar resumo" para lançar no sistema de vendas.
+- **Relatório do disparo**: clique no cartão do disparo. Funil (enviadas → entregues → lidas → responderam → pedidos), lista por pessoa com o motivo da falha, exportar planilha e **reenviar para quem falhou** (função `waReenviar`).
+- **Modelo com foto**: em Modelos › Novo modelo › "Com foto" (a foto de exemplo sobe para a Meta pela Resumable Upload API — precisa do `META_APP_ID` real). No disparo e no envio avulso o CRM pede a foto da peça (do computador ou do catálogo).
+- **Automações** (menu novo): boas-vindas na 1ª mensagem, fora do horário (dias e horário de Brasília, 1 vez a cada 12h) e pós-compra (modelo aprovado X horas depois de cada pedido do sistema de vendas e da Yampi — função `waPosCompra`, a cada 30 min). Respostas automáticas **não** tiram a cliente da fila "Aguardando resposta".
+- Regras: `wa_conversations` aceita `etapa`, `etapaEm` e `pedido` vindos da tela.
+- Testes: 24 do servidor e 35 de tela (computador e celular, com acessibilidade).
+- Essas funções do WhatsApp entram no ar junto com a conexão da Meta (deploy de `functions:whatsapp` completo).

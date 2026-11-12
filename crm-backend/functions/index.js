@@ -13,6 +13,9 @@
  *  waFila           a cada minuto: envia a fila de disparos devagar
  *  waAtribuir       a cada 10 min: liga vendas novas às campanhas (receita atribuída)
  *  waCatalogo       busca peças na Yampi para mandar no chat
+ *  waReenviar       põe de novo na fila quem falhou num disparo (gestor)
+ *  waPosCompra      a cada 30 min: mensagem automática depois da compra (se ligada)
+ *  Respostas automáticas (boas-vindas e fora do horário) saem no próprio webhook.
  */
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -124,6 +127,7 @@ async function saveInbound(line, wa, contactName, msg, origin = "crm") {
   delete (doc.media || {}).path;
   await mref.set(doc);
   const optOut = W.isOptOut(msg.text);
+  let info = { convId, novo: false, optOut, cur: {} };
   await db.runTransaction(async tx => {
     // Firestore: todas as leituras antes das gravações
     const cref = convRef(convId); const c = await tx.get(cref); const cur = c.exists ? c.data() : {};
@@ -138,6 +142,8 @@ async function saveInbound(line, wa, contactName, msg, origin = "crm") {
     if (origin !== "historico") patch.unread = FieldValue.increment(1);
     if (optOut) Object.assign(patch, { optOut: true, optOutEm: msg.ts, optOutMotivo: msg.text });
     if (!c.exists) Object.assign(patch, { tags: [], notes: "", criadoEm: Date.now() });
+    if (!cur.primeiraEm && origin !== "historico") patch.primeiraEm = msg.ts; // 1ª mensagem dela pelo CRM
+    info = { convId, novo: !cur.primeiraEm && !cur.lastTs, optOut: optOut || !!cur.optOut, cur };
     tx.set(cref, patch, { merge: true });
     // campanha: conta resposta e saída uma vez por cliente
     if (d && d.exists && !d.data().respondeuEm) {
@@ -145,11 +151,12 @@ async function saveInbound(line, wa, contactName, msg, origin = "crm") {
       tx.set(db.collection("wa_campaigns").doc(camp.id), { respondidas: FieldValue.increment(1), sairam: FieldValue.increment(optOut ? 1 : 0) }, { merge: true });
     }
   });
+  return info;
 }
 async function saveOutbound(convId, wa, wamid, doc, convPatch) {
   const id = wamid || "local_" + crypto.randomUUID();
   await convRef(convId).collection("messages").doc(id).set(Object.assign({ dir: "out", ts: Date.now() }, doc), { merge: true });
-  if (wamid) await db.collection("wa_index").doc(wamid).set({ convId, campaignId: doc.campanhaId || null, ts: Date.now() });
+  if (wamid) await db.collection("wa_index").doc(wamid).set({ convId, campaignId: doc.campanhaId || null, destId: doc.destId || null, ts: Date.now() });
   const patch = Object.assign({ phone: wa, telKey: W.telKey(wa) }, convPatch || {});
   if (doc.status !== "failed") Object.assign(patch, { lastTs: doc.ts || Date.now(), lastText: W.previewText(doc), lastDir: "out", waitingSince: null, unread: 0 });
   await convRef(convId).set(patch, { merge: true });
@@ -158,7 +165,7 @@ async function saveOutbound(convId, wa, wamid, doc, convPatch) {
 async function applyStatus(ev, prices) {
   const idx = await db.collection("wa_index").doc(ev.id).get();
   if (!idx.exists) return;
-  const { convId, campaignId } = idx.data();
+  const { convId, campaignId, destId } = idx.data();
   const mref = convRef(convId).collection("messages").doc(ev.id);
   await db.runTransaction(async tx => {
     const m = await tx.get(mref); if (!m.exists) return;
@@ -175,6 +182,7 @@ async function applyStatus(ev, prices) {
       if (nx === "read" && cur !== "read") c.lidas = inc(1);
       if (ev.billable && !m.data().cobrada) { c.custo = inc(ev.category === "utility" ? prices.precoUtilidade : prices.precoMarketing); tx.set(mref, { cobrada: true }, { merge: true }); }
       if (Object.keys(c).length) tx.set(db.collection("wa_campaigns").doc(campaignId), c, { merge: true });
+      if (destId) tx.set(db.collection("wa_campaigns").doc(campaignId).collection("dest").doc(destId), Object.assign({ entrega: nx, entregaEm: Date.now() }, nx === "failed" ? { erro: ev.error || "Não entregue" } : {}), { merge: true });
     }
   });
 }
@@ -192,7 +200,7 @@ exports.waWebhook = onRequest({ secrets: [META_APP_SECRET, WA_VERIFY_TOKEN], tim
   for (const ev of events) {
     try {
       const line = ev.pnid ? await lineByPnid(ev.pnid) : null;
-      if (ev.kind === "in") await saveInbound(line, ev.wa, ev.contactName, ev.msg);
+      if (ev.kind === "in") { const info = await saveInbound(line, ev.wa, ev.contactName, ev.msg); if (info) await autoReply(line, ev, info).catch(e => logger.warn("resposta automática", e.message)); }
       else if (ev.kind === "echo") { // mandada pelo app do celular (API híbrida)
         const convId = await findConvId(ev.wa);
         if (ev.msg.mediaId) { const st = await storeMedia(ev.msg.mediaId, line && line.token, convId, ev.msg.id); ev.msg.media = Object.assign(ev.msg.media || {}, st || {}); delete ev.msg.media.path; }
@@ -261,7 +269,7 @@ exports.waEnviar = onCall({ timeoutSeconds: 60 }, async req => {
   try { payload = W.buildSendPayload(wa, d); } catch (e) { throw new HttpsError("invalid-argument", e.message); }
   const doc = { type: d.kind === "text" ? "text" : d.kind === "template" ? "template" : payload.type, text: d.kind === "text" ? d.text : d.kind === "template" ? (d.preview || "") : (d.caption || ""), by: me.name, byUid: me.uid, origin: d.teste ? "teste" : "crm", ts: Date.now() };
   if (d.kind === "media") doc.media = { url: d.media.url, mime: d.media.mime, name: d.media.name || "" };
-  if (d.kind === "template") doc.template = { name: d.template, vars: d.vars || [] };
+  if (d.kind === "template") { doc.template = { name: d.template, vars: d.vars || [] }; if (d.headerImage) doc.media = { url: d.headerImage, mime: "image/jpeg" }; }
   if (d.replyTo) doc.replyTo = d.replyTo;
   const convPatch = { line: line.id, status: "aberta" };
   if (!cs.exists) Object.assign(convPatch, { name: d.name || "", tags: [], notes: "", criadoEm: Date.now(), windowUntil: 0 });
@@ -290,9 +298,62 @@ exports.waCriarModelo = onCall(async req => {
   const d = req.data || {};
   if (!d.name || !d.body) throw new HttpsError("invalid-argument", "Preencha nome e texto.");
   const line = await lineCreds(d.line);
-  try { const r = await graph(`/${line.wabaId}/message_templates`, { method: "POST", token: line.token, body: W.templateToMeta(d) }); return { ok: true, id: r.id, status: r.status }; }
+  try {
+    const t = Object.assign({}, d);
+    if (d.headerImage) t.headerHandle = await metaUpload(line.token, d.headerImage); // foto de exemplo do cabeçalho
+    const r = await graph(`/${line.wabaId}/message_templates`, { method: "POST", token: line.token, body: W.templateToMeta(t) }); return { ok: true, id: r.id, status: r.status };
+  }
   catch (e) { throw new HttpsError("aborted", e.message); }
 });
+
+/** Sobe a foto de exemplo para a Meta (Resumable Upload API) e devolve o "handle" do modelo. */
+async function metaUpload(token, url) {
+  const appId = META_APP_ID.value();
+  if (!appId || appId === "pendente") throw new Error("Para modelo com foto, configure o META_APP_ID (o número do app da Meta).");
+  const r = await fetch(url); if (!r.ok) throw new Error("Não consegui ler a foto (" + r.status + ")");
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length > 5 * 1024 * 1024) throw new Error("Foto muito grande (máx. 5 MB).");
+  const mime = (r.headers.get("content-type") || "image/jpeg").split(";")[0];
+  if (!/^image\/(jpeg|png)$/.test(mime)) throw new Error("Use foto JPG ou PNG.");
+  const ses = await graph(`/${appId}/uploads`, { method: "POST", token, query: { file_length: buf.length, file_type: mime } });
+  const up = await fetch(`${GRAPH}/${ses.id}`, { method: "POST", headers: { Authorization: "OAuth " + token, file_offset: "0", "Content-Type": mime }, body: buf });
+  const j = await up.json().catch(() => ({}));
+  if (!up.ok || !j.h) throw new Error("A Meta não aceitou a foto: " + ((j.error && j.error.message) || up.status));
+  return j.h;
+}
+
+/* ================= RESPOSTAS AUTOMÁTICAS ================= */
+const autoCfg = (() => { let c = null, at = 0; return async () => { if (c && Date.now() - at < (process.env.WA_TEST ? 0 : 60000)) return c; const s = await db.collection("wa_settings").doc("auto").get(); c = s.exists ? s.data() : {}; at = Date.now(); return c; }; })();
+/** Está dentro do horário de atendimento? (fuso de São Paulo) */
+function dentroHorario(h, now = Date.now()) {
+  if (!h) return true;
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(now)).map(x => [x.type, x.value]));
+  const dia = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(p.weekday);
+  const min = (Number(p.hour) % 24) * 60 + Number(p.minute);
+  const toMin = s => { const [a, b] = String(s || "0:0").split(":").map(Number); return a * 60 + (b || 0); };
+  const dias = Array.isArray(h.dias) ? h.dias : [1, 2, 3, 4, 5];
+  if (!dias.includes(dia)) return false;
+  const ini = toMin(dia === 6 && h.sabIni ? h.sabIni : h.ini || "08:00"), fim = toMin(dia === 6 && h.sabFim ? h.sabFim : h.fim || "18:00");
+  return min >= ini && min < fim;
+}
+async function autoReply(line, ev, info) {
+  if (!line || !line.token || info.optOut || ev.msg.type === "reaction") return;
+  const cfg = await autoCfg(); const now = Date.now();
+  const nome = W.firstName(info.cur.name || ev.contactName || "");
+  const fill = t => String(t || "").replace(/\{primeiroNome\}/g, nome).replace(/\{nome\}/g, info.cur.name || ev.contactName || "").replace(/ ([!,.?])/g, "$1").replace(/  +/g, " ").trim();
+  const parts = [], patch = {};
+  if (cfg.boasVindas && cfg.boasVindas.on && info.novo && cfg.boasVindas.texto) { parts.push(fill(cfg.boasVindas.texto)); patch.autoBoasEm = now; }
+  const fh = cfg.foraHorario;
+  if (fh && fh.on && fh.texto && !dentroHorario(fh, now) && !(info.cur.autoForaEm && now - info.cur.autoForaEm < 12 * 3600e3)) { parts.push(fill(fh.texto)); patch.autoForaEm = now; }
+  if (!parts.length) return;
+  const text = parts.join("\n\n");
+  const r = await graph(`/${line.phoneNumberId}/messages`, { method: "POST", token: line.token, body: W.buildSendPayload(ev.wa, { kind: "text", text }) });
+  const wamid = r.messages && r.messages[0] && r.messages[0].id;
+  // grava sem tirar a cliente da fila "Aguardando resposta": automático não conta como atendimento
+  await convRef(info.convId).collection("messages").doc(wamid || "auto_" + now).set({ dir: "out", type: "text", text, ts: now, status: "pending", origin: "auto", by: "Automático" });
+  if (wamid) await db.collection("wa_index").doc(wamid).set({ convId: info.convId, campaignId: null, ts: now });
+  await convRef(info.convId).set(patch, { merge: true });
+}
 
 /* ================= CONEXÃO (oficial ou híbrida) ================= */
 exports.waConectar = onCall({ secrets: [META_APP_SECRET], timeoutSeconds: 120 }, async req => {
@@ -353,7 +414,7 @@ exports.waDisparo = onCall({ timeoutSeconds: 120 }, async req => {
   for (const x of list) { const wa = W.toWa(x.tel); const k = W.telKey(wa); if (!k || seen.has(k) || blocked.has(k)) continue; seen.add(k); dest.push({ wa, name: String(x.name || "").slice(0, 80) }); }
   if (!dest.length) throw new HttpsError("failed-precondition", "Ninguém para enviar (todos sem telefone ou fora da lista).");
   const ref = db.collection("wa_campaigns").doc();
-  await ref.set({ nome: d.nome, modelo: d.modelo, language: d.language || "pt_BR", categoria: d.categoria || "MARKETING", line: d.line, publico: d.publico || "", total: dest.length, status: d.agendarPara ? "agendada" : "enviando", agendarPara: d.agendarPara || null, criadoEm: Date.now(), criadoPor: me.name, enviadas: 0, entregues: 0, lidas: 0, respondidas: 0, falhas: 0, sairam: 0, pedidos: 0, receita: 0, custo: 0, custoEstimado: d.custoEstimado || 0 });
+  await ref.set({ nome: d.nome, modelo: d.modelo, language: d.language || "pt_BR", categoria: d.categoria || "MARKETING", line: d.line, publico: d.publico || "", total: dest.length, status: d.agendarPara ? "agendada" : "enviando", agendarPara: d.agendarPara || null, headerImage: d.headerImage || null, criadoEm: Date.now(), criadoPor: me.name, enviadas: 0, entregues: 0, lidas: 0, respondidas: 0, falhas: 0, sairam: 0, pedidos: 0, receita: 0, custo: 0, custoEstimado: d.custoEstimado || 0 });
   for (let i = 0; i < dest.length; i += 400) {
     const b = db.batch();
     dest.slice(i, i + 400).forEach((x, j) => b.set(ref.collection("dest").doc(x.wa), { wa: x.wa, name: x.name, status: "fila", ordem: i + j }));
@@ -380,16 +441,17 @@ exports.waFila = onSchedule({ schedule: "every 1 minutes", timeoutSeconds: 120, 
       const vars = nVars ? [W.firstName(x.name) || "querida"].concat(Array(nVars - 1).fill("")) : [];
       if (vars.slice(1).some(v => !v)) { await cdoc.ref.update({ status: "pausada", motivo: "O modelo tem mais de uma variável; disparo só preenche o {{1}}" }); break; }
       try {
-        const r = await graph(`/${line.phoneNumberId}/messages`, { method: "POST", token: line.token, body: W.buildSendPayload(x.wa, { kind: "template", template: c.modelo, language: c.language, vars }) });
+        const headerImage = tpl.headerFormat === "IMAGE" ? (c.headerImage || tpl.headerExample) : null;
+        const r = await graph(`/${line.phoneNumberId}/messages`, { method: "POST", token: line.token, body: W.buildSendPayload(x.wa, { kind: "template", template: c.modelo, language: c.language, vars, headerImage }) });
         const wamid = r.messages[0].id;
         const convId = await findConvId(x.wa);
         const exists = (await convRef(convId).get()).exists;
-        await saveOutbound(convId, x.wa, wamid, { type: "template", template: { name: c.modelo, buttons: tpl.buttons || null }, text: tpl.body.replace(/\{\{(\d+)\}\}/g, (m, i) => vars[i - 1] || m), status: "pending", origin: "campanha", campanha: c.nome, campanhaId: cdoc.id, ts: Date.now() },
+        await saveOutbound(convId, x.wa, wamid, { type: "template", template: { name: c.modelo, buttons: tpl.buttons || null }, text: tpl.body.replace(/\{\{(\d+)\}\}/g, (m, i) => vars[i - 1] || m), status: "pending", origin: "campanha", campanha: c.nome, campanhaId: cdoc.id, destId: dd.id, media: headerImage ? { url: headerImage, mime: "image/jpeg" } : null, ts: Date.now() },
           Object.assign({ line: line.id, lastCampaign: { id: cdoc.id, ts: Date.now(), destId: dd.id } }, exists ? {} : { name: x.name, tags: [], notes: "", status: "encerrada", criadoEm: Date.now(), windowUntil: 0 }));
         await dd.ref.set({ status: "enviada", wamid, convId, em: Date.now() }, { merge: true });
         await cdoc.ref.update({ enviadas: FieldValue.increment(1) });
       } catch (e) {
-        await dd.ref.set({ status: "falha", erro: e.message }, { merge: true });
+        await dd.ref.set({ status: "falha", erro: e.message, em: Date.now() }, { merge: true });
         await cdoc.ref.update({ falhas: FieldValue.increment(1) });
         if ([131048, 131031, 190, 368].includes(e.code)) { await cdoc.ref.update({ status: "pausada", motivo: e.message }); break; } // proteger o número
         if (e.code === 130429) break; // limite por segundo: continua no próximo minuto
@@ -419,6 +481,59 @@ exports.waAtribuir = onSchedule({ schedule: "every 10 minutes", timeoutSeconds: 
     });
   }
   await mark.set({ ate: nowIso });
+});
+
+/** Reenviar: quem falhou (no envio ou na entrega) volta para a fila do mesmo disparo. */
+exports.waReenviar = onCall({ timeoutSeconds: 120 }, async req => {
+  await member(req, true);
+  const id = req.data && req.data.campaignId; if (!id) throw new HttpsError("invalid-argument", "Disparo?");
+  const cref = db.collection("wa_campaigns").doc(id);
+  const c = await cref.get(); if (!c.exists) throw new HttpsError("not-found", "Disparo não encontrado.");
+  const [a, b] = await Promise.all([cref.collection("dest").where("status", "==", "falha").get(), cref.collection("dest").where("entrega", "==", "failed").get()]);
+  const docs = new Map(); a.docs.concat(b.docs).forEach(d => docs.set(d.id, d));
+  if (!docs.size) return { ok: true, n: 0 };
+  let enviadas = 0; const all = [...docs.values()];
+  for (let i = 0; i < all.length; i += 400) {
+    const bt = db.batch();
+    all.slice(i, i + 400).forEach(d => { if (d.data().status === "enviada") enviadas++; bt.set(d.ref, { status: "fila", entrega: null, erro: null, reenviadaEm: Date.now() }, { merge: true }); });
+    await bt.commit();
+  }
+  await cref.update({ status: "enviando", falhas: FieldValue.increment(-docs.size), enviadas: FieldValue.increment(-enviadas), reenvios: FieldValue.increment(docs.size) });
+  return { ok: true, n: docs.size };
+});
+
+/** Pós-compra: manda um modelo (ex.: agradecimento) X horas depois da compra, uma vez por pedido. */
+exports.waPosCompra = onSchedule({ schedule: "every 30 minutes", timeoutSeconds: 300 }, async () => {
+  const cfg = (await autoCfg()).posCompra || {};
+  if (!cfg.on || !cfg.modelo || !cfg.line) return;
+  let line; try { line = await lineCreds(cfg.line); } catch (e) { logger.warn("pós-compra: número desconectado"); return; }
+  const delay = Math.max(0, Number(cfg.horas) || 2) * 3600e3, now = Date.now();
+  const mark = db.collection("wa_index").doc("_poscompra");
+  const m = await mark.get(); const since = m.exists ? m.data().ate : now - delay - 3600e3; const until = now - delay;
+  if (until <= since) return;
+  const tpl = await graph(`/${line.wabaId}/message_templates`, { token: line.token, query: { name: cfg.modelo, fields: "name,status,components,language" } }).then(r => (r.data || []).map(W.templateFromMeta).find(t => t.name === cfg.modelo)).catch(() => null);
+  if (!tpl || tpl.status !== "APPROVED") { logger.warn("pós-compra: modelo não aprovado"); return; }
+  const nVars = (tpl.body.match(/\{\{\d+\}\}/g) || []).length;
+  if (nVars > 1) { logger.warn("pós-compra: modelo com mais de uma variável"); return; }
+  const pedidos = [];
+  const vs = await db.collection("sales").where("created_at", ">", new Date(since).toISOString()).where("created_at", "<=", new Date(until).toISOString()).get();
+  vs.forEach(d => { const v = d.data(); if (v.status === "cancelado" || v.deleted) return; pedidos.push({ id: "v_" + d.id, tel: (v.shipping_data || {}).tel || v.phone, nome: v.client || "" }); });
+  if (cfg.yampi !== false) { const ys = await db.collection("yampi_orders").where("t", ">", since).where("t", "<=", until).get(); ys.forEach(d => { const o = d.data(); if (o.pago) pedidos.push({ id: "y_" + d.id, tel: o.tel, nome: o.nome }); }); }
+  const vistos = new Set();
+  for (const p of pedidos) {
+    const wa = W.toWa(p.tel); const k = W.telKey(wa); if (!k || vistos.has(k)) continue; vistos.add(k);
+    const iref = db.collection("wa_index").doc("pos_" + p.id); if ((await iref.get()).exists) continue;
+    const cq = await db.collection("wa_conversations").where("telKey", "==", k).limit(1).get();
+    if (!cq.empty && cq.docs[0].data().optOut) continue;
+    const vars = nVars ? [W.firstName(p.nome) || "querida"] : [];
+    try {
+      const r = await graph(`/${line.phoneNumberId}/messages`, { method: "POST", token: line.token, body: W.buildSendPayload(wa, { kind: "template", template: tpl.name, language: tpl.language, vars, headerImage: tpl.headerFormat === "IMAGE" ? cfg.headerImage || tpl.headerExample : null }) });
+      const convId = cq.empty ? await findConvId(wa) : cq.docs[0].id;
+      await saveOutbound(convId, wa, r.messages[0].id, { type: "template", template: { name: tpl.name }, text: tpl.body.replace(/\{\{1\}\}/g, vars[0] || ""), status: "pending", origin: "auto", by: "Pós-compra", ts: Date.now() }, Object.assign({ line: line.id }, cq.empty ? { name: p.nome, tags: [], notes: "", status: "encerrada", criadoEm: Date.now(), windowUntil: 0 } : {}));
+      await iref.set({ em: Date.now() });
+    } catch (e) { logger.warn("pós-compra falhou", p.id, e.message); await iref.set({ em: Date.now(), erro: e.message }); if ([131048, 131031, 190, 368].includes(e.code)) break; }
+  }
+  await mark.set({ ate: until });
 });
 
 /* ================= CATÁLOGO (Yampi) ================= */
