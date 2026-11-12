@@ -343,3 +343,30 @@ test.describe("S03 auditoria de segurança — vitrine", () => {
     expect(erros.filter((e) => !/'vrn:/.test(e))).toEqual([]);
   });
 });
+
+test.describe("H01 faixa de destaques editável", () => {
+  test("H01-1 sem edição mostra o texto automático", async ({ page }) => {
+    await abrir(page, base, { freteRegra: "acima", frete: 199, parcelas: 3 });
+    const hl = page.locator("#hl");
+    await expect(hl).toContainText("Frete grátis acima de R$ 199,00");
+    await expect(hl).toContainText("Em até 3x sem juros");
+    await expect(hl.locator(".hl-item")).toHaveCount(4);
+  });
+  test("H01-2 texto trocado, item escondido e HTML aparece como texto", async ({ page }) => {
+    const erros = await abrir(page, base, { destaques: [{ t: "Entrega em 24h", s: "para Nova Friburgo" }, { off: true }, {}, { t: '<img src=x onerror="window.__h=1">', s: "" }] });
+    const hl = page.locator("#hl");
+    await expect(hl.locator(".hl-item")).toHaveCount(3);
+    await expect(hl).toContainText("Entrega em 24h");
+    await expect(hl).toContainText("para Nova Friburgo");
+    await expect(hl).not.toContainText("Parcele");
+    await expect(hl).toContainText("qualidade Premium");
+    await expect(hl).toContainText('<img src=x onerror="window.__h=1">');
+    await expect(hl).toContainText("no banho das peças");
+    expect(await page.evaluate(() => (window as any).__h)).toBeUndefined();
+    expect(erros).toEqual([]);
+  });
+  test("H01-3 todos escondidos some a faixa", async ({ page }) => {
+    await abrir(page, base, { destaques: [{ off: true }, { off: true }, { off: true }, { off: true }] });
+    await expect(page.locator("#hl")).toBeHidden();
+  });
+});

@@ -822,6 +822,9 @@ function tConta(){
     <div class="flabel">Prévia no carrinho</div>
     <div id="brPrev" style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;display:flex;flex-direction:column;gap:9px"></div></div>
 
+  <div class="box"><h2>Destaques da loja</h2><p class="lead">A faixa com 4 ícones logo abaixo do banner (entrega, pagamento, qualidade e garantia). Deixe em branco para usar o texto automático.</p>
+    <div id="dqBox"></div><span class="saved" id="saved3" aria-live="polite"></span></div>
+
   <div class="box"><h2>Rodapé</h2><p class="lead">O texto que aparece no fim da loja.</p>
     <div class="field"><label for="fSobre">Sobre a loja</label><textarea id="fSobre" rows="3" maxlength="240">${esc(L.sobre)}</textarea></div>
     <div class="field"><label for="fHor">Horário de atendimento</label><input id="fHor" maxlength="60" value="${esc(rp.horario??"Segunda a sábado")}"></div>
@@ -860,6 +863,25 @@ function tConta(){
     el.innerHTML=`<span>Faltam <b>${brl(meta-ex)}</b> para ${txt}</span><div style="height:8px;background:var(--bg);border-radius:999px;overflow:hidden"><i style="display:block;height:100%;width:60%;background:var(--brand);border-radius:999px"></i></div><span class="hint">Exemplo com ${brl(ex)} no carrinho. Ao atingir: “${ok.replace(/<[^>]+>/g,"")}”</span>`;
   }
   prevFrete();
+
+  /* destaques: 4 itens; vazio = texto automático; desmarcar = esconder */
+  const DQ_NOMES=["Entrega","Pagamento","Qualidade","Garantia"];
+  const dqPadrao=()=>{const r=freteRegra(),v=Number(L.frete)||0,np=Number(L.parcelas)||1;return [
+    [r==="sempre"?"Frete grátis":"Envio imediato",r==="sempre"?"em todos os pedidos":r==="acima"&&v>0?`Frete grátis acima de ${brl(v)}`:"Para todo o Brasil"],
+    [np>1?"Parcele suas compras":"Pix ou cartão",np>1?`Em até ${np}x sem juros`:"Pagamento combinado no WhatsApp"],
+    ["Semijoias com","qualidade Premium"],["Garantia de 1 ano","no banho das peças"]]};
+  const dqAtual=()=>[0,1,2,3].map(i=>{const d=(Array.isArray(L.destaques)&&L.destaques[i])||{};return {t:d.t||"",s:d.s||"",off:d.off===true}});
+  const dqRender=()=>{const p=dqPadrao(),a=dqAtual();$("dqBox").innerHTML=a.map((d,i)=>`<fieldset class="dq" style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;display:flex;flex-direction:column;gap:8px">
+      <legend style="padding:0 6px;font-weight:600">${DQ_NOMES[i]}</legend>
+      <label class="check" style="min-height:32px"><input type="checkbox" style="width:20px;height:20px;accent-color:var(--brand)" data-dq="${i}" data-k="on" ${d.off?"":"checked"}>Mostrar na loja</label>
+      <div class="field"><label for="dqT${i}">Título</label><input id="dqT${i}" data-dq="${i}" data-k="t" maxlength="40" value="${esc(d.t)}" placeholder="${esc(p[i][0])}" ${d.off?"disabled":""}></div>
+      <div class="field"><label for="dqS${i}">Texto</label><input id="dqS${i}" data-dq="${i}" data-k="s" maxlength="60" value="${esc(d.s)}" placeholder="${esc(p[i][1])}" ${d.off?"disabled":""}></div></fieldset>`).join("")};
+  dqRender();
+  const dqSalvar=e=>{const el=e.target.closest("[data-dq]");if(!el)return;const a=dqAtual(),i=Number(el.dataset.dq);
+    if(el.dataset.k==="on"){a[i].off=!el.checked;$("dqT"+i).disabled=a[i].off;$("dqS"+i).disabled=a[i].off}else a[i][el.dataset.k]=el.value.trim();
+    salvarCampo("destaques",a.map(d=>({t:d.t.slice(0,40),s:d.s.slice(0,60),off:d.off})));
+    const s3=$("saved3");s3.textContent="Salvo ✓";clearTimeout(s3._t);s3._t=setTimeout(()=>s3.textContent="",1600)};
+  $("dqBox").oninput=dqSalvar;$("dqBox").onchange=e=>{if(e.target.type==="checkbox")dqSalvar(e)};
 
   const flash2=()=>{const el=$("saved2");if(!el)return;el.textContent="Salvo ✓";clearTimeout(el._t);el._t=setTimeout(()=>el.textContent="",1600)};
   const setRod=(k,v)=>{salvarCampo("rodape",{...(L.rodape||{}),[k]:v});flash2()};

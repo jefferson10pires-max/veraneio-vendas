@@ -470,12 +470,16 @@ function render(){
   if(rp.copy)$("copy").textContent=rp.copy;
   $("dfoot").innerHTML=[L.whats&&`<a href="https://wa.me/${waNum(L.whats)}" target="_blank" rel="noopener">${I.wa}Atendimento: ${esc(L.whats)}</a>`,ig&&`<a href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener">${I.ig}@${esc(ig)}</a>`].filter(Boolean).join("");
   const f=freteInfo(),np=Number(L.parcelas)||1;
-  $("hl").innerHTML=[
+  /* faixa de destaques: texto automático, que a revendedora pode trocar ou esconder item por item (L.destaques) */
+  const dq=Array.isArray(L.destaques)?L.destaques:[],txt=(v,max)=>typeof v==="string"?v.trim().slice(0,max):"";
+  const hl=[
     [I.truck,f.r==="sempre"?"Frete grátis":"Envio imediato",f.r==="sempre"?"em todos os pedidos":f.r==="acima"&&f.v>0?`Frete grátis acima de ${brl(f.v)}`:"Para todo o Brasil"],
     [I.card,np>1?"Parcele suas compras":"Pix ou cartão",np>1?`Em até ${np}x sem juros`:"Pagamento combinado no WhatsApp"],
     [I.gem,"Semijoias com","qualidade Premium"],
     [I.shield,"Garantia de 1 ano","no banho das peças"]
-  ].map(([i,b,s])=>`<div class="hl-item">${i}<p><b>${b}</b>${s}</p></div>`).join("");
+  ].map(([i,b,s],k)=>{const d=dq[k]&&typeof dq[k]==="object"?dq[k]:{};return d.off===true?null:[i,txt(d.t,40)||b,txt(d.s,60)||s]}).filter(Boolean);
+  $("hl").parentElement.hidden=!hl.length;
+  $("hl").innerHTML=hl.map(([i,b,s])=>`<div class="hl-item">${i}<p><b>${esc(b)}</b>${esc(s)}</p></div>`).join("");
   renderBanners();renderNav();renderMain();renderCart();
 }
 let hlTimer=null;

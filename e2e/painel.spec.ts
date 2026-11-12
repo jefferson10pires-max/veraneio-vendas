@@ -962,3 +962,18 @@ test.describe("A01 aviso do ADM no Início das revendedoras", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("H02 revendedora edita a faixa de destaques", () => {
+  test("H02-1 trocar texto e esconder item salva na loja", async ({ page }) => {
+    const erros = await preparar(page);
+    await entrar(page);
+    await aba(page, "Loja").click();
+    await page.getByLabel("Título").first().fill("Entrega em 24h");
+    await page.locator("#dqS0").fill("para Nova Friburgo");
+    await page.locator('[data-dq="1"][data-k="on"]').uncheck();
+    await expect(page.locator("#dqT1")).toBeDisabled();
+    await expect.poll(async () => (await db(page))["lojas/u1"].destaques, { timeout: 5000 }).toEqual([
+      { t: "Entrega em 24h", s: "para Nova Friburgo", off: false }, { t: "", s: "", off: true }, { t: "", s: "", off: false }, { t: "", s: "", off: false }]);
+    expect(erros).toEqual([]);
+  });
+});

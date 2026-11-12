@@ -118,7 +118,8 @@ service cloud.firestore {
 
     // campos que a revendedora pode mudar na própria loja; só o que ela mudou é conferido
     function lojaOk(d, k) {
-      return k.hasOnly(['nome', 'cor', 'logo', 'frase', 'sobre', 'aviso', 'frete', 'freteRegra', 'parcelas', 'insta', 'whats', 'barra', 'rodape', 'modo'])
+      return k.hasOnly(['nome', 'cor', 'logo', 'frase', 'sobre', 'aviso', 'frete', 'freteRegra', 'parcelas', 'insta', 'whats', 'barra', 'rodape', 'modo', 'destaques'])
+        && (!k.hasAny(['destaques']) || (d.destaques is list && d.destaques.size() <= 4))
         && (!k.hasAny(['cor']) || isCor(d.cor))
         && (!k.hasAny(['nome']) || (d.nome is string && d.nome.size() <= 80))
         && (!k.hasAny(['logo']) || d.logo == null || isFoto(d.logo))

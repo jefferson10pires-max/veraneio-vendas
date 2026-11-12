@@ -199,6 +199,13 @@ test("R20 aviso do ADM: revendedora lê, visitante não; só ADM grava, com link
   await assertFails(setDoc(doc(adm(), "avisos/outro"), { ativo: true }));
 });
 
+test("R21 revendedora edita a faixa de destaques (lista de até 4)", async () => {
+  await assertSucceeds(updateDoc(doc(rev(), "lojas/rev"), { destaques: [{ t: "Entrega 24h", s: "x", off: false }, { off: true }] }));
+  await assertFails(updateDoc(doc(rev(), "lojas/rev"), { destaques: "texto" }));
+  await assertFails(updateDoc(doc(rev(), "lojas/rev"), { destaques: [{}, {}, {}, {}, {}] }));
+  await assertFails(updateDoc(doc(rev(), "lojas/outra"), { destaques: [] }));
+});
+
 // --- ADM ---
 test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertSucceeds(setDoc(doc(adm(), "atacado/p0"), { itens: [] }));
