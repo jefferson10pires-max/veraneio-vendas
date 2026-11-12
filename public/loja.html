@@ -615,7 +615,8 @@ function abrirProduto(id){
         <div>${I.gem}<span>Peças com<b>garantia</b></span></div>
         <div>${I.truck}<span>Envio<b>imediato</b></span></div>
       </div>
-      <div class="pdesc"><h4>Descrição</h4><p>${esc(p.desc||"Semijoia com acabamento de alta durabilidade e garantia de 1 ano no banho.")}${p.banho?`\n\nBanho: ${esc(p.banho)}`:""}</p></div>
+      ${(()=>{/* peça da Veraneio: só a descrição escrita pela revendedora (campo descricao); peça própria: a dela (desc) */
+        const d=String((p.proprio?p.desc:p.descricao)||"").trim();return d?`<div class="pdesc"><h4>Descrição</h4><p>${esc(d)}</p></div>`:""})()}
     </div>`;
   const body=$("pBody");
   body.onclick=e=>{const b=e.target.closest("[data-pq],[data-padd],[data-op]");if(!b)return;

@@ -63,7 +63,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   const src = precos && typeof precos === "object" ? precos : {};
   const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
   const arr = (v) => (Array.isArray(v) ? v : []);
-  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), pronta: arr(src.pronta), ocultas: arr(src.ocultas) };
+  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), pronta: arr(src.pronta), ocultas: arr(src.ocultas) };
   if (!Number.isFinite(Number(pr.margem))) pr.margem = 100;
   const pe = new Set(pr.pronta), oc = new Set(pr.ocultas), fo = pr.fotos;
   const nFotos = (n) => Math.min(3, Math.max(0, Math.floor(Number(n) || 0)));
@@ -78,7 +78,9 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   const itens = atacado.filter((p) => vale(p.id)).map((p) => {
     const f = fo[p.id] && nFotos(fo[p.id].n) ? fo[p.id] : null;
     return {
-      id: p.id, nome: String(pr.nomes[p.id] || "").trim().slice(0, 80) || p.nome || "", cat: p.cat || "", banho: p.banho || "", desc: p.desc || "",
+      id: p.id, nome: String(pr.nomes[p.id] || "").trim().slice(0, 80) || p.nome || "", cat: p.cat || "", banho: p.banho || "",
+      // descrição: só a que a revendedora escreveu (a da Veraneio/Yampi não vai para a loja)
+      descricao: String(pr.descs[p.id] || "").trim().slice(0, 600),
       fotos: f ? [] : (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
       preco: precoFinal(p.preco, pr, p.id),
       ...(f ? { fp: { n: nFotos(f.n), v: Number(f.v) || 1 } } : {}),

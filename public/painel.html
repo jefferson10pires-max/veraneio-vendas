@@ -314,7 +314,7 @@ async function carregarConta(u){
     const [p,rl,rp,rb,rm]=await Promise.all([getDoc(doc(db,"precos",u.uid)),...["loja","precos","banners","mudou"].map(n=>getDoc(doc(db,"rascunhos",u.uid,"docs",n)).catch(()=>null))]);
     RAS={loja:rl&&rl.exists(),precos:rp&&rp.exists(),banners:rb&&rb.exists(),mudou:rm&&rm.exists()};
     if(RAS.loja){const d=rl.data();delete d.em;Object.assign(L,d)}
-    PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
+    PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{},descs:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
     BAN=RAS.banners?(rb.data().itens||[]):null;
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     aplicarCor();shell();
@@ -679,7 +679,7 @@ async function lerArquivos(input,atual,msg){
 function ligarGrade(el,l,re){el.onclick=e=>{const r=e.target.closest("[data-rm]"),f=e.target.closest("[data-first]");
   if(r){l.splice(Number(r.dataset.rm),1);re()}else if(f){const i=Number(f.dataset.first);[l[0],l[i]]=[l[i],l[0]];re()}}}
 
-/* editar uma peça da Veraneio só na loja desta revendedora: nome e fotos */
+/* editar uma peça da Veraneio só na loja desta revendedora: nome, preço, descrição e fotos */
 async function formPeca(id){
   const p=(PRODS||[]).find(x=>x.id===id);if(!p)return;
   const tinha=temFotoPropria(p),minhas=tinha?[...(await fotosProprias(id))]:[],nomeAtual=(PR.nomes&&PR.nomes[id])||"";
@@ -687,6 +687,8 @@ async function formPeca(id){
       <span class="hint">Nome da Veraneio: ${esc(p.nome)}${nomeAtual?` · <button type="button" class="linkbtn" id="ffNV">Usar o nome da Veraneio</button>`:""}</span></div>
     <div class="field"><label for="ffP">Preço exato na sua loja (R$, opcional)</label><input id="ffP" type="text" inputmode="decimal" autocomplete="off" value="${reaisTxt((PR.fixo||{})[id])}" placeholder="${esc(brl(precoFinal(p.preco,{...PR,fixo:{}},id)))} pela sua margem">
       <span class="hint">Atacado ${brl(p.preco)}. Deixe em branco para usar a margem.</span></div>
+    <div class="field"><label for="ffD">Descrição na sua loja (opcional)</label><textarea id="ffD" rows="4" maxlength="600" placeholder="Ex.: Anel regulável banhado a ouro 18k, com zircônias. Ótimo para presente.">${esc((PR.descs||{})[id]||"")}</textarea>
+      <span class="hint">Aparece na página da peça. Em branco, a peça fica sem descrição.</span></div>
     <div class="field"><span class="flabel">Fotos da Veraneio</span><div class="fotos">${(p.fotos||[]).slice(0,4).map(u=>`<figure><img src="${esc(mini(u,300))}" alt=""></figure>`).join("")||'<p class="hint">Sem foto.</p>'}</div></div>
     <div class="field"><span class="flabel">Suas fotos (aparecem no lugar das da Veraneio)</span><div class="fotos" id="ffG"></div>
       <span class="btn btn-ghost btn-sm file">${I.upload}Enviar foto<input type="file" id="ffIn" accept="image/*" multiple aria-label="Enviar foto"></span>
@@ -704,8 +706,9 @@ async function formPeca(id){
     b.disabled=true;
     const fxv=lerReais($("ffP").value);
     if($("ffP").value.trim()&&!(fxv>0)){$("ffErr").textContent="Preço inválido. Use, por exemplo, 59,90.";$("ffP").focus();b.disabled=false;return}
-    try{PR.fotos=PR.fotos||{};PR.nomes=PR.nomes||{};PR.fixo=PR.fixo||{};
+    try{PR.fotos=PR.fotos||{};PR.nomes=PR.nomes||{};PR.fixo=PR.fixo||{};PR.descs=PR.descs||{};
       if(nome===p.nome)delete PR.nomes[id];else PR.nomes[id]=nome;
+      const ds=$("ffD").value.replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim().slice(0,600);if(ds)PR.descs[id]=ds;else delete PR.descs[id];
       if(fxv>0){PR.fixo[id]=fxv;if(PR.over)delete PR.over[id]}else delete PR.fixo[id];
       if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id+"~"+v),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
       else if(tinha)delete PR.fotos[id];
@@ -828,8 +831,9 @@ function precosLimpos(){
   const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
   const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
   const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
-  PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
-  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,modo:modo()}}
+  const ds={};for(const [k,v] of Object.entries(PR.descs||{}))if(ids.has(k)&&String(v||"").trim())ds[k]=String(v).trim().slice(0,600);
+  PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;PR.descs=ds;
+  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,modo:modo()}}
 async function gravarPrecosRascunho(){await Promise.all([carregarProds(),carregarProprios()]);await rascunho("precos",precosLimpos())}
 function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;RAS.precos=true;pubBar();saveT.p=setTimeout(()=>{saveT.p=null;
   filaPub=filaPub.then(async()=>{

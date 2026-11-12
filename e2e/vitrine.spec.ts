@@ -383,3 +383,20 @@ test("S04 só aparece o selo de Pronta entrega (sem 'Garantia' nem 'Novidade' na
   await card(page, "Anel Comum").locator(".name").click();
   await expect(page.locator(".pinfo .flag")).toHaveCount(0);
 });
+
+test("S05 descrição: peça da Veraneio só mostra a descrição escrita pela revendedora", async ({ page }) => {
+  await abrir(page, [
+    { id: "d1", nome: "Anel Sem", cat: "Anéis", preco: 30, fotos: [FOTO_OK], desc: "Texto antigo da Yampi" },
+    { id: "d2", nome: "Anel Com", cat: "Anéis", preco: 30, fotos: [FOTO_OK], desc: "Texto antigo da Yampi", descricao: "Anel regulável <b>lindo</b>\nÓtimo presente" } as any,
+    { id: "d3", nome: "Anel Meu", cat: "Anéis", preco: 30, fotos: [FOTO_OK], proprio: true, desc: "Descrição da peça própria" } as any,
+  ]);
+  await card(page, "Anel Sem").locator(".name").click();
+  await expect(page.locator(".pdesc")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("Texto antigo da Yampi");
+  await page.keyboard.press("Escape");
+  await card(page, "Anel Com").locator(".name").click();
+  await expect(page.locator(".pdesc p")).toHaveText("Anel regulável <b>lindo</b>\nÓtimo presente");
+  await page.keyboard.press("Escape");
+  await card(page, "Anel Meu").locator(".name").click();
+  await expect(page.locator(".pdesc p")).toHaveText("Descrição da peça própria");
+});

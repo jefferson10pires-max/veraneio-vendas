@@ -59,11 +59,11 @@ service cloud.firestore {
 
     // formato que o painel grava; qualquer outra coisa é recusada (um documento malformado travava a republicação de todas as lojas)
     function precosOk(d) {
-      return d.keys().hasOnly(['margem', 'arred', 'over', 'fixo', 'pronta', 'ocultas', 'excluidas', 'fotos', 'nomes', 'modo', 'atualizadoEm', 'em'])
+      return d.keys().hasOnly(['margem', 'arred', 'over', 'fixo', 'pronta', 'ocultas', 'excluidas', 'fotos', 'nomes', 'descs', 'modo', 'atualizadoEm', 'em'])
         && d.get('margem', 0) is number && d.get('margem', 0) >= 0 && d.get('margem', 0) <= 1000
         && d.get('arred', '') is string
         && d.get('over', {}) is map && d.get('fixo', {}) is map
-        && d.get('fotos', {}) is map && d.get('nomes', {}) is map
+        && d.get('fotos', {}) is map && d.get('nomes', {}) is map && d.get('descs', {}) is map
         && d.get('pronta', []) is list && d.get('ocultas', []) is list
         && d.get('excluidas', []) is list
         && d.get('pronta', []).size() <= 5000 && d.get('ocultas', []).size() <= 5000 && d.get('excluidas', []).size() <= 5000

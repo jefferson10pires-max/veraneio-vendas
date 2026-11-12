@@ -1066,3 +1066,30 @@ test.describe("H02 revendedora edita a faixa de destaques", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("DS1 descrição da peça", () => {
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  test("DS1-H1 revendedora escreve a descrição e ela vai para a loja ao publicar; apagar volta ao vazio", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: /Editar peça: Peça 2$/ }).click();
+    await expect(page.getByLabel("Descrição na sua loja (opcional)")).toHaveValue("");
+    await page.getByLabel("Descrição na sua loja (opcional)").fill("Anel regulável banhado a ouro 18k.");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await publicar(page);
+    let d = await db(page);
+    expect(d["precos/u1"].descs).toEqual({ y2: "Anel regulável banhado a ouro 18k." });
+    expect(catalogo(d).find((x: any) => x.id === "y2").descricao).toBe("Anel regulável banhado a ouro 18k.");
+    expect(catalogo(d).find((x: any) => x.id === "y3").descricao).toBe("");
+    await page.getByRole("button", { name: /Editar peça: Peça 2$/ }).click();
+    await expect(page.getByLabel("Descrição na sua loja (opcional)")).toHaveValue("Anel regulável banhado a ouro 18k.");
+    await page.getByLabel("Descrição na sua loja (opcional)").fill("");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await publicar(page);
+    d = await db(page);
+    expect(d["precos/u1"].descs).toEqual({});
+    expect(catalogo(d).find((x: any) => x.id === "y2").descricao).toBe("");
+    expect(erros).toEqual([]);
+  });
+});
