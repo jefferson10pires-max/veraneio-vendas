@@ -29,6 +29,8 @@ a{color:inherit}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .px{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
+.pubbar{position:sticky;top:58px;z-index:9;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:10px;padding-bottom:10px;background:color-mix(in srgb,var(--brand) 10%,var(--surface));border-bottom:1px solid var(--line);font-size:14px}
+.pubbar[hidden]{display:none}
 .top{position:sticky;top:0;z-index:10;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;min-height:58px}
 .top .who{flex:1;min-width:0;display:flex;align-items:center;gap:10px}
 .top b{font-family:var(--display);font-size:21px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;line-height:1.1}
@@ -309,7 +311,11 @@ async function carregarConta(u){
     const s=await getDoc(doc(db,"lojas",u.uid));
     if(!s.exists()){app.innerHTML=`<div class="center px"><div><h2>Sua conta ainda não tem loja</h2><p class="hint">Fale com a Veraneio para ativar.</p><button class="btn btn-ghost" id="out">Sair</button></div></div>`;$("out").onclick=()=>A.signOut(auth);return}
     L=s.data();
-    const p=await getDoc(doc(db,"precos",u.uid));PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{}},p.exists()?p.data():{});
+    const [p,rl,rp,rb,rm]=await Promise.all([getDoc(doc(db,"precos",u.uid)),...["loja","precos","banners","mudou"].map(n=>getDoc(doc(db,"rascunhos",u.uid,"docs",n)).catch(()=>null))]);
+    RAS={loja:rl&&rl.exists(),precos:rp&&rp.exists(),banners:rb&&rb.exists(),mudou:rm&&rm.exists()};
+    if(RAS.loja){const d=rl.data();delete d.em;Object.assign(L,d)}
+    PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
+    BAN=RAS.banners?(rb.data().itens||[]):null;
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     aplicarCor();shell();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
@@ -323,8 +329,10 @@ function shell(){
   document.title=`${L.nome} · Painel`;
   app.innerHTML=`<header class="top px"><div class="who"><span class="logo" id="tLogo">${logoHTML()}</span><div style="min-width:0"><small>Painel da loja</small><b id="tName">${esc(L.nome)}</b></div></div>
       <a class="ibtn" href="/${esc(L.slug)}" target="_blank" rel="noopener" aria-label="Ver minha loja">${I.eye}</a></header>
+    <div class="pubbar px" id="pubbar" hidden role="status"><span id="pubTxt">Você tem mudanças que ainda não estão na loja.</span><button class="btn btn-brand btn-sm" type="button" id="pubBtn">Publicar atualização</button></div>
     <div class="layout"><nav class="nav" id="nav" aria-label="Seções"></nav><main class="main px" id="main"></main></div>`;
   $("nav").onclick=e=>{const b=e.target.closest("[data-tab]");if(b)ir(b.dataset.tab)};
+  $("pubBtn").onclick=publicarAtualizacao;pubBar();
   ir(ui.tab);
 }
 function navHTML(){const ab=(LEADS||[]).filter(l=>l.status==="abandonado").length;
@@ -335,11 +343,45 @@ function ir(t){if(!TABS.some(x=>x[0]===t))t="inicio";ui.tab=t;ui.vez++;if(locati
 const vez=()=>{const v=ui.vez;return()=>v===ui.vez};
 const loading=()=>$("main").innerHTML=`<div class="skel"></div><div class="skel"></div>`;
 let saveT={};
-function salvarLoja(campos,quiet){clearTimeout(saveT.l);Object.assign(L,campos);saveT.l=setTimeout(async()=>{
-  try{await updateDoc(doc(db,"lojas",U.uid),campos);if(!quiet)flash()}catch(e){toast("Não foi possível salvar. Verifique sua internet.")}},600)}
+/* ---------- rascunho + publicar ----------
+   Tudo o que a revendedora muda fica guardado em rascunhos/{uid}/docs/* e só vai para a loja
+   quando ela toca em "Publicar atualização". */
+let RAS={loja:false,precos:false,banners:false,mudou:false},filaRas=Promise.resolve(),pubAndando=false;
+const rasRef=n=>doc(db,"rascunhos",U.uid,"docs",n);
+const temRascunho=()=>RAS.loja||RAS.precos||RAS.banners||RAS.mudou;
+function pubBar(){const b=$("pubbar");if(!b)return;b.hidden=!temRascunho()&&!pubAndando;
+  $("pubBtn").disabled=pubAndando;$("pubBtn").textContent=pubAndando?"Publicando…":"Publicar atualização";
+  $("pubTxt").textContent=pubAndando?"Atualizando a sua loja…":"Você tem mudanças que ainda não estão na loja."}
+function rascunho(nome,dados,merge){RAS[nome]=true;pubBar();
+  filaRas=filaRas.then(()=>setDoc(rasRef(nome),{...dados,em:serverTimestamp()},merge?{merge:true}:undefined)).catch(e=>{console.error(e);toast("Não foi possível salvar. Verifique sua internet.")});return filaRas}
+const marcarMudou=()=>rascunho("mudou",{});
+function salvarLoja(campos,quiet){Object.assign(L,campos);rascunho("loja",campos,true).then(()=>{if(!quiet)flash()})}
 let pend={};
-function salvarCampo(k,v){pend[k]=v;L[k]=v;clearTimeout(saveT.c);saveT.c=setTimeout(async()=>{const c=pend;pend={};
-  try{await updateDoc(doc(db,"lojas",U.uid),c);flash()}catch(e){toast("Não foi possível salvar. Verifique sua internet.")}},700)}
+function salvarCampo(k,v){pend[k]=v;L[k]=v;RAS.loja=true;pubBar();clearTimeout(saveT.c);saveT.c=setTimeout(()=>{const c=pend;pend={};rascunho("loja",c,true).then(flash)},700)}
+const CAMPOS_LOJA=["nome","cor","logo","frase","sobre","aviso","frete","freteRegra","parcelas","insta","whats","barra","rodape","modo","destaques"];
+async function publicarAtualizacao(){
+  if(pubAndando)return;pubAndando=true;pubBar();
+  try{
+    clearTimeout(saveT.c);if(Object.keys(pend).length){const c=pend;pend={};rascunho("loja",c,true)}
+    if(saveT.p){clearTimeout(saveT.p);saveT.p=null;await gravarPrecosRascunho()}
+    await filaRas;await filaPub;
+    if(RAS.loja){const s=await getDoc(rasRef("loja"));if(s.exists()){const d=s.data(),up={};CAMPOS_LOJA.forEach(k=>{if(k in d)up[k]=d[k]});if(Object.keys(up).length)await updateDoc(doc(db,"lojas",U.uid),up)}}
+    if(RAS.banners)await setDoc(doc(db,"banners",U.uid),{itens:BAN||[],em:serverTimestamp()});
+    await Promise.all([carregarProds(),carregarProprios()]);
+    await setDoc(doc(db,"precos",U.uid),{...precosLimpos(),atualizadoEm:serverTimestamp()});
+    await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);
+    await limparFotosVelhas();
+    await Promise.all(["loja","precos","banners","mudou"].map(n=>RAS[n]?deleteDoc(rasRef(n)).catch(()=>{}):null));
+    RAS={loja:false,precos:false,banners:false,mudou:false};
+    toast("Loja atualizada! As clientes já veem as mudanças.")}
+  catch(e){console.error(e);toast("Não foi possível publicar. Confira a internet e tente de novo.")}
+  finally{pubAndando=false;pubBar()}}
+/* fotos próprias ficam numa versão nova a cada troca; depois de publicar, apaga as versões que a loja não usa mais */
+async function limparFotosVelhas(){try{
+  const usa=new Set();for(const [k,v] of Object.entries(PR.fotos||{}))if(v&&v.n)usa.add(k+"~"+v.v);
+  for(const p of PROPRIOS||[])if(p.fotosN)usa.add(p.id+"~"+p.fotosV);
+  const s=await getDocs(collection(db,"lojas",U.uid,"fotos"));
+  await Promise.all(s.docs.filter(d=>d.id.includes("~")&&!usa.has(d.id)).map(d=>deleteDoc(d.ref)))}catch(e){console.error(e)}}
 function flash(){const el=$("saved");if(!el)return;el.textContent="Salvo ✓";clearTimeout(el._t);el._t=setTimeout(()=>el.textContent="",1600)}
 
 /* ---------- dados ---------- */
@@ -461,10 +503,10 @@ async function tAparencia(){
   $("sws").onclick=e=>{const c=e.target.dataset.col;if(c){$("colPick").value=c;setCor(c)}};
   $("colPick").onchange=e=>setCor(e.target.value);
   $("logoFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;toast("Enviando logo…");
-    try{const url=await paraDataURL(f,360,360,"contain",.9,90000);await updateDoc(doc(db,"lojas",U.uid),{logo:url});L.logo=url;tAparencia();reLogo();toast("Logo atualizada")}
+    try{const url=await paraDataURL(f,360,360,"contain",.9,90000);await salvarLoja({logo:url},true);tAparencia();reLogo();toast("Logo salva. Toque em Publicar atualização para ir para a loja.")}
     catch(err){console.error(err);toast("Não foi possível usar essa imagem.")}};
-  $("logoDel")&&($("logoDel").onclick=async()=>{await updateDoc(doc(db,"lojas",U.uid),{logo:null});L.logo=null;tAparencia();reLogo()});
-  const salvarBanners=async()=>{const tam=JSON.stringify(BAN).length;if(tam>950000)throw new Error("grande");await setDoc(doc(db,"banners",U.uid),{itens:BAN,em:serverTimestamp()});tAparencia()};
+  $("logoDel")&&($("logoDel").onclick=async()=>{await salvarLoja({logo:null},true);tAparencia();reLogo()});
+  const salvarBanners=async()=>{const tam=JSON.stringify(BAN).length;if(tam>950000)throw new Error("grande");await rascunho("banners",{itens:BAN});tAparencia()};
   $("bNew")&&($("bNew").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("bMsg").textContent="Enviando banner…";
     try{const m=await paraDataURL(f,1080,1350,"fit",.8,160000);BAN=[...BAN,{m,d:null}];await salvarBanners();toast("Banner adicionado")}
     catch(err){console.error(err);BAN=BAN.filter(x=>x.m);$("bMsg").textContent="Não coube mais esse banner. Remova um ou use uma imagem mais simples."}});
@@ -508,7 +550,10 @@ const renomeada=p=>!p.proprio&&!!(PR.nomes&&PR.nomes[p.id]);
 const temFotoPropria=p=>p.proprio?!!p.fotosN:!!(PR.fotos&&PR.fotos[p.id]&&PR.fotos[p.id].n);
 /* fotos próprias ficam em lojas/{uid}/fotos/{peça}; aqui são lidas só quando a linha aparece */
 const _fp={};
-function fotosProprias(id){if(!_fp[id])_fp[id]=getDoc(doc(db,"lojas",U.uid,"fotos",id)).then(s=>(s.exists()&&s.data().fotos)||[]).catch(()=>[]);return _fp[id]}
+const versaoFoto=id=>{const p=(PROPRIOS||[]).find(x=>x.id===id);return p?p.fotosV:PR.fotos&&PR.fotos[id]&&PR.fotos[id].v};
+function fotosProprias(id){if(!_fp[id])_fp[id]=(async()=>{const v=versaoFoto(id);
+    if(v){const s=await getDoc(doc(db,"lojas",U.uid,"fotos",id+"~"+v));if(s.exists())return s.data().fotos||[]}
+    const s=await getDoc(doc(db,"lojas",U.uid,"fotos",id));return (s.exists()&&s.data().fotos)||[]})().catch(()=>[]);return _fp[id]}
 function encherMiniaturas(root){root.querySelectorAll("[data-fid]").forEach(el=>{const id=el.dataset.fid;el.removeAttribute("data-fid");
   fotosProprias(id).then(l=>{if(l[0])el.innerHTML=`<img src="${esc(l[0])}" alt="">`})})}
 
@@ -532,7 +577,7 @@ async function tPecas(){
   $("novaPeca").onclick=()=>formPropria();
   $("modo").onclick=e=>{const v=e.target.closest("[data-modo]")?.dataset.modo;if(!v||v===modo())return;PR.modo=v;
     $("modo").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.modo===v));
-    updateDoc(doc(db,"lojas",U.uid),{modo:v}).then(()=>{L.modo=v}).catch(()=>{});
+    salvarLoja({modo:v},true);
     if(v==="pronta"&&ui.pf==="fora")ui.pf="todas";pecas();salvarPrecos()};
   $("pf").onclick=e=>{const v=e.target.closest("[data-f]")?.dataset.f;if(v){ui.pf=v;ui.plim=40;pecas()}};
   $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=40;pecas()};
@@ -560,10 +605,10 @@ const modo=()=>PR.modo==="pronta"?"pronta":"catalogo";
 function excluirPeca(id){
   const ex=new Set(PR.excluidas||[]),oc=new Set(PR.ocultas||[]);ex.add(id);oc.add(id);
   PR.excluidas=[...ex];PR.ocultas=[...oc];PR.pronta=(PR.pronta||[]).filter(x=>x!==id);
-  if($("plist"))pecas();salvarPrecos();toast("Peça excluída da sua loja. Ela fica em “Excluídas” se quiser restaurar.")}
+  if($("plist"))pecas();salvarPrecos();toast("Peça excluída. Toque em Publicar atualização para tirar da loja. Ela fica em “Excluídas” se quiser restaurar.")}
 function restaurar(id){
   PR.excluidas=(PR.excluidas||[]).filter(x=>x!==id);PR.ocultas=(PR.ocultas||[]).filter(x=>x!==id);
-  if($("plist"))pecas();salvarPrecos();toast("Peça restaurada. Ela volta para a sua loja em alguns segundos.")}
+  if($("plist"))pecas();salvarPrecos();toast("Peça restaurada. Toque em Publicar atualização para ela voltar à loja.")}
 function filtradas(){
   const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),ex=new Set(PR.excluidas||[]),q=norm(ui.pq);
   return todas().filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(p.nome+" "+nomeLoja(p)).includes(q))
@@ -662,9 +707,9 @@ async function formPeca(id){
     try{PR.fotos=PR.fotos||{};PR.nomes=PR.nomes||{};PR.fixo=PR.fixo||{};
       if(nome===p.nome)delete PR.nomes[id];else PR.nomes[id]=nome;
       if(fxv>0){PR.fixo[id]=fxv;if(PR.over)delete PR.over[id]}else delete PR.fixo[id];
-      if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
-      else if(tinha){await deleteDoc(doc(db,"lojas",U.uid,"fotos",id));delete PR.fotos[id]}
-      delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. A loja atualiza em alguns segundos.")}
+      if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id+"~"+v),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
+      else if(tinha)delete PR.fotos[id];
+      delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. Toque em Publicar atualização para ir para a loja.")}
     catch(e){console.error(e);b.disabled=false;$("ffMsg").textContent="Não foi possível salvar. Confira a internet."}};
   const v=$("ffVolta");if(v)v.onclick=()=>{minhas.length=0;$("ffOk").click()};
   const ex=$("ffEx");ex.onclick=()=>{
@@ -699,19 +744,18 @@ async function formPropria(id){
     const b=$("npOk");b.disabled=true;$("npErr").textContent="";
     try{const v=Date.now(),dados={nome,cat:$("npC").value.trim()||"Outras",preco,desc:$("npD").value.trim(),var:C.opcoesProprias($("npO").value),
         novo:novo?true:!!p.novo,fotosN:fotos.length,fotosV:fotos.length?v:null,atualizadoEm:serverTimestamp(),...(novo?{criadoEm:serverTimestamp()}:{})};
-      if(fotos.length)await setDoc(doc(db,"lojas",U.uid,"fotos",p.id),{fotos,v});
-      else if(p.fotosN)await deleteDoc(doc(db,"lojas",U.uid,"fotos",p.id));
+      if(fotos.length)await setDoc(doc(db,"lojas",U.uid,"fotos",p.id+"~"+v),{fotos,v});
       await setDoc(doc(db,"lojas",U.uid,"proprios",p.id),dados,{merge:true});
       delete _fp[p.id];
       const item={...p,...dados,proprio:true},i=PROPRIOS.findIndex(x=>x.id===p.id);if(i>=0)PROPRIOS[i]=item;else PROPRIOS.unshift(item);
       const s1=new Set(PR.pronta||[]);$("npPE").checked?s1.add(p.id):s1.delete(p.id);PR.pronta=[...s1];
       PR.ocultas=(PR.ocultas||[]).filter(x=>x!==p.id);
-      fecharFolha();if($("plist")){if(novo)ui.pf="minhas";pecas()}salvarPrecos();toast(novo?"Peça cadastrada. Ela aparece na loja em alguns segundos.":"Peça salva.")}
+      fecharFolha();if($("plist")){if(novo)ui.pf="minhas";pecas()}salvarPrecos();toast(novo?"Peça cadastrada. Toque em Publicar atualização para ela aparecer na loja.":"Peça salva. Toque em Publicar atualização para ir para a loja.")}
     catch(err){console.error(err);b.disabled=false;$("npErr").textContent="Não foi possível salvar. Confira a internet."}};
   const del=$("npDel");if(del)del.onclick=async()=>{
     if(del.dataset.arm!=="1"){del.dataset.arm="1";del.textContent="Toque de novo para excluir";setTimeout(()=>{if(del.isConnected){del.dataset.arm="";del.textContent="Excluir peça"}},3500);return}
     del.disabled=true;
-    try{await deleteDoc(doc(db,"lojas",U.uid,"proprios",p.id));if(p.fotosN)await deleteDoc(doc(db,"lojas",U.uid,"fotos",p.id)).catch(()=>{});
+    try{await deleteDoc(doc(db,"lojas",U.uid,"proprios",p.id));
       PROPRIOS=PROPRIOS.filter(x=>x.id!==p.id);PR.pronta=(PR.pronta||[]).filter(x=>x!==p.id);PR.ocultas=(PR.ocultas||[]).filter(x=>x!==p.id);
       fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça excluída.")}
     catch(err){del.disabled=false;$("npErr").textContent="Não foi possível excluir. Confira a internet."}};
@@ -779,19 +823,19 @@ let _cati=null,_catiDe=null;const CATI=()=>{if(_catiDe!==PRODS){_cati={};PRODS.f
    As gravações entram em fila: nunca duas publicações ao mesmo tempo, e a última mudança sempre vence. */
 let filaPub=Promise.resolve(),pendPub=0;
 function status(t){const a=$("pcStatus");if(a)a.textContent=t}
-function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;saveT.p=setTimeout(()=>{
+function precosLimpos(){
+  const ids=new Set(todas().map(p=>p.id)),exl=[...new Set((PR.excluidas||[]).filter(i=>ids.has(i)))],oc=[...new Set([...(PR.ocultas||[]),...exl])].filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
+  const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
+  const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
+  const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
+  PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
+  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,modo:modo()}}
+async function gravarPrecosRascunho(){await Promise.all([carregarProds(),carregarProprios()]);await rascunho("precos",precosLimpos())}
+function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;RAS.precos=true;pubBar();saveT.p=setTimeout(()=>{saveT.p=null;
   filaPub=filaPub.then(async()=>{
-    try{await Promise.all([carregarProds(),carregarProprios()]);
-      const ids=new Set(todas().map(p=>p.id)),exl=[...new Set((PR.excluidas||[]).filter(i=>ids.has(i)))],oc=[...new Set([...(PR.ocultas||[]),...exl])].filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
-      const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
-      const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
-      const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
-      PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;
-      await setDoc(doc(db,"precos",U.uid),{margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,modo:modo(),atualizadoEm:serverTimestamp()});
-      const el=$("saved");if(el)el.textContent="Atualizando a loja…";
-      await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);flash();status("Loja atualizada ✓")}
+    try{await gravarPrecosRascunho();flash();status("Salvo ✓ — toque em Publicar atualização para ir para a loja")}
     catch(e){console.error(e);status("Não foi possível salvar. Confira a internet.");toast("Não foi possível salvar. Confira a internet e tente de novo.")}
-    finally{pendPub=0}})},1200)}
+    finally{pendPub=0}})},800)}
 addEventListener("beforeunload",e=>{if(pendPub){e.preventDefault();e.returnValue=""}});
 
 /* ---------- LOJA (configurações) ---------- */

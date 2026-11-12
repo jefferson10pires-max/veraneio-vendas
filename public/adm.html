@@ -609,7 +609,7 @@ async function publicarTodas(prog=()=>{}){
   const pr=await getDocs(collection(db,"precos"));let n=0;const falhas=[];
   /* uma loja com problema não impede as outras de serem atualizadas */
   for(const d of pr.docs){prog(`Atualizando lojas ${++n}/${pr.size}`);
-    try{await C.publicarLoja(F,db,d.id,d.data(),at)}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
+    try{await C.publicarLoja(F,db,d.id,d.data(),at,"publicados")}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
   if(falhas.length){const nomes=falhas.map(u=>(LOJAS.find(l=>l.uid===u)||{}).nome||u);throw new Error(`${falhas.length} loja(s) não foram atualizadas: ${nomes.join(", ")}`)}
 }
 let pubT=null;

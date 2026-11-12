@@ -523,7 +523,10 @@ function fotoPropria(tok){
   const [,pid,i,v]=String(tok).split(":"),k=pid+":"+v;
   if(!_fotosP[k])_fotosP[k]=(async()=>{
     if(DEMO){const d=(demoData().fotos||{})[pid];return d||[]}
-    await initFb();const s=await fb.getDoc(fb.doc(fb.db,"lojas",UID,"fotos",pid));return (s.exists()&&s.data().fotos)||[]})().catch(()=>[]);
+    await initFb();
+    /* cada troca de foto é uma versão nova (pid~v); a loja só usa a versão publicada no catálogo */
+    const n=await fb.getDoc(fb.doc(fb.db,"lojas",UID,"fotos",pid+"~"+v));if(n.exists())return n.data().fotos||[];
+    const s=await fb.getDoc(fb.doc(fb.db,"lojas",UID,"fotos",pid));return (s.exists()&&s.data().fotos)||[]})().catch(()=>[]);
   return _fotosP[k].then(l=>l[Number(i)]||null);
 }
 /* miniaturas pelo CDN de imagens da Yampi (bem mais leves que a foto original) */

@@ -59,7 +59,7 @@ service cloud.firestore {
 
     // formato que o painel grava; qualquer outra coisa é recusada (um documento malformado travava a republicação de todas as lojas)
     function precosOk(d) {
-      return d.keys().hasOnly(['margem', 'arred', 'over', 'fixo', 'pronta', 'ocultas', 'excluidas', 'fotos', 'nomes', 'modo', 'atualizadoEm'])
+      return d.keys().hasOnly(['margem', 'arred', 'over', 'fixo', 'pronta', 'ocultas', 'excluidas', 'fotos', 'nomes', 'modo', 'atualizadoEm', 'em'])
         && d.get('margem', 0) is number && d.get('margem', 0) >= 0 && d.get('margem', 0) <= 1000
         && d.get('arred', '') is string
         && d.get('over', {}) is map && d.get('fixo', {}) is map
@@ -83,6 +83,16 @@ service cloud.firestore {
       allow read: if isRevendedora() || isAdmin();
       allow write: if isAdmin() && id == 'geral' && avisoOk(request.resource.data);
       allow delete: if isAdmin();
+    }
+    // Rascunho da revendedora: o que ela mudou e ainda não publicou (só ela e o ADM veem)
+    match /rascunhos/{uid}/docs/{nome} {
+      allow read, delete: if dono(uid);
+      allow create, update: if dono(uid) && (
+        (nome == 'loja' && request.resource.data.keys().hasOnly(['nome', 'cor', 'logo', 'frase', 'sobre', 'aviso', 'frete', 'freteRegra', 'parcelas', 'insta', 'whats', 'barra', 'rodape', 'modo', 'destaques', 'em'])
+          && lojaOk(request.resource.data, request.resource.data.keys().removeAll(['em'])))
+        || (nome == 'precos' && precosOk(request.resource.data))
+        || (nome == 'banners' && request.resource.data.keys().hasOnly(['itens', 'em']) && request.resource.data.itens is list && request.resource.data.itens.size() <= 4)
+        || (nome == 'mudou' && request.resource.data.keys().hasOnly(['em'])));
     }
     match /precos/{uid} {
       allow read, delete: if dono(uid);

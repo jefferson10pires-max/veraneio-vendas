@@ -67,7 +67,12 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   if (!Number.isFinite(Number(pr.margem))) pr.margem = 100;
   const pe = new Set(pr.pronta), oc = new Set(pr.ocultas), fo = pr.fotos;
   const nFotos = (n) => Math.min(3, Math.max(0, Math.floor(Number(n) || 0)));
-  if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
+  // "publicados": republicação feita pelo ADM — mantém as peças próprias exatamente como a revendedora publicou
+  // (o que ela editou e ainda não publicou não pode ir para a loja)
+  const velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
+  let prontos = null;
+  if (proprios === "publicados") { prontos = velhas.docs.flatMap((d) => (d.data().itens || []).filter((x) => x && x.proprio)); proprios = []; }
+  else if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const so = pr.modo === "pronta";
   const vale = (id) => !oc.has(id) && (!so || pe.has(id));
   const itens = atacado.filter((p) => vale(p.id)).map((p) => {
@@ -89,8 +94,8 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
     ...(p.var && p.var.ops && p.var.ops.length ? { var: p.var } : {}),
     ...(pe.has(p.id) ? { pronta: true } : {}),
   }));
-  const todos = [...meus, ...itens];
-  const ps = partes(todos), velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
+  const todos = [...(prontos || meus), ...itens];
+  const ps = partes(todos);
   const b = F.writeBatch(db);
   ps.forEach((p, i) => b.set(F.doc(db, "catalogos", uid, "partes", "p" + i), { itens: p, em: F.serverTimestamp() }));
   velhas.docs.forEach((d) => { if (Number(d.id.slice(1)) >= ps.length) b.delete(d.ref); });

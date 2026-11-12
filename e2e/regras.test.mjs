@@ -206,6 +206,23 @@ test("R21 revendedora edita a faixa de destaques (lista de até 4)", async () =>
   await assertFails(updateDoc(doc(rev(), "lojas/outra"), { destaques: [] }));
 });
 
+test("R22 rascunho: só a dona (e o ADM) lê e grava, no formato certo", async () => {
+  await assertSucceeds(setDoc(doc(rev(), "rascunhos/rev/docs/loja"), { nome: "Nova", cor: "#aabbcc", em: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(rev(), "rascunhos/rev/docs/precos"), { margem: 80, arred: "90", over: {}, fixo: {}, pronta: [], ocultas: ["y1"], excluidas: [], fotos: {}, nomes: {}, modo: "catalogo", em: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(rev(), "rascunhos/rev/docs/banners"), { itens: [{ m: "data:image/jpeg;base64,AA" }], em: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(rev(), "rascunhos/rev/docs/mudou"), { em: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(rev(), "rascunhos/rev/docs/loja")));
+  await assertSucceeds(getDoc(doc(adm(), "rascunhos/rev/docs/loja")));
+  await assertFails(getDoc(doc(visitante(), "rascunhos/rev/docs/loja")));
+  await assertFails(getDoc(doc(rev(), "rascunhos/outra/docs/loja")));
+  await assertFails(setDoc(doc(rev(), "rascunhos/outra/docs/loja"), { nome: "x" }));
+  await assertFails(setDoc(doc(rev(), "rascunhos/rev/docs/loja"), { cor: "red;x" }));
+  await assertFails(setDoc(doc(rev(), "rascunhos/rev/docs/loja"), { status: "ativa" }));
+  await assertFails(setDoc(doc(rev(), "rascunhos/rev/docs/precos"), { margem: 0, pronta: 1 }));
+  await assertFails(setDoc(doc(rev(), "rascunhos/rev/docs/outro"), { em: serverTimestamp() }));
+  await assertSucceeds(deleteDoc(doc(rev(), "rascunhos/rev/docs/loja")));
+});
+
 // --- ADM ---
 test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertSucceeds(setDoc(doc(adm(), "atacado/p0"), { itens: [] }));
