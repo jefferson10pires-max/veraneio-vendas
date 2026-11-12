@@ -196,6 +196,7 @@ exports.waWebhook = onRequest({ secrets: [META_APP_SECRET, WA_VERIFY_TOKEN], tim
   if (req.method !== "POST") return res.sendStatus(405);
   if (!W.verifySignature(req.rawBody, req.get("x-hub-signature-256"), META_APP_SECRET.value())) { logger.warn("assinatura inválida"); return res.sendStatus(401); }
   const events = W.extractEvents(req.body);
+  db.collection("wa_index").doc("_webhook").set({ em: Date.now(), eventos: events.length }).catch(() => { }); // para o checklist mostrar que a Meta está chegando
   let prices = null;
   for (const ev of events) {
     try {
@@ -538,6 +539,73 @@ exports.waPosCompra = onSchedule({ schedule: "every 30 minutes", timeoutSeconds:
   await mark.set({ ate: until });
 });
 
+/* ================= MANUTENÇÃO (gestor): regras do Storage e índice da busca ================= */
+const REGRAS_WA = `
+    // ---- CRM Conversas (crm.html): arquivos do WhatsApp ----
+    match /wa_out/{conv}/{file} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.resource.size < 100 * 1024 * 1024
+        && request.auth.token.firebase.sign_in_provider != "anonymous";
+    }
+    match /wa_in/{all=**} { allow read: if request.auth != null; allow write: if false; }
+    // ---- fim CRM ----`;
+/** Junta as regras do CRM às regras atuais do Storage sem mexer no resto (estoque, quiz…). */
+function juntarRegrasStorage(src) {
+  if (/match\s*\/wa_out\//.test(src)) return null; // já tem
+  const m = src.match(/match\s*\/b\/\{[^}]+\}\/o\s*\{/);
+  if (!m) throw new Error("Não achei o bloco match /b/{bucket}/o nas regras do Storage.");
+  const i = m.index + m[0].length;
+  return src.slice(0, i) + REGRAS_WA + src.slice(i);
+}
+exports.waManutencao = onCall({ timeoutSeconds: 60, secrets: [META_APP_SECRET, WA_VERIFY_TOKEN] }, async req => {
+  await member(req, true);
+  const acao = req.data && req.data.acao;
+  const out = {};
+  if (acao === "status") { // checklist da tela Conexões (só sim/não, nunca o valor dos segredos)
+    const ok = v => !!v && v !== "pendente";
+    out.metaAppId = ok(META_APP_ID.value()); out.metaAppSecret = ok(META_APP_SECRET.value()); out.verifyToken = ok(WA_VERIFY_TOKEN.value());
+    try { const { getSecurityRules } = require("firebase-admin/security-rules"); const rs = await getSecurityRules().getStorageRuleset(); out.storage = /match\s*\/wa_out\//.test((rs.source || []).map(f => String(f.content)).join("\n")); } catch (e) { out.storage = false; out.storageErro = e.message; }
+    try {
+      const { applicationDefault } = require("firebase-admin/app"); const tk = await applicationDefault().getAccessToken();
+      const proj = process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId;
+      const r = await fetch(`https://firestore.googleapis.com/v1/projects/${proj}/databases/(default)/collectionGroups/messages/fields/ts`, { headers: { Authorization: "Bearer " + tk.access_token } });
+      const j = await r.json(); const ix = ((j.indexConfig || {}).indexes || []).filter(x => x.queryScope === "COLLECTION_GROUP");
+      out.indice = ix.length ? (ix.every(x => x.state === "READY") ? "pronto" : "criando") : "falta";
+    } catch (e) { out.indice = "erro"; out.indiceErro = e.message; }
+    const ls = await db.collection("wa_lines").where("status", "==", "conectado").get(); out.linhas = ls.size;
+    const w = await db.collection("wa_index").doc("_webhook").get(); out.webhookEm = w.exists ? w.data().em : null;
+    return out;
+  }
+  if (acao === "storage" || acao === "tudo") {
+    const { getSecurityRules } = require("firebase-admin/security-rules");
+    const sr = getSecurityRules();
+    let atual = "";
+    try { const rs = await sr.getStorageRuleset(); atual = (rs.source || []).map(f => String(f.content)).join("\n"); }
+    catch (e) { if (!/not.?found|NOT_FOUND/i.test(e.message)) throw new HttpsError("aborted", "Ler regras do Storage: " + e.message); }
+    if (!atual) atual = "rules_version = '2';\nservice firebase.storage {\n  match /b/{bucket}/o {\n  }\n}\n";
+    const nova = juntarRegrasStorage(atual);
+    if (!nova) out.storage = "já estava pronto";
+    else {
+      await db.collection("wa_index").doc("_storage_rules_backup").set({ em: Date.now(), regras: atual });
+      if (req.data.aplicar === false) out.storagePrevia = nova;
+      else { await sr.releaseStorageRulesetFromSource(nova); out.storage = "regras do CRM adicionadas (backup das antigas em wa_index/_storage_rules_backup)"; }
+    }
+  }
+  if (acao === "indice" || acao === "tudo") {
+    const { applicationDefault } = require("firebase-admin/app");
+    const tk = await applicationDefault().getAccessToken();
+    const proj = process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || "{}").projectId;
+    const idx = (scope, order) => ({ queryScope: scope, fields: [{ fieldPath: "ts", order }] });
+    const r = await fetch(`https://firestore.googleapis.com/v1/projects/${proj}/databases/(default)/collectionGroups/messages/fields/ts?updateMask=indexConfig`, {
+      method: "PATCH", headers: { Authorization: "Bearer " + tk.access_token, "Content-Type": "application/json" },
+      body: JSON.stringify({ indexConfig: { indexes: [idx("COLLECTION", "ASCENDING"), idx("COLLECTION", "DESCENDING"), idx("COLLECTION_GROUP", "ASCENDING"), idx("COLLECTION_GROUP", "DESCENDING")] } }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new HttpsError("aborted", "Índice da busca: " + ((j.error && j.error.message) || r.status));
+    out.indice = "criando (leva alguns minutos)";
+  }
+  return out;
+});
 /* ================= CATÁLOGO (Yampi) ================= */
 exports.waCatalogo = onCall({ secrets: [YAMPI_ALIAS, YAMPI_TOKEN, YAMPI_SECRET] }, async req => {
   await member(req);
