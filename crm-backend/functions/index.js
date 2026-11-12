@@ -434,9 +434,11 @@ exports.waFila = onSchedule({ schedule: "every 1 minutes", timeoutSeconds: 120, 
     const tpl = await graph(`/${line.wabaId}/message_templates`, { token: line.token, query: { name: c.modelo, fields: "name,status,components,language" } }).then(r => (r.data || []).map(W.templateFromMeta).find(t => t.name === c.modelo)).catch(() => null);
     if (!tpl || tpl.status !== "APPROVED") { await cdoc.ref.update({ status: "pausada", motivo: "Modelo não aprovado ou pausado pela Meta" }); continue; }
     const nVars = (tpl.body.match(/\{\{\d+\}\}/g) || []).length;
-    const batch = await cdoc.ref.collection("dest").where("status", "==", "fila").orderBy("ordem").limit(60).get();
-    if (batch.empty) { await cdoc.ref.update({ status: "concluida", concluidaEm: now }); continue; }
-    for (const dd of batch.docs) {
+    // sem orderBy no Firestore (evita índice composto): pega a fila e ordena aqui
+    const fila = await cdoc.ref.collection("dest").where("status", "==", "fila").limit(500).get();
+    if (fila.empty) { await cdoc.ref.update({ status: "concluida", concluidaEm: now }); continue; }
+    const lote = fila.docs.sort((a, b) => (a.data().ordem || 0) - (b.data().ordem || 0)).slice(0, 60);
+    for (const dd of lote) {
       const x = dd.data();
       const vars = nVars ? [W.firstName(x.name) || "querida"].concat(Array(nVars - 1).fill("")) : [];
       if (vars.slice(1).some(v => !v)) { await cdoc.ref.update({ status: "pausada", motivo: "O modelo tem mais de uma variável; disparo só preenche o {{1}}" }); break; }
