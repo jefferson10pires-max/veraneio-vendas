@@ -107,8 +107,12 @@ label.f{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin:14
 .lsearch svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink3)}
 .lsearch input{padding-left:34px;background:var(--bg);border-color:transparent}
 .lsearch input:focus{background:var(--card);border-color:var(--line)}
-.chips{display:flex;gap:4px;overflow-x:auto;padding:0 16px 10px;border-bottom:1px solid var(--line);scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
+.chips{display:flex;flex-direction:column;gap:1px;padding:0 10px 10px;border-bottom:1px solid var(--line)}
+.chips .chip{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 10px;font-size:13.5px;border-radius:8px}
+.chips .chip .cl{flex:1}
+.chips .chip b{margin-left:0;min-width:24px;text-align:center;font-size:12px;padding:1px 6px}
+.chips .chip b.z{background:transparent;color:var(--ink3);font-weight:600}
+.chips .chip svg{width:16px;height:16px;flex:none;opacity:.75}
 .chip{border:1px solid transparent;background:transparent;border-radius:7px;padding:5px 9px;font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap}
 .chip:hover{background:var(--card2)}
 .chip[aria-pressed=true]{background:var(--goldsoft);color:var(--gold)}
@@ -522,7 +526,7 @@ table.t tr.sumrow td{font-weight:700;border-top:2px solid var(--line);background
 <div id="tip" class="hide" role="tooltip"></div>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol><symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13h5l1.5 3h5L16 13h5M5.5 5h13L21 13v6H3v-6z"/></symbol><symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
   <symbol id="i-mega" viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
   <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
   <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/></symbol>
@@ -1157,14 +1161,17 @@ function onConvs() {
 function renderList() {
   const box = $("#items"); if (!box) return;
   const base = S.convs.filter(convMatches);
-  $("#chips").innerHTML = FILTERS.map(([k, label, fn]) => { const n = base.filter(fn).length; return `<button class="chip" data-f="${k}" aria-pressed="${S.filter === k}">${label}${n && k !== "abertas" && k !== "encerradas" ? `<b>${n}</b>` : ""}</button>`; }).join("");
+  const ic = { aguardando: "clock", naolidas: "chat", minhas: "user", semdono: "users", abertas: "inbox", importantes: "star", encerradas: "check" };
+  $("#chips").innerHTML = FILTERS.map(([k, label, fn]) => { const n = base.filter(fn).length; return `<button class="chip" data-f="${k}" aria-pressed="${S.filter === k}">${icon(ic[k])}<span class="cl">${label}</span><b class="${n ? "" : "z"}">${n}</b></button>`; }).join("");
   $$("#chips .chip").forEach(b => b.onclick = () => { S.filter = b.dataset.f; renderList(); });
   const fn = FILTERS.find(f => f[0] === S.filter)[2];
   let list = base.filter(fn);
   if (S.filter === "aguardando") list.sort((a, b) => (a.waitingSince || a.lastTs) - (b.waitingSince || b.lastTs)); // quem espera há mais tempo primeiro
   if (!list.length) {
     const msg = { aguardando: ["Ninguém esperando 🎉", "Todas as clientes que escreveram já foram respondidas."], naolidas: ["Tudo lido", ""], minhas: ["Nenhuma conversa com você", "Assuma uma conversa pelo topo do chat."], semdono: ["Tudo com responsável", ""], encerradas: ["Nenhuma conversa encerrada", ""] }[S.filter] || ["Nada por aqui", S.convs.length ? "Tente outro filtro." : "Quando uma cliente escrever, a conversa aparece aqui."];
-    box.innerHTML = `<div class="empty"><h3>${msg[0]}</h3><p>${msg[1]}</p>${S.q ? `<button class="btn sm" id="clrq">Limpar filtro “${U.esc(S.q)}”</button>` : ""}</div>`;
+    const nAb = base.filter(FILTERS.find(f => f[0] === "abertas")[2]).length;
+    box.innerHTML = `<div class="empty"><h3>${msg[0]}</h3><p>${msg[1]}</p>${S.filter !== "abertas" && nAb ? `<button class="btn sm" id="verab">Ver as ${nAb} conversas abertas</button> ` : ""}${S.q ? `<button class="btn sm" id="clrq">Limpar filtro “${U.esc(S.q)}”</button>` : ""}</div>`;
+    const va = $("#verab"); if (va) va.onclick = () => { S.filter = "abertas"; renderList(); };
     const b = $("#clrq"); if (b) b.onclick = () => { S.q = ""; $("#lq").value = ""; renderList(); };
     return;
   }
