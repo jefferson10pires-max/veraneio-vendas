@@ -370,3 +370,16 @@ test.describe("H01 faixa de destaques editável", () => {
     await expect(page.locator("#hl")).toBeHidden();
   });
 });
+
+test("S04 só aparece o selo de Pronta entrega (sem 'Garantia' nem 'Novidade' nas peças)", async ({ page }) => {
+  await abrir(page, [
+    { id: "a1", nome: "Anel Comum", cat: "Anéis", preco: 30, fotos: [FOTO_OK] },
+    { id: "a2", nome: "Anel Novo", cat: "Anéis", preco: 30, fotos: [FOTO_OK], novo: true },
+    { id: "a3", nome: "Anel Pronto", cat: "Anéis", preco: 30, fotos: [FOTO_OK], pronta: true } as any,
+  ]);
+  await expect(page.locator("#grid .flag")).toHaveCount(1);
+  await expect(card(page, "Anel Pronto").locator(".flag")).toHaveText("Pronta entrega");
+  await expect(page.locator("#grid")).not.toContainText("Garantia de 1 ANO");
+  await card(page, "Anel Comum").locator(".name").click();
+  await expect(page.locator(".pinfo .flag")).toHaveCount(0);
+});

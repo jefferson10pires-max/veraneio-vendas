@@ -514,7 +514,8 @@ function filtrada(){
   if(ui.q){const q=norm(ui.q);l=l.filter(p=>norm(`${p.nome} ${p.cat} ${p.banho}`).includes(q))}
   return ordenar(l);
 }
-const selo=p=>p.pronta?`<span class="flag pe">Pronta entrega</span>`:p.novo?`<span class="flag new">Novidade</span>`:`<span class="flag">Garantia de 1 ANO no banho</span>`;
+/* só o selo de pronta entrega (marcado pela revendedora); nada vem da Yampi */
+const selo=p=>p.pronta?`<span class="flag pe">Pronta entrega</span>`:"";
 /* fotos próprias da revendedora: no catálogo a peça só diz quantas tem (fp.n); a foto vem de lojas/{uid}/fotos/{peça}.
    Na tela ela entra como "vrn:peça:índice:versão"; o navegador não abre esse endereço, o onerror chama vrnFoto e busca a foto. */
 function tokensFotos(){ITENS.forEach(p=>{const n=Math.min(3,Math.max(0,Math.floor(Number(p.fp&&p.fp.n)||0)));if(n)p.fotos=Array.from({length:n},(_,i)=>`vrn:${p.id}:${i}:${p.fp.v||1}`)})}
