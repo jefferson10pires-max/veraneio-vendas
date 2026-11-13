@@ -69,6 +69,7 @@ a{color:inherit}
 .plano{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;letter-spacing:.02em}
 .plano::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .plano.gratuito{background:var(--soft);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.plano.vencido{background:color-mix(in srgb,var(--warn,#b45309) 14%,var(--surface));color:var(--warn,#b45309)}
 .plano.assinante{background:color-mix(in srgb,var(--brand) 12%,var(--surface));color:var(--brand)}
 .note{background:var(--soft);border-radius:12px;padding:12px 14px;font-size:13.5px}
 .aviso{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
@@ -322,10 +323,14 @@ async function carregarConta(u){
     BAN=RAS.banners?(rb.data().itens||[]):null;
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     /* plano de acesso ao app (o ADM muda); no 1º acesso registra a data */
-    PLANO="gratuito";
-    try{const r=doc(db,"planos",u.uid),pl=await getDoc(r);
+    PLANO="gratuito";PLANO_RESTA=null;
+    try{const r=doc(db,"planos",u.uid),[pl,cf]=await Promise.all([getDoc(r),getDoc(doc(db,"config","planos")).catch(()=>null)]);
+      let ini=Date.now();
       if(!pl.exists())await setDoc(r,{plano:"gratuito",primeiroAcesso:serverTimestamp()});
-      else{PLANO=pl.data().plano==="assinante"?"assinante":"gratuito";if(!pl.data().primeiroAcesso)await updateDoc(r,{primeiroAcesso:serverTimestamp()})}}catch(e){console.error(e)}
+      else{const d=pl.data();PLANO=d.plano==="assinante"?"assinante":"gratuito";
+        if(!d.primeiroAcesso)await updateDoc(r,{primeiroAcesso:serverTimestamp()});else ini=d.primeiroAcesso.toDate?d.primeiroAcesso.toDate().getTime():Number(d.primeiroAcesso)||ini}
+      const dias=cf&&cf.exists()?Number(cf.data().diasGratis):NaN;
+      if(PLANO==="gratuito"&&Number.isFinite(dias)&&dias>0)PLANO_RESTA=dias-Math.floor((Date.now()-ini)/864e5)}catch(e){console.error(e)}
     aplicarCor();shell();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
 }
@@ -355,7 +360,12 @@ let saveT={};
 /* ---------- rascunho + publicar ----------
    Tudo o que a revendedora muda fica guardado em rascunhos/{uid}/docs/* e só vai para a loja
    quando ela toca em "Publicar atualização". */
-let PLANO="gratuito";
+let PLANO="gratuito",PLANO_RESTA=null;
+/* selo do plano no Início: assinante, gratuito com dias restantes, ou gratuito encerrado */
+function seloPlano(){if(PLANO==="assinante")return `<span class="plano assinante" aria-label="Seu acesso ao app">Assinante</span>`;
+  if(PLANO_RESTA===null)return `<span class="plano gratuito" aria-label="Seu acesso ao app">Acesso gratuito</span>`;
+  if(PLANO_RESTA<=0)return `<span class="plano vencido" aria-label="Seu acesso ao app">Período gratuito encerrado</span>`;
+  return `<span class="plano gratuito" aria-label="Seu acesso ao app">Acesso gratuito · ${PLANO_RESTA===1?"falta 1 dia":`faltam ${PLANO_RESTA} dias`}</span>`}
 let RAS={loja:false,precos:false,banners:false,mudou:false},filaRas=Promise.resolve(),pubAndando=false;
 const rasRef=n=>doc(db,"rascunhos",U.uid,"docs",n);
 const temRascunho=()=>RAS.loja||RAS.precos||RAS.banners||RAS.mudou;
@@ -422,7 +432,7 @@ async function tInicio(){
   const top=Object.entries(views).sort((a,b)=>b[1]-a[1]).slice(0,5),mt=top.length?top[0][1]:1;
   const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>nv((DIAS[dkey(d)]||{}).visitas)),mx=Math.max(1,...vals);
   $("main").innerHTML=`${avisoHTML()}
-    <div class="row" style="justify-content:flex-end"><span class="plano ${PLANO}" aria-label="Seu acesso ao app">${PLANO==="assinante"?"Assinante":"Acesso gratuito"}</span></div>
+    <div class="row" style="justify-content:flex-end">${seloPlano()}</div>
     <div class="box"><h3>Link da sua loja</h3>
       <div class="linkbox"><code id="lk">${esc(lojaURL().replace(/^https?:\/\//,""))}</code></div>
       <div class="row"><button class="btn btn-brand btn-sm" type="button" id="shr">${I.share}Compartilhar</button><button class="btn btn-ghost btn-sm" type="button" id="cpy">${I.copy}Copiar link</button></div>

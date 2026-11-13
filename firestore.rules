@@ -96,6 +96,14 @@ service cloud.firestore {
     }
     // Plano de acesso da revendedora ao app: gratuito ou assinante.
     // A revendedora só registra o próprio 1º acesso (hora do servidor); quem muda o plano é o ADM.
+    // Prazo do período gratuito (dias), definido pelo ADM; as revendedoras leem para ver quanto falta
+    match /config/{id} {
+      allow read: if isRevendedora() || isAdmin();
+      allow write: if isAdmin() && id == 'planos'
+        && request.resource.data.keys().hasOnly(['diasGratis', 'em'])
+        && request.resource.data.diasGratis is int
+        && request.resource.data.diasGratis >= 0 && request.resource.data.diasGratis <= 3650;
+    }
     match /planos/{uid} {
       allow read: if isLoja(uid) || isAdmin();
       allow create: if isLoja(uid)

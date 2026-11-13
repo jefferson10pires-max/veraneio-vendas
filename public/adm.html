@@ -180,6 +180,7 @@ a{color:inherit}
 .rescard .mini span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .pill.ativa{background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok)}
 .pill.pl-assinante{background:color-mix(in srgb,var(--brand) 13%,transparent);color:var(--brand)}
+.pill.pl-vencido{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn);box-shadow:none}
 .pill.pl-gratuito{background:var(--bg);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .pill.pausada{background:var(--bg);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .prow{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding-block:12px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -281,6 +282,10 @@ const BANHOS=["Ouro 18k","Ródio branco","Ródio negro","Ouro rosé","Prata"];
 
 let PLANOS=Object.create(null);
 const planoDe=uid=>(PLANOS[uid]||{}).plano==="assinante"?"assinante":"gratuito";
+let DIAS_GRATIS=0; /* prazo do período gratuito em dias (0 = sem prazo) */
+/* dias que faltam do período gratuito (null = sem prazo, assinante ou ainda não acessou) */
+const resta=uid=>{const p=PLANOS[uid]||{};if(planoDe(uid)!=="gratuito"||!DIAS_GRATIS||!p.primeiroAcesso)return null;return DIAS_GRATIS-diasDesde(p.primeiroAcesso)};
+const vencido=uid=>{const r=resta(uid);return r!==null&&r<=0};
 const dataBR=t=>{const d=toDate(t);return d?d.toLocaleDateString("pt-BR"):""};
 let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={},AVISO=null;
 const ui={tab:"geral",q:"",st:"todas",pq:"",pcat:"Todas",pst:"todos",pend:false};
@@ -351,6 +356,7 @@ async function carregar(){
   try{const c=await getDoc(doc(db,"sistema","config"));CFG_ADM=Object.assign({promo:"nao"},c.exists()?c.data():{})}catch(e){CFG_ADM={promo:"nao"}}
   try{const c=await getDocs(collection(db,"contas"));CONTAS={};c.docs.forEach(d=>CONTAS[d.id]=d.data())}catch(e){}
   try{const c=await getDocs(collection(db,"planos"));PLANOS=Object.create(null);c.docs.forEach(d=>PLANOS[d.id]=d.data())}catch(e){}
+  try{const c=await getDoc(doc(db,"config","planos"));DIAS_GRATIS=c.exists()&&Number.isFinite(Number(c.data().diasGratis))?Number(c.data().diasGratis):0}catch(e){DIAS_GRATIS=0}
   /* responsável, cidade e último acesso ficam em contas/ e acessos/ (só o ADM lê); lojas/ é público */
   let AC={};try{const a=await getDocs(collection(db,"acessos"));a.docs.forEach(d=>AC[d.id]=d.data().em)}catch(e){}
   await migrarPrivados(l.docs).catch(e=>console.error("migração",e));
@@ -438,15 +444,21 @@ function tGeral(){
 
 /* ---------- REVENDEDORAS ---------- */
 function tRes(){
-  const q=norm(ui.q),l=LOJAS.filter(x=>(ui.st==="todas"||(ui.st==="assinante"||ui.st==="gratuito"?planoDe(x.uid)===ui.st:x.status===ui.st))&&(!q||norm(`${x.nome} ${x.resp} ${x.cidade} ${x.slug}`).includes(q)));
+  const q=norm(ui.q),l=LOJAS.filter(x=>(ui.st==="todas"||(ui.st==="vencido"?vencido(x.uid):ui.st==="assinante"||ui.st==="gratuito"?planoDe(x.uid)===ui.st:x.status===ui.st))&&(!q||norm(`${x.nome} ${x.resp} ${x.cidade} ${x.slug}`).includes(q)));
   $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h2>Revendedoras</h2><button class="btn btn-brand btn-sm" type="button" id="nova">+ Nova</button></div>
     <div class="tools"><label class="sbox"><span class="sr">Buscar</span>${I.search}<input id="rq" type="search" placeholder="Loja, nome ou cidade" value="${esc(ui.q)}"></label>
-      <select id="rst" aria-label="Status"><option value="todas">Todas (${LOJAS.length})</option><option value="ativa" ${ui.st==="ativa"?"selected":""}>Ativas</option><option value="pausada" ${ui.st==="pausada"?"selected":""}>Pausadas</option><option value="assinante" ${ui.st==="assinante"?"selected":""}>Assinantes (${LOJAS.filter(x=>planoDe(x.uid)==="assinante").length})</option><option value="gratuito" ${ui.st==="gratuito"?"selected":""}>Gratuitas (${LOJAS.filter(x=>planoDe(x.uid)==="gratuito").length})</option></select></div>
+      <select id="rst" aria-label="Status"><option value="todas">Todas (${LOJAS.length})</option><option value="ativa" ${ui.st==="ativa"?"selected":""}>Ativas</option><option value="pausada" ${ui.st==="pausada"?"selected":""}>Pausadas</option><option value="assinante" ${ui.st==="assinante"?"selected":""}>Assinantes (${LOJAS.filter(x=>planoDe(x.uid)==="assinante").length})</option><option value="gratuito" ${ui.st==="gratuito"?"selected":""}>Gratuitas (${LOJAS.filter(x=>planoDe(x.uid)==="gratuito").length})</option>${DIAS_GRATIS?`<option value="vencido" ${ui.st==="vencido"?"selected":""}>Gratuito encerrado (${LOJAS.filter(x=>vencido(x.uid)).length})</option>`:""}</select></div>
+    <form class="row" id="pzf" style="align-items:flex-end;gap:10px;margin-top:4px" novalidate><div class="field" style="margin:0"><label for="pzD">Período gratuito (dias)</label><input id="pzD" type="number" inputmode="numeric" min="0" max="3650" step="1" value="${DIAS_GRATIS||""}" placeholder="Sem prazo" style="max-width:140px"></div>
+      <button class="btn btn-ghost btn-sm" type="submit" id="pzOk">Salvar prazo</button><span class="hint" style="flex-basis:100%">Conta a partir do 1º acesso de cada revendedora. Em branco ou 0 = sem prazo.</span></form>
     <div class="leads" id="rl">${l.length?l.map(resCard).join(""):`<p class="hint">Nenhuma revendedora encontrada.</p>`}</div>
     <span class="hint">Números dos últimos 30 dias. Pausar tira a loja do ar sem apagar nada.</span></div>`;
   $("nova").onclick=formNova;
   $("rq").oninput=e=>{ui.q=e.target.value;const p=e.target.selectionStart;tRes();$("rq").focus();$("rq").setSelectionRange(p,p)};
   $("rst").onchange=e=>{ui.st=e.target.value;tRes()};
+  $("pzf").onsubmit=async e=>{e.preventDefault();const v=$("pzD").value.trim(),n=v===""?0:Math.floor(Number(v));
+    if(!Number.isFinite(n)||n<0||n>3650){toast("Coloque um número de dias entre 0 e 3650.");return}
+    $("pzOk").disabled=true;try{await setDoc(doc(db,"config","planos"),{diasGratis:n,em:serverTimestamp()});DIAS_GRATIS=n;if(ui.st==="vencido"&&!n)ui.st="todas";tRes();toast(n?`Período gratuito: ${n} dias`:"Período gratuito sem prazo")}
+    catch(err){console.error(err);toast("Não foi possível salvar o prazo.");$("pzOk").disabled=false}};
   $("rl").onclick=async e=>{const b=e.target.closest("[data-st],[data-cp],[data-lk],[data-pl]");if(!b)return;
     const lj=LOJAS.find(x=>x.uid===(b.dataset.st||b.dataset.cp||b.dataset.lk||b.dataset.pl));
     if(b.dataset.pl){const nv=planoDe(lj.uid)==="assinante"?"gratuito":"assinante";b.disabled=true;
@@ -459,9 +471,9 @@ function tRes(){
 }
 function resCard(l){const a=ag(l.uid);return `<div class="rescard">
   <div class="h"><span class="logo" style="background:${corOk(l.cor)}">${/^(data:image\/|https:)/i.test(String(l.logo||""))?`<img alt="" src="${esc(l.logo)}">`:esc(initials(l.nome))}</span>
-    <div style="flex:1;min-width:0"><b>${esc(l.nome)}</b><span class="hint">${esc([l.resp,l.cidade].filter(Boolean).join(" · "))}</span></div><span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="pill ${esc(l.status)}">${l.status==="ativa"?"Ativa":"Pausada"}</span><span class="pill pl-${planoDe(l.uid)}">${planoDe(l.uid)==="assinante"?"Assinante":"Gratuito"}</span></span></div>
+    <div style="flex:1;min-width:0"><b>${esc(l.nome)}</b><span class="hint">${esc([l.resp,l.cidade].filter(Boolean).join(" · "))}</span></div><span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="pill ${esc(l.status)}">${l.status==="ativa"?"Ativa":"Pausada"}</span><span class="pill pl-${planoDe(l.uid)} ${vencido(l.uid)?"pl-vencido":""}">${planoDe(l.uid)==="assinante"?"Assinante":vencido(l.uid)?"Gratuito encerrado":"Gratuito"}</span></span></div>
   <div class="mini"><div><b class="num">${int(a.acessos)}</b><span>Acessos</span></div><div><b class="num">${a.pedidos}</b><span>Pedidos</span></div><div><b class="num">${a.aband}</b><span>Abandon.</span></div><div><b class="num">${a.valor>=1000?"R$ "+(a.valor/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mil":brl(Math.round(a.valor)).replace(",00","")}</b><span>Vendas</span></div></div>
-  <div class="hint">${(PLANOS[l.uid]||{}).primeiroAcesso?`1º acesso em ${dataBR(PLANOS[l.uid].primeiroAcesso)}${planoDe(l.uid)==="gratuito"?` (${diasDesde(PLANOS[l.uid].primeiroAcesso)} dias)`:""}`:"Ainda não acessou o painel"} · ${ultimoTxt(l.ultimoAcesso)} · /${esc(l.slug)}</div>
+  <div class="hint">${(PLANOS[l.uid]||{}).primeiroAcesso?`1º acesso em ${dataBR(PLANOS[l.uid].primeiroAcesso)}${planoDe(l.uid)==="gratuito"?` (${diasDesde(PLANOS[l.uid].primeiroAcesso)} dias${resta(l.uid)===null?"":resta(l.uid)>0?` · faltam ${resta(l.uid)}`:resta(l.uid)===0?" · encerrou hoje":` · encerrou há ${-resta(l.uid)}`})`:""}`:"Ainda não acessou o painel"} · ${ultimoTxt(l.ultimoAcesso)} · /${esc(l.slug)}</div>
   <div class="row"><a class="btn btn-ghost btn-sm" href="/${esc(l.slug)}" target="_blank" rel="noopener">Ver loja</a><button class="btn btn-ghost btn-sm" type="button" data-cp="${esc(l.uid)}">${I.copy}Link</button>
     <button class="btn btn-ghost btn-sm" type="button" data-lk="${esc(l.uid)}">Acesso</button><button class="btn btn-ghost btn-sm" type="button" data-st="${esc(l.uid)}">${l.status==="ativa"?"Pausar":"Reativar"}</button>
     <button class="btn btn-ghost btn-sm" type="button" data-pl="${esc(l.uid)}">${planoDe(l.uid)==="assinante"?"Voltar para gratuito":"Tornar assinante"}</button>

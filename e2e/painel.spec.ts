@@ -1132,3 +1132,38 @@ test.describe("PL1 plano de acesso (gratuito / assinante)", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("PZ1 prazo do período gratuito", () => {
+  const dia = 864e5;
+  test("PZ1-H1 ADM define o prazo; cartões mostram quanto falta ou que encerrou; filtro de encerrados", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "lojas/u2": { nome: "Loja Velha", slug: "velha", status: "ativa", cor: "#043034" },
+      "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 5 * dia } },
+      "planos/u2": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 40 * dia } },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    await expect(page.locator(".rescard", { hasText: "Loja Velha" })).not.toContainText("encerrou");
+    await page.getByLabel("Período gratuito (dias)").fill("30");
+    await page.getByRole("button", { name: "Salvar prazo" }).click();
+    await expect(page.locator("#toast")).toContainText("30 dias");
+    expect((await db(page))["config/planos"].diasGratis).toBe(30);
+    await expect(page.locator(".rescard", { hasText: "Loja Velha" }).locator(".pill.pl-vencido")).toHaveText("Gratuito encerrado");
+    await expect(page.locator(".rescard", { hasText: "Loja Velha" })).toContainText("encerrou há 10");
+    await expect(page.locator(".rescard").filter({ hasNotText: "Loja Velha" })).toContainText("faltam 25");
+    await page.locator("#rst").selectOption("vencido");
+    await expect(page.locator(".rescard")).toHaveCount(1);
+    await expect(page.locator(".rescard")).toContainText("Loja Velha");
+    expect(erros).toEqual([]);
+  });
+  test("PZ1-H2 revendedora vê quantos dias faltam; depois do prazo vê 'Período gratuito encerrado'", async ({ page }) => {
+    await preparar(page, { seed: seed(40, { "config/planos": { diasGratis: 30 }, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 5 * dia } } }) });
+    await entrar(page);
+    await expect(page.locator(".plano")).toHaveText("Acesso gratuito · faltam 25 dias");
+  });
+  test("PZ1-H3 prazo vencido e assinante", async ({ page }) => {
+    await preparar(page, { seed: seed(40, { "config/planos": { diasGratis: 30 }, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 31 * dia } } }) });
+    await entrar(page);
+    await expect(page.locator(".plano")).toHaveText("Período gratuito encerrado");
+  });
+});

@@ -245,6 +245,17 @@ test("R23 plano: revendedora registra o 1º acesso como gratuito; só o ADM vira
   await assertFails(updateDoc(doc(c, "planos/outra"), { primeiroAcesso: serverTimestamp() }));
 });
 
+test("R24 prazo do período gratuito: só o ADM define; revendedora lê", async () => {
+  await assertSucceeds(setDoc(doc(adm(), "config/planos"), { diasGratis: 30, em: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(rev(), "config/planos")));
+  await assertFails(getDoc(doc(visitante(), "config/planos")));
+  await assertFails(getDoc(doc(estranho(), "config/planos")));
+  await assertFails(setDoc(doc(rev(), "config/planos"), { diasGratis: 9999 }));
+  await assertFails(setDoc(doc(adm(), "config/planos"), { diasGratis: -1 }));
+  await assertFails(setDoc(doc(adm(), "config/planos"), { diasGratis: "30" }));
+  await assertFails(setDoc(doc(adm(), "config/outro"), { diasGratis: 30 }));
+});
+
 // --- ADM ---
 test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertSucceeds(setDoc(doc(adm(), "atacado/p0"), { itens: [] }));
