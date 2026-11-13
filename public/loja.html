@@ -128,6 +128,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .flag.new{background:var(--brand);color:var(--brand-ink)}
 .card .name{margin-top:6px;font-size:14px;line-height:1.14;color:#000;min-height:2.3em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .card .price{margin-top:19px;font-size:17px;font-weight:700;color:#000;line-height:normal}
+.price .de,.pprice .de{font-size:12px;font-weight:400;color:#8a8a8a;text-decoration:line-through;margin-right:8px;vertical-align:1px}
+.pprice .de{font-size:15px;vertical-align:4px}
 .card .inst{font-size:11.8px;color:var(--muted);margin-top:2px;line-height:1.1}
 .vars{margin-top:22px;display:flex;flex-direction:column;gap:10px}
 .vars .vl{font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:#222}
@@ -545,7 +547,7 @@ function cardHTML(p,eager){
       <button class="buybtn" type="button" ${p.var?`data-open="${esc(p.id)}"`:`data-add="${esc(p.id)}"`} aria-label="Adicionar ${esc(p.nome)} ao carrinho">${I.cartPlus}</button></div>
     ${selo(p)}
     <div class="name" data-open="${esc(p.id)}">${esc(p.nome)}</div>
-    <div class="price num">${brl(p.preco)}</div><div class="inst num">${instOf(p.preco)}</div>
+    <div class="price num">${p.de>p.preco?`<s class="de">${brl(p.de)}</s>`:""}${brl(p.preco)}</div><div class="inst num">${instOf(p.preco)}</div>
   </article>`;
 }
 function renderMain(){
@@ -600,7 +602,7 @@ function abrirProduto(id){
     <div class="pinfo">
       ${selo(p)}
       <h2 id="pTitle">${esc(p.nome)}</h2>
-      <div class="pprice num">${brl(p.preco)}</div>
+      <div class="pprice num">${p.de>p.preco?`<s class="de">${brl(p.de)}</s>`:""}${brl(p.preco)}</div>
       <div class="pinst num">${instOf(p.preco)}</div>
       ${p.var?`<div class="vars" id="vars"><div class="vl" id="vLabel">${esc(p.var.nome)}: <b id="vSel">escolha</b></div>
         <div class="vops" role="radiogroup" aria-label="${esc(p.var.nome)}">${p.var.ops.map(o=>`<button type="button" class="vop" role="radio" aria-checked="false" aria-label="${esc(o)}" data-op="${esc(o)}">${esc(o)}</button>`).join("")}</div>

@@ -1167,3 +1167,48 @@ test.describe("PZ1 prazo do período gratuito", () => {
     await expect(page.locator(".plano")).toHaveText("Período gratuito encerrado");
   });
 });
+
+test.describe("PR1 desconto nas peças", () => {
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  test("PR1-H1 desconto em % na peça da Veraneio: loja recebe preço riscado; nunca abaixo do atacado; tirar o desconto volta", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "precos/u1": { margem: 100, arred: "", over: {} } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: /Editar peça: Peça 2$/ }).click();
+    await page.getByLabel("Desconto (%) — opcional").fill("20");
+    await expect(page.locator("#prmTxt")).toContainText("Na loja:");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await page.getByRole("button", { name: /Editar peça: Peça 3$/ }).click();
+    await page.getByLabel("Desconto (%) — opcional").fill("90");
+    await expect(page.locator("#prmTxt")).toContainText("não fica abaixo do atacado");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await publicar(page);
+    let d = await db(page), y2 = catalogo(d).find((x: any) => x.id === "y2"), y3 = catalogo(d).find((x: any) => x.id === "y3");
+    const at = (id: string) => d["atacado/p0"].itens.find((x: any) => x.id === id).preco;
+    expect(y2.de).toBeCloseTo(at("y2") * 2, 2);
+    expect(y2.preco).toBeCloseTo(Math.round(at("y2") * 2 * 80) / 100, 2);
+    expect(y3.preco).toBeCloseTo(at("y3"), 2);
+    expect(y3.de).toBeCloseTo(at("y3") * 2, 2);
+    expect(d["precos/u1"].promos).toEqual({ y2: 20, y3: 90 });
+    await expect(page.locator("#plist")).toContainText("(−20%)");
+    await page.getByRole("button", { name: /Editar peça: Peça 2$/ }).click();
+    await page.getByLabel("Desconto (%) — opcional").fill("");
+    await page.getByRole("button", { name: "Salvar" }).click();
+    await publicar(page);
+    d = await db(page); y2 = catalogo(d).find((x: any) => x.id === "y2");
+    expect(y2.de).toBeUndefined();
+    expect(y2.preco).toBeCloseTo(at("y2") * 2, 2);
+    expect(erros).toEqual([]);
+  });
+  test("PR1-H2 desconto em peça própria", async ({ page }) => {
+    await preparar(page, { seed: seed(40, { "lojas/u1/proprios/rX": { nome: "Colar Meu", cat: "Colares", preco: 100 } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar Colar Meu" }).click();
+    await page.getByLabel("Desconto (%) — opcional").fill("15");
+    await page.locator("#npOk").click();
+    await publicar(page);
+    const it = catalogo(await db(page)).find((x: any) => x.id === "rX");
+    expect([it.de, it.preco]).toEqual([100, 85]);
+  });
+});

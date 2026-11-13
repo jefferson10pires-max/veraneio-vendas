@@ -319,7 +319,7 @@ async function carregarConta(u){
     const [p,rl,rp,rb,rm]=await Promise.all([getDoc(doc(db,"precos",u.uid)),...["loja","precos","banners","mudou"].map(n=>getDoc(doc(db,"rascunhos",u.uid,"docs",n)).catch(()=>null))]);
     RAS={loja:rl&&rl.exists(),precos:rp&&rp.exists(),banners:rb&&rb.exists(),mudou:rm&&rm.exists()};
     if(RAS.loja){const d=rl.data();delete d.em;Object.assign(L,d)}
-    PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{},descs:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
+    PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{},descs:{},promos:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
     BAN=RAS.banners?(rb.data().itens||[]):null;
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     /* plano de acesso ao app (o ADM muda); no 1º acesso registra a data */
@@ -565,6 +565,17 @@ const todas=()=>[...(PROPRIOS||[]),...(PRODS||[])];
 const lerReais=v=>Math.round(Number(String(v||"").replace(/[^\d,.]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",","."))*100)/100;
 const reaisTxt=n=>n>0?n.toFixed(2).replace(".",","):"";
 const precoLoja=p=>p.proprio?Number(p.preco)||0:precoFinal(p.preco,PR,p.id);
+/* preço com o desconto da revendedora (de = antes do desconto) */
+const precoVenda=p=>C.comPromo(precoLoja(p),(PR.promos||{})[p.id],p.proprio?0:p.preco);
+const precoTxt=p=>{const v=precoVenda(p);return v.de?`<s>${brl(v.de)}</s> ${brl(v.preco)} (−${C.pctPromo(PR.promos[p.id])}%)`:brl(v.preco)};
+/* campo de desconto (%) usado nas folhas de edição */
+const campoPromo=(id,base,piso)=>`<div class="field"><label for="prm">Desconto (%) — opcional</label>
+  <input id="prm" type="number" inputmode="numeric" min="0" max="90" step="1" value="${C.pctPromo((PR.promos||{})[id])||""}" placeholder="Sem desconto" style="max-width:160px">
+  <span class="hint" id="prmTxt"></span></div>`;
+function ligarPromo(base,piso){const ver=()=>{const b=base(),v=C.comPromo(b,$("prm").value,piso);const n=Number($("prm").value)||0;
+  $("prmTxt").innerHTML=n&&!(n>=1&&n<=90)?"Use de 1 a 90%.":v.de?`Na loja: <s>${brl(v.de)}</s> <b>${brl(v.preco)}</b>${piso&&v.preco<=piso+0.004?" (não fica abaixo do atacado)":""}`:"Sem desconto: o preço aparece normal."};
+  $("prm").oninput=ver;ver();return ver}
+const lerPromo=(id)=>{const n=C.pctPromo($("prm").value);PR.promos=PR.promos||{};if(n)PR.promos[id]=n;else delete PR.promos[id]}
 /* nome que a cliente vê: a revendedora pode renomear as peças da Veraneio (PR.nomes) */
 const nomeLoja=p=>p.proprio?p.nome:(PR.nomes&&PR.nomes[p.id])||p.nome;
 const renomeada=p=>!p.proprio&&!!(PR.nomes&&PR.nomes[p.id]);
@@ -666,7 +677,7 @@ function pecas(){
     <div class="pacts"><button class="btn btn-ghost btn-sm" type="button" data-rest="${esc(p.id)}" aria-label="Restaurar ${esc(nm)}">Restaurar</button></div></div>`;
     return `<div class="pr ${o?"off":""}">
     <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
-    <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${brl(precoLoja(p))}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}</div>
+    <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${precoTxt(p)}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}</div>
     <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(nm)}">${I.edit}Editar</button>`
       :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Editar peça: ${esc(nm)}">${I.edit}Editar</button>`}</div>
     <div class="sws"><label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!o?"checked":""} ${o?"disabled":""} aria-label="Pronta entrega: ${esc(nm)}">Pronta entrega</label>
@@ -708,6 +719,7 @@ async function formPeca(id){
       <span class="hint">Nome da Veraneio: ${esc(p.nome)}${nomeAtual?` · <button type="button" class="linkbtn" id="ffNV">Usar o nome da Veraneio</button>`:""}</span></div>
     <div class="field"><label for="ffP">Preço exato na sua loja (R$, opcional)</label><input id="ffP" type="text" inputmode="decimal" autocomplete="off" value="${reaisTxt((PR.fixo||{})[id])}" placeholder="${esc(brl(precoFinal(p.preco,{...PR,fixo:{}},id)))} pela sua margem">
       <span class="hint">Atacado ${brl(p.preco)}. Deixe em branco para usar a margem.</span></div>
+    ${campoPromo(id)}
     <div class="field"><label for="ffD">Descrição na sua loja (opcional)</label><textarea id="ffD" rows="4" maxlength="600" placeholder="Ex.: Anel regulável banhado a ouro 18k, com zircônias. Ótimo para presente.">${esc((PR.descs||{})[id]||"")}</textarea>
       <span class="hint">Aparece na página da peça. Em branco, a peça fica sem descrição.</span></div>
     <div class="field"><span class="flabel">Fotos da Veraneio</span><div class="fotos">${(p.fotos||[]).slice(0,4).map(u=>`<figure><img src="${esc(mini(u,300))}" alt=""></figure>`).join("")||'<p class="hint">Sem foto.</p>'}</div></div>
@@ -721,6 +733,7 @@ async function formPeca(id){
   const re=()=>{$("ffG").innerHTML=gradeFotos(minhas)};re();ligarGrade($("ffG"),minhas,re);
   $("ffIn").onchange=async e=>{await lerArquivos(e.target,minhas,$("ffMsg"));re()};
   const nv=$("ffNV");if(nv)nv.onclick=()=>{$("ffN").value=p.nome;$("ffN").focus()};
+  {const ver=ligarPromo(()=>{const f=lerReais($("ffP").value);return f>0?f:precoFinal(p.preco,{...PR,fixo:{}},id)},p.preco);$("ffP").addEventListener("input",ver)}
   $("ffOk").onclick=async()=>{const b=$("ffOk");
     const nome=$("ffN").value.replace(/\s+/g," ").trim();
     if(nome.length<2){$("ffErr").textContent="Escreva o nome da peça (ou toque em “Usar o nome da Veraneio”).";$("ffN").focus();return}
@@ -731,6 +744,7 @@ async function formPeca(id){
       if(nome===p.nome)delete PR.nomes[id];else PR.nomes[id]=nome;
       const ds=$("ffD").value.replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim().slice(0,600);if(ds)PR.descs[id]=ds;else delete PR.descs[id];
       if(fxv>0){PR.fixo[id]=fxv;if(PR.over)delete PR.over[id]}else delete PR.fixo[id];
+      lerPromo(id);
       if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id+"~"+v),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
       else if(tinha)delete PR.fotos[id];
       delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. Toque em Publicar atualização para ir para a loja.")}
@@ -754,6 +768,7 @@ async function formPropria(id){
     <div class="field"><label for="npN">Nome da peça</label><input id="npN" value="${esc(p.nome)}" maxlength="80" placeholder="Ex.: Brinco argola prata"></div>
     <div class="two"><div class="field"><label for="npC">Categoria</label><input id="npC" list="npCats" value="${esc(p.cat)}" placeholder="Ex.: Brincos"><datalist id="npCats">${cats.map(c=>`<option value="${esc(c)}">`).join("")}</datalist></div>
       <div class="field"><label for="npP">Preço de venda (R$)</label><input id="npP" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${p.preco?esc(String(p.preco).replace(".",",")):""}"></div></div>
+    ${campoPromo(p.id||"_novo")}
     <div class="field"><label for="npD">Descrição (opcional)</label><textarea id="npD" rows="3" maxlength="220">${esc(p.desc||"")}</textarea></div>
     <div class="field"><label for="npO">Tamanhos ou opções (opcional)</label><input id="npO" value="${esc(p.var?p.var.ops.join(", "):"")}" placeholder="Ex.: 14, 16, 18"><span class="hint">Separe por vírgula. A cliente escolhe antes de pôr no carrinho.</span></div>
     <label class="pe" style="align-self:flex-start"><input type="checkbox" role="switch" id="npPE" ${pe?"checked":""}>Pronta entrega</label>
@@ -761,6 +776,7 @@ async function formPropria(id){
     <div class="row"><button class="btn btn-brand" type="submit" id="npOk">${novo?"Cadastrar peça":"Salvar"}</button>${novo?"":`<button class="btn btn-ghost" type="button" id="npDel">Excluir peça</button>`}</div></form>`);
   const re=()=>{$("npG").innerHTML=gradeFotos(fotos)};re();ligarGrade($("npG"),fotos,re);
   $("npIn").onchange=async e=>{await lerArquivos(e.target,fotos,$("npMsg"));re()};
+  {const ver=ligarPromo(()=>lerReais($("npP").value)||0,0);$("npP").addEventListener("input",ver)}
   $("npF").onsubmit=async e=>{e.preventDefault();
     const nome=$("npN").value.trim(),preco=lerReais($("npP").value);
     if(nome.length<2){$("npErr").textContent="Escreva o nome da peça.";$("npN").focus();return}
@@ -773,7 +789,7 @@ async function formPropria(id){
       delete _fp[p.id];
       const item={...p,...dados,proprio:true},i=PROPRIOS.findIndex(x=>x.id===p.id);if(i>=0)PROPRIOS[i]=item;else PROPRIOS.unshift(item);
       const s1=new Set(PR.pronta||[]);$("npPE").checked?s1.add(p.id):s1.delete(p.id);PR.pronta=[...s1];
-      PR.ocultas=(PR.ocultas||[]).filter(x=>x!==p.id);
+      PR.ocultas=(PR.ocultas||[]).filter(x=>x!==p.id);lerPromo(p.id);
       fecharFolha();if($("plist")){if(novo)ui.pf="minhas";pecas()}salvarPrecos();toast(novo?"Peça cadastrada. Toque em Publicar atualização para ela aparecer na loja.":"Peça salva. Toque em Publicar atualização para ir para a loja.")}
     catch(err){console.error(err);b.disabled=false;$("npErr").textContent="Não foi possível salvar. Confira a internet."}};
   const del=$("npDel");if(del)del.onclick=async()=>{
@@ -853,8 +869,9 @@ function precosLimpos(){
   const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
   const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
   const ds={};for(const [k,v] of Object.entries(PR.descs||{}))if(ids.has(k)&&String(v||"").trim())ds[k]=String(v).trim().slice(0,600);
+  const pm={};for(const [k,v] of Object.entries(PR.promos||{}))if(ids.has(k)&&C.pctPromo(v))pm[k]=C.pctPromo(v);PR.promos=pm;
   PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;PR.descs=ds;
-  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,modo:modo()}}
+  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,modo:modo()}}
 async function gravarPrecosRascunho(){await Promise.all([carregarProds(),carregarProprios()]);await rascunho("precos",precosLimpos())}
 function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;RAS.precos=true;pubBar();saveT.p=setTimeout(()=>{saveT.p=null;
   filaPub=filaPub.then(async()=>{

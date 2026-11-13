@@ -400,3 +400,17 @@ test("S05 descrição: peça da Veraneio só mostra a descrição escrita pela r
   await card(page, "Anel Meu").locator(".name").click();
   await expect(page.locator(".pdesc p")).toHaveText("Descrição da peça própria");
 });
+
+test("S06 peça em desconto mostra o preço antigo riscado e o novo (card, página e sacola)", async ({ page }) => {
+  await abrir(page, [
+    { id: "p1", nome: "Argola Coraçãozinho", cat: "Brincos", preco: 10.32, de: 12.9, fotos: [FOTO_OK] } as any,
+    { id: "p2", nome: "Argola Normal", cat: "Brincos", preco: 20, fotos: [FOTO_OK] },
+  ]);
+  const c = card(page, "Argola Coraçãozinho");
+  await expect(c.locator(".price s.de")).toHaveText("R$ 12,90");
+  await expect(c.locator(".price")).toContainText("R$ 10,32");
+  await expect(card(page, "Argola Normal").locator(".price s")).toHaveCount(0);
+  await c.locator(".name").click();
+  await expect(page.locator(".pprice s.de")).toHaveText("R$ 12,90");
+  await expect(page.locator(".pprice")).toContainText("R$ 10,32");
+});
