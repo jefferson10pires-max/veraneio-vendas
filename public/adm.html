@@ -179,6 +179,8 @@ a{color:inherit}
 .rescard .mini b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rescard .mini span{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .pill.ativa{background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok)}
+.pill.pl-assinante{background:color-mix(in srgb,var(--brand) 13%,transparent);color:var(--brand)}
+.pill.pl-gratuito{background:var(--bg);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .pill.pausada{background:var(--bg);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .prow{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding-block:12px;border-bottom:1px solid var(--line);cursor:pointer}
 .prow:last-child{border-bottom:0}
@@ -277,6 +279,9 @@ const I={home:sv('<path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/>'),users:sv('<circle 
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'};
 const BANHOS=["Ouro 18k","Ródio branco","Ródio negro","Ouro rosé","Prata"];
 
+let PLANOS=Object.create(null);
+const planoDe=uid=>(PLANOS[uid]||{}).plano==="assinante"?"assinante":"gratuito";
+const dataBR=t=>{const d=toDate(t);return d?d.toLocaleDateString("pt-BR"):""};
 let LOJAS=[],PRODS=[],AGG={},YS=null,loaded=false,CONTAS={},AVISO=null;
 const ui={tab:"geral",q:"",st:"todas",pq:"",pcat:"Todas",pst:"todos",pend:false};
 
@@ -345,6 +350,7 @@ async function carregar(){
   YS=y&&y.exists()?y.data():null;
   try{const c=await getDoc(doc(db,"sistema","config"));CFG_ADM=Object.assign({promo:"nao"},c.exists()?c.data():{})}catch(e){CFG_ADM={promo:"nao"}}
   try{const c=await getDocs(collection(db,"contas"));CONTAS={};c.docs.forEach(d=>CONTAS[d.id]=d.data())}catch(e){}
+  try{const c=await getDocs(collection(db,"planos"));PLANOS=Object.create(null);c.docs.forEach(d=>PLANOS[d.id]=d.data())}catch(e){}
   /* responsável, cidade e último acesso ficam em contas/ e acessos/ (só o ADM lê); lojas/ é público */
   let AC={};try{const a=await getDocs(collection(db,"acessos"));a.docs.forEach(d=>AC[d.id]=d.data().em)}catch(e){}
   await migrarPrivados(l.docs).catch(e=>console.error("migração",e));
@@ -432,29 +438,33 @@ function tGeral(){
 
 /* ---------- REVENDEDORAS ---------- */
 function tRes(){
-  const q=norm(ui.q),l=LOJAS.filter(x=>(ui.st==="todas"||x.status===ui.st)&&(!q||norm(`${x.nome} ${x.resp} ${x.cidade} ${x.slug}`).includes(q)));
+  const q=norm(ui.q),l=LOJAS.filter(x=>(ui.st==="todas"||(ui.st==="assinante"||ui.st==="gratuito"?planoDe(x.uid)===ui.st:x.status===ui.st))&&(!q||norm(`${x.nome} ${x.resp} ${x.cidade} ${x.slug}`).includes(q)));
   $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h2>Revendedoras</h2><button class="btn btn-brand btn-sm" type="button" id="nova">+ Nova</button></div>
     <div class="tools"><label class="sbox"><span class="sr">Buscar</span>${I.search}<input id="rq" type="search" placeholder="Loja, nome ou cidade" value="${esc(ui.q)}"></label>
-      <select id="rst" aria-label="Status"><option value="todas">Todas (${LOJAS.length})</option><option value="ativa" ${ui.st==="ativa"?"selected":""}>Ativas</option><option value="pausada" ${ui.st==="pausada"?"selected":""}>Pausadas</option></select></div>
+      <select id="rst" aria-label="Status"><option value="todas">Todas (${LOJAS.length})</option><option value="ativa" ${ui.st==="ativa"?"selected":""}>Ativas</option><option value="pausada" ${ui.st==="pausada"?"selected":""}>Pausadas</option><option value="assinante" ${ui.st==="assinante"?"selected":""}>Assinantes (${LOJAS.filter(x=>planoDe(x.uid)==="assinante").length})</option><option value="gratuito" ${ui.st==="gratuito"?"selected":""}>Gratuitas (${LOJAS.filter(x=>planoDe(x.uid)==="gratuito").length})</option></select></div>
     <div class="leads" id="rl">${l.length?l.map(resCard).join(""):`<p class="hint">Nenhuma revendedora encontrada.</p>`}</div>
     <span class="hint">Números dos últimos 30 dias. Pausar tira a loja do ar sem apagar nada.</span></div>`;
   $("nova").onclick=formNova;
   $("rq").oninput=e=>{ui.q=e.target.value;const p=e.target.selectionStart;tRes();$("rq").focus();$("rq").setSelectionRange(p,p)};
   $("rst").onchange=e=>{ui.st=e.target.value;tRes()};
-  $("rl").onclick=async e=>{const b=e.target.closest("[data-st],[data-cp],[data-lk]");if(!b)return;
-    const lj=LOJAS.find(x=>x.uid===(b.dataset.st||b.dataset.cp||b.dataset.lk));
-    if(b.dataset.st){const nv=lj.status==="ativa"?"pausada":"ativa";try{await updateDoc(doc(db,"lojas",lj.uid),{status:nv});lj.status=nv;tRes();toast(nv==="ativa"?"Loja reativada":"Loja pausada")}catch(err){toast("Não foi possível mudar o status.")}}
+  $("rl").onclick=async e=>{const b=e.target.closest("[data-st],[data-cp],[data-lk],[data-pl]");if(!b)return;
+    const lj=LOJAS.find(x=>x.uid===(b.dataset.st||b.dataset.cp||b.dataset.lk||b.dataset.pl));
+    if(b.dataset.pl){const nv=planoDe(lj.uid)==="assinante"?"gratuito":"assinante";b.disabled=true;
+      try{await setDoc(doc(db,"planos",lj.uid),{plano:nv,mudadoEm:serverTimestamp()},{merge:true});PLANOS[lj.uid]={...(PLANOS[lj.uid]||{}),plano:nv};tRes();toast(nv==="assinante"?`${lj.nome} agora é assinante`:`${lj.nome} voltou para o acesso gratuito`)}
+      catch(err){console.error(err);toast("Não foi possível mudar o plano.");b.disabled=false}}
+    else if(b.dataset.st){const nv=lj.status==="ativa"?"pausada":"ativa";try{await updateDoc(doc(db,"lojas",lj.uid),{status:nv});lj.status=nv;tRes();toast(nv==="ativa"?"Loja reativada":"Loja pausada")}catch(err){toast("Não foi possível mudar o status.")}}
     else if(b.dataset.cp){try{await navigator.clipboard.writeText(`${location.origin}/${lj.slug}`);toast("Link da loja copiado")}catch(err){toast(`${location.origin}/${lj.slug}`)}}
     else{const em=(CONTAS[lj.uid]||{}).email;if(!em){toast("E-mail da revendedora não encontrado.");return}
       b.disabled=true;try{await A.sendPasswordResetEmail(auth,em);mostrarAcesso(lj,em,false)}catch(err){toast("Não foi possível enviar o e-mail agora.")}b.disabled=false}};
 }
 function resCard(l){const a=ag(l.uid);return `<div class="rescard">
   <div class="h"><span class="logo" style="background:${corOk(l.cor)}">${/^(data:image\/|https:)/i.test(String(l.logo||""))?`<img alt="" src="${esc(l.logo)}">`:esc(initials(l.nome))}</span>
-    <div style="flex:1;min-width:0"><b>${esc(l.nome)}</b><span class="hint">${esc([l.resp,l.cidade].filter(Boolean).join(" · "))}</span></div><span class="pill ${esc(l.status)}">${l.status==="ativa"?"Ativa":"Pausada"}</span></div>
+    <div style="flex:1;min-width:0"><b>${esc(l.nome)}</b><span class="hint">${esc([l.resp,l.cidade].filter(Boolean).join(" · "))}</span></div><span style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="pill ${esc(l.status)}">${l.status==="ativa"?"Ativa":"Pausada"}</span><span class="pill pl-${planoDe(l.uid)}">${planoDe(l.uid)==="assinante"?"Assinante":"Gratuito"}</span></span></div>
   <div class="mini"><div><b class="num">${int(a.acessos)}</b><span>Acessos</span></div><div><b class="num">${a.pedidos}</b><span>Pedidos</span></div><div><b class="num">${a.aband}</b><span>Abandon.</span></div><div><b class="num">${a.valor>=1000?"R$ "+(a.valor/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" mil":brl(Math.round(a.valor)).replace(",00","")}</b><span>Vendas</span></div></div>
-  <div class="hint">${ultimoTxt(l.ultimoAcesso)} · /${esc(l.slug)}</div>
+  <div class="hint">${(PLANOS[l.uid]||{}).primeiroAcesso?`1º acesso em ${dataBR(PLANOS[l.uid].primeiroAcesso)}${planoDe(l.uid)==="gratuito"?` (${diasDesde(PLANOS[l.uid].primeiroAcesso)} dias)`:""}`:"Ainda não acessou o painel"} · ${ultimoTxt(l.ultimoAcesso)} · /${esc(l.slug)}</div>
   <div class="row"><a class="btn btn-ghost btn-sm" href="/${esc(l.slug)}" target="_blank" rel="noopener">Ver loja</a><button class="btn btn-ghost btn-sm" type="button" data-cp="${esc(l.uid)}">${I.copy}Link</button>
     <button class="btn btn-ghost btn-sm" type="button" data-lk="${esc(l.uid)}">Acesso</button><button class="btn btn-ghost btn-sm" type="button" data-st="${esc(l.uid)}">${l.status==="ativa"?"Pausar":"Reativar"}</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-pl="${esc(l.uid)}">${planoDe(l.uid)==="assinante"?"Voltar para gratuito":"Tornar assinante"}</button>
     ${l.whats?`<a class="btn btn-ghost btn-sm" href="https://wa.me/${waNum(l.whats)}" target="_blank" rel="noopener" aria-label="WhatsApp">${I.chat}</a>`:""}</div></div>`}
 
 /* folha (modal) */

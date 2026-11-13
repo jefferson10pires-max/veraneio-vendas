@@ -225,6 +225,26 @@ test("R22 rascunho: só a dona (e o ADM) lê e grava, no formato certo", async (
   await assertSucceeds(deleteDoc(doc(rev(), "rascunhos/rev/docs/loja")));
 });
 
+test("R23 plano: revendedora registra o 1º acesso como gratuito; só o ADM vira assinante", async () => {
+  await assertFails(setDoc(doc(rev(), "planos/rev"), { plano: "assinante", primeiroAcesso: serverTimestamp() }));
+  await assertFails(setDoc(doc(rev(), "planos/rev"), { plano: "gratuito", primeiroAcesso: Timestamp.fromMillis(0) }));
+  await assertSucceeds(setDoc(doc(rev(), "planos/rev"), { plano: "gratuito", primeiroAcesso: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(rev(), "planos/rev")));
+  await assertFails(updateDoc(doc(rev(), "planos/rev"), { plano: "assinante" }));
+  await assertFails(updateDoc(doc(rev(), "planos/rev"), { primeiroAcesso: serverTimestamp() }));
+  await assertFails(getDoc(doc(visitante(), "planos/rev")));
+  await assertFails(getDoc(doc(estranho(), "planos/rev")));
+  await assertFails(setDoc(doc(estranho(), "planos/estranho"), { plano: "gratuito", primeiroAcesso: serverTimestamp() }));
+  await assertFails(getDoc(doc(rev(), "planos/outra")));
+  await assertSucceeds(setDoc(doc(adm(), "planos/rev"), { plano: "assinante", mudadoEm: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(adm(), "planos/rev"), { plano: "vip" }, { merge: true }));
+  // ADM marcou antes do 1º acesso: a revendedora só completa a data
+  await assertSucceeds(setDoc(doc(adm(), "planos/outra"), { plano: "assinante" }));
+  const c = env.authenticatedContext("outra").firestore();
+  await assertSucceeds(updateDoc(doc(c, "planos/outra"), { primeiroAcesso: serverTimestamp() }));
+  await assertFails(updateDoc(doc(c, "planos/outra"), { primeiroAcesso: serverTimestamp() }));
+});
+
 // --- ADM ---
 test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertSucceeds(setDoc(doc(adm(), "atacado/p0"), { itens: [] }));

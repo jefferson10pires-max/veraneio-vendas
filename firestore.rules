@@ -94,6 +94,23 @@ service cloud.firestore {
         || (nome == 'banners' && request.resource.data.keys().hasOnly(['itens', 'em']) && request.resource.data.itens is list && request.resource.data.itens.size() <= 4)
         || (nome == 'mudou' && request.resource.data.keys().hasOnly(['em'])));
     }
+    // Plano de acesso da revendedora ao app: gratuito ou assinante.
+    // A revendedora só registra o próprio 1º acesso (hora do servidor); quem muda o plano é o ADM.
+    match /planos/{uid} {
+      allow read: if isLoja(uid) || isAdmin();
+      allow create: if isLoja(uid)
+        && request.resource.data.keys().hasOnly(['plano', 'primeiroAcesso'])
+        && request.resource.data.plano == 'gratuito'
+        && request.resource.data.primeiroAcesso == request.time;
+      allow update: if isLoja(uid)
+        && !('primeiroAcesso' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['primeiroAcesso'])
+        && request.resource.data.primeiroAcesso == request.time;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['plano', 'primeiroAcesso', 'mudadoEm'])
+        && request.resource.data.plano in ['gratuito', 'assinante'];
+      allow delete: if isAdmin();
+    }
     match /precos/{uid} {
       allow read, delete: if dono(uid);
       allow create, update: if dono(uid) && precosOk(request.resource.data);

@@ -1093,3 +1093,42 @@ test.describe("DS1 descrição da peça", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("PL1 plano de acesso (gratuito / assinante)", () => {
+  test("PL1-H1 1º acesso registra a data e mostra 'Acesso gratuito' no Início", async ({ page }) => {
+    const erros = await preparar(page);
+    await entrar(page);
+    await expect(page.locator(".plano")).toHaveText("Acesso gratuito");
+    const p = (await db(page))["planos/u1"];
+    expect(p.plano).toBe("gratuito");
+    expect(p.primeiroAcesso).toBeTruthy();
+    expect(erros).toEqual([]);
+  });
+  test("PL1-H2 assinante vê o selo 'Assinante' e o 1º acesso não muda", async ({ page }) => {
+    await preparar(page, { seed: seed(40, { "planos/u1": { plano: "assinante", primeiroAcesso: { __ts: Date.UTC(2026, 9, 1) } } }) });
+    await entrar(page);
+    await expect(page.locator(".plano")).toHaveText("Assinante");
+    expect((await db(page))["planos/u1"].primeiroAcesso).toEqual({ __ts: Date.UTC(2026, 9, 1) });
+  });
+  test("PL1-H3 ADM vê 1º acesso e selo, torna assinante e volta para gratuito", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 5 * 864e5 } },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    const c = page.locator(".rescard").first();
+    await expect(c.locator(".pill.pl-gratuito")).toHaveText("Gratuito");
+    await expect(c).toContainText(/1º acesso em \d{2}\/\d{2}\/\d{4} \(5 dias\)/);
+    await c.getByRole("button", { name: "Tornar assinante" }).click();
+    await expect.poll(async () => (await db(page))["planos/u1"].plano).toBe("assinante");
+    await expect(page.locator(".rescard").first().locator(".pill.pl-assinante")).toHaveText("Assinante");
+    await page.locator("#rst").selectOption("gratuito");
+    await expect(page.locator(".rescard")).toHaveCount(0);
+    await page.locator("#rst").selectOption("assinante");
+    await expect(page.locator(".rescard")).toHaveCount(1);
+    await page.locator(".rescard").first().getByRole("button", { name: "Voltar para gratuito" }).click();
+    await expect.poll(async () => (await db(page))["planos/u1"].plano).toBe("gratuito");
+    expect((await db(page))["planos/u1"].primeiroAcesso).toBeTruthy();
+    expect(erros).toEqual([]);
+  });
+});
