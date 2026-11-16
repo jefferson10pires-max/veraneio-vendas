@@ -77,7 +77,7 @@ test("R07 revendedora mexe na própria loja, mas não no endereço, situação o
   await assertFails(setDoc(doc(db, "catalogos/rev/partes/qualquer"), { itens: [] }));
   await assertSucceeds(setDoc(doc(db, "lojas/rev/fotos/y1"), { fotos: ["data:image/jpeg;base64,AA"], v: 1 }));
   await assertFails(setDoc(doc(db, "lojas/rev/fotos/y2"), { fotos: ["a", "b", "c", "d"], v: 1 }));
-  await assertSucceeds(setDoc(doc(db, "lojas/rev/proprios/r1"), { nome: "Brinco", preco: 10 }));
+  await assertFails(setDoc(doc(db, "lojas/rev/proprios/r1"), { nome: "Brinco", preco: 10 })); // sem plano assinante
 });
 
 // --- dados pessoais ---
@@ -266,6 +266,53 @@ test("R14 ADM gerencia tudo; sistema só ADM", async () => {
   await assertFails(getDoc(doc(visitante(), "sistema/yampi")));
   await assertSucceeds(updateDoc(doc(adm(), "lojas/rev"), { status: "pausada" }));
   await assertSucceeds(setDoc(doc(adm(), "catalogos/rev/partes/p0"), { itens: [] }));
+});
+
+// --- planos: gratuito x assinante ---
+const dia = 864e5;
+const plano = (plano, diasAtras, diasGratis) => env.withSecurityRulesDisabled(async (c) => {
+  const db = c.firestore();
+  await setDoc(doc(db, "planos/rev"), { plano, primeiroAcesso: Timestamp.fromMillis(Date.now() - diasAtras * dia) });
+  if (diasGratis != null) await setDoc(doc(db, "config/planos"), { diasGratis });
+  await setDoc(doc(db, "lojas/rev/proprios/velha"), { nome: "Velha", preco: 10 });
+});
+test("R25 peças próprias só no plano assinante; gratuita ainda apaga as que já tinha", async () => {
+  await plano("gratuito", 1, 30);
+  await assertFails(setDoc(doc(rev(), "lojas/rev/proprios/r1"), { nome: "Brinco", preco: 10 }));
+  await assertFails(updateDoc(doc(rev(), "lojas/rev/proprios/velha"), { preco: 1 }));
+  await assertSucceeds(getDoc(doc(rev(), "lojas/rev/proprios/velha")));
+  await assertSucceeds(deleteDoc(doc(rev(), "lojas/rev/proprios/velha")));
+  await assertSucceeds(setDoc(doc(adm(), "lojas/rev/proprios/r2"), { nome: "Do ADM", preco: 10 }));
+  await plano("assinante", 400, 30);
+  await assertSucceeds(setDoc(doc(rev(), "lojas/rev/proprios/r1"), { nome: "Brinco", preco: 10 }));
+  await assertSucceeds(updateDoc(doc(rev(), "lojas/rev/proprios/velha"), { preco: 12 }));
+});
+test("R26 período gratuito vencido: painel não muda nada; loja continua lida; pedidos seguem; ADM ainda grava", async () => {
+  await plano("gratuito", 31, 30);
+  const db = rev();
+  await assertFails(updateDoc(doc(db, "lojas/rev"), { nome: "Novo" }));
+  await assertFails(setDoc(doc(db, "precos/rev"), { margem: 50 }));
+  await assertFails(setDoc(doc(db, "rascunhos/rev/docs/mudou"), { em: serverTimestamp() }));
+  await assertFails(setDoc(doc(db, "catalogos/rev/partes/p0"), { itens: [] }));
+  await assertFails(setDoc(doc(db, "banners/rev"), { itens: [] }));
+  await assertFails(setDoc(doc(db, "lojas/rev/fotos/y1"), { fotos: ["data:image/jpeg;base64,AA"], v: 1 }));
+  await assertFails(deleteDoc(doc(db, "lojas/rev/proprios/velha")));
+  await assertSucceeds(getDoc(doc(visitante(), "lojas/rev")));
+  await assertSucceeds(getDoc(doc(db, "precos/rev")));
+  await assertSucceeds(updateDoc(doc(db, "lojas/rev/leads/AAAAAAAAAAAAAAAAAAAA"), { status: "enviado" }));
+  await assertSucceeds(setDoc(doc(db, "acessos/rev"), { em: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(adm(), "catalogos/rev/partes/p0"), { itens: [] }));
+  await assertSucceeds(updateDoc(doc(adm(), "lojas/rev"), { nome: "Pelo ADM" }));
+});
+test("R27 dentro do prazo, sem prazo (0) ou assinante: painel grava normal", async () => {
+  await plano("gratuito", 29, 30);
+  await assertSucceeds(setDoc(doc(rev(), "precos/rev"), { margem: 50 }));
+  await assertSucceeds(updateDoc(doc(rev(), "lojas/rev"), { nome: "A" }));
+  await plano("gratuito", 400, 0);
+  await assertSucceeds(setDoc(doc(rev(), "precos/rev"), { margem: 60 }));
+  await plano("assinante", 400, 30);
+  await assertSucceeds(setDoc(doc(rev(), "precos/rev"), { margem: 70 }));
+  await assertSucceeds(setDoc(doc(rev(), "catalogos/rev/partes/p0"), { itens: [] }));
 });
 
 // --- R99: tudo que o app gravou nos testes do painel/ADM (e2e/escritas-gravadas.json, gerado por `npm test`)

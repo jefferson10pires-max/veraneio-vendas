@@ -462,8 +462,12 @@ function tRes(){
   $("rl").onclick=async e=>{const b=e.target.closest("[data-st],[data-cp],[data-lk],[data-pl]");if(!b)return;
     const lj=LOJAS.find(x=>x.uid===(b.dataset.st||b.dataset.cp||b.dataset.lk||b.dataset.pl));
     if(b.dataset.pl){const nv=planoDe(lj.uid)==="assinante"?"gratuito":"assinante";b.disabled=true;
-      try{await setDoc(doc(db,"planos",lj.uid),{plano:nv,mudadoEm:serverTimestamp()},{merge:true});PLANOS[lj.uid]={...(PLANOS[lj.uid]||{}),plano:nv};tRes();toast(nv==="assinante"?`${lj.nome} agora é assinante`:`${lj.nome} voltou para o acesso gratuito`)}
-      catch(err){console.error(err);toast("Não foi possível mudar o plano.");b.disabled=false}}
+      try{await setDoc(doc(db,"planos",lj.uid),{plano:nv,mudadoEm:serverTimestamp()},{merge:true});PLANOS[lj.uid]={...(PLANOS[lj.uid]||{}),plano:nv};tRes()}
+      catch(err){console.error(err);toast("Não foi possível mudar o plano.");b.disabled=false;return}
+      /* peças próprias são do plano assinante: republica a loja com ou sem elas */
+      try{const pr=await getDoc(doc(db,"precos",lj.uid));await C.publicarLoja(F,db,lj.uid,pr.exists()?pr.data():{},await C.lerAtacado(F,db),nv==="assinante"?undefined:[]);
+        toast(nv==="assinante"?`${lj.nome} agora é assinante`:`${lj.nome} voltou para o acesso gratuito (peças próprias saíram da loja)`)}
+      catch(err){console.error(err);toast("Plano mudado, mas a loja não foi atualizada. Use “Republicar catálogo em todas as lojas” em Produtos.")}}
     else if(b.dataset.st){const nv=lj.status==="ativa"?"pausada":"ativa";try{await updateDoc(doc(db,"lojas",lj.uid),{status:nv});lj.status=nv;tRes();toast(nv==="ativa"?"Loja reativada":"Loja pausada")}catch(err){toast("Não foi possível mudar o status.")}}
     else if(b.dataset.cp){try{await navigator.clipboard.writeText(`${location.origin}/${lj.slug}`);toast("Link da loja copiado")}catch(err){toast(`${location.origin}/${lj.slug}`)}}
     else{const em=(CONTAS[lj.uid]||{}).email;if(!em){toast("E-mail da revendedora não encontrado.");return}
@@ -629,9 +633,11 @@ async function publicarTodas(prog=()=>{}){
   const at=PRODS.filter(C.ativoNaLoja).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt")).map(C.paraAtacado);
   prog("Gravando catálogo de atacado");await C.gravarAtacado(F,db,at);
   const pr=await getDocs(collection(db,"precos"));let n=0;const falhas=[];
+  /* peças próprias só ficam na loja de quem é assinante (se não der para ler os planos, mantém como está) */
+  let pl=null;try{pl=Object.create(null);(await getDocs(collection(db,"planos"))).docs.forEach(d=>pl[d.id]=d.data().plano)}catch(e){pl=null}
   /* uma loja com problema não impede as outras de serem atualizadas */
   for(const d of pr.docs){prog(`Atualizando lojas ${++n}/${pr.size}`);
-    try{await C.publicarLoja(F,db,d.id,d.data(),at,"publicados")}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
+    try{await C.publicarLoja(F,db,d.id,d.data(),at,!pl||pl[d.id]==="assinante"?"publicados":[])}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
   if(falhas.length){const nomes=falhas.map(u=>(LOJAS.find(l=>l.uid===u)||{}).nome||u);throw new Error(`${falhas.length} loja(s) não foram atualizadas: ${nomes.join(", ")}`)}
 }
 let pubT=null;

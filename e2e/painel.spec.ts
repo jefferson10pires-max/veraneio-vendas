@@ -18,6 +18,7 @@ function seed(n = 800, extra: Record<string, any> = {}) {
   d["slugs/kailane-joias"] = { uid: "u1" };
   d["admins/adm1"] = { nome: "Jefferson" };
   d["contas/u1"] = { email: "rev@teste.com" };
+  d["planos/u1"] = { plano: "assinante", primeiroAcesso: { __ts: Date.UTC(2026, 9, 1) } }; // padrão: tudo liberado
   for (const p of at.slice(0, 30)) d["produtos/" + p.id] = { ...p, yampiId: p.id.slice(1), ativo: true, origem: "yampi" };
   return { ...d, ...extra };
 }
@@ -1096,7 +1097,7 @@ test.describe("DS1 descrição da peça", () => {
 
 test.describe("PL1 plano de acesso (gratuito / assinante)", () => {
   test("PL1-H1 1º acesso registra a data e mostra 'Acesso gratuito' no Início", async ({ page }) => {
-    const erros = await preparar(page);
+    const erros = await preparar(page, { seed: seed(800, { "planos/u1": undefined }) });
     await entrar(page);
     await expect(page.locator(".plano")).toHaveText("Acesso gratuito");
     const p = (await db(page))["planos/u1"];
@@ -1165,6 +1166,86 @@ test.describe("PZ1 prazo do período gratuito", () => {
     await preparar(page, { seed: seed(40, { "config/planos": { diasGratis: 30 }, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 31 * dia } } }) });
     await entrar(page);
     await expect(page.locator(".plano")).toHaveText("Período gratuito encerrado");
+  });
+});
+
+test.describe("PG1 o que o plano gratuito libera", () => {
+  const dia = 864e5;
+  const catalogo = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).sort().flatMap((k) => d[k].itens);
+  test("PG1-H1 gratuito não cadastra peça própria; ao publicar, as peças próprias que já tinha saem da loja", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "config/planos": { diasGratis: 30 }, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 2 * dia } },
+      "lojas/u1/proprios/rX": { nome: "Colar Meu", cat: "Colares", preco: 100 } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await expect(page.getByText("Cadastrar peças suas é do plano")).toBeVisible();
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await expect(page.locator("#toast")).toContainText("plano Assinante");
+    await expect(page.locator("#npF")).toHaveCount(0);
+    await page.locator("#pf").getByRole("button", { name: /Minhas/ }).click();
+    await expect(page.locator("#massa")).toContainText("não aparecem na loja");
+    await page.getByRole("button", { name: /Editar Colar Meu/ }).click();
+    await expect(page.locator("#npF")).toHaveCount(0);
+    await page.locator("#pf").getByRole("button", { name: /Todas/ }).click();
+    await page.locator("[data-pe]").first().check();
+    await publicar(page);
+    const itens = catalogo(await db(page));
+    expect(itens.length).toBeGreaterThan(0);
+    expect(itens.some((x: any) => x.proprio)).toBe(false);
+    expect(erros).toEqual([]);
+  });
+  test("PG1-H2 prazo vencido: loja segue no ar, Início e Pedidos abrem, o resto fica bloqueado", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "config/planos": { diasGratis: 30 }, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 31 * dia } } }) });
+    await entrar(page);
+    await expect(page.getByRole("heading", { name: "Seu período gratuito terminou" })).toBeVisible();
+    await expect(page.locator("#pubbar")).toBeHidden();
+    for (const n of ["Peças", "Preços", "Aparência", "Loja"]) {
+      await page.locator("#nav").getByRole("button", { name: `${n} bloqueada`, exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Seu período gratuito terminou" })).toBeVisible();
+      await expect(page.locator("#plist, #npF, #fWa")).toHaveCount(0);
+    }
+    await expect(page.getByRole("button", { name: "Sair" })).toBeVisible();
+    await aba(page, "Pedidos").click();
+    await expect(page.getByRole("heading", { name: "Seu período gratuito terminou" })).toHaveCount(0);
+    expect(Object.keys(await db(page)).some((k) => k.startsWith("rascunhos/") || k.startsWith("catalogos/"))).toBe(false);
+    expect(erros).toEqual([]);
+  });
+  test("PG1-H3 ADM: voltar para gratuito tira as peças próprias da loja; tornar assinante traz de volta", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "lojas/u1/proprios/rX": { nome: "Colar Meu", cat: "Colares", preco: 100 },
+      "catalogos/u1/partes/p0": { itens: [{ id: "rX", nome: "Colar Meu", preco: 100, proprio: true }] },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    await page.locator(".rescard").first().getByRole("button", { name: "Voltar para gratuito" }).click();
+    await expect(page.locator("#toast")).toContainText("peças próprias saíram");
+    let itens = catalogo(await db(page));
+    expect(itens.some((x: any) => x.proprio)).toBe(false);
+    expect(itens.length).toBeGreaterThan(0);
+    await page.locator(".rescard").first().getByRole("button", { name: "Tornar assinante" }).click();
+    await expect(page.locator("#toast")).toContainText("agora é assinante");
+    itens = catalogo(await db(page));
+    expect(itens.find((x: any) => x.id === "rX")).toMatchObject({ nome: "Colar Meu", proprio: true });
+    expect(erros).toEqual([]);
+  });
+  test("PG1-H4 republicação do ADM mantém peças próprias de assinante e tira de gratuita", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "lojas/u2": { nome: "Loja Grátis", slug: "gratis", status: "ativa", cor: "#043034" }, "precos/u2": { margem: 100 },
+      "planos/u2": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() } },
+      "catalogos/u1/partes/p0": { itens: [{ id: "rX", nome: "Colar Meu", preco: 100, proprio: true }] },
+      "catalogos/u2/partes/p0": { itens: [{ id: "rY", nome: "Colar Dela", preco: 100, proprio: true }] },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.locator("#toast")).toContainText("Catálogo atualizado", { timeout: 10000 });
+    const d = await db(page);
+    const de = (u: string) => Object.keys(d).filter((k) => k.startsWith(`catalogos/${u}/partes/`)).flatMap((k) => d[k].itens);
+    expect(de("u1").some((x: any) => x.id === "rX")).toBe(true);
+    expect(de("u2").some((x: any) => x.proprio)).toBe(false);
+    expect(de("u2").length).toBeGreaterThan(0);
+    expect(erros).toEqual([]);
   });
 });
 

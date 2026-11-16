@@ -34,6 +34,22 @@ service cloud.firestore {
     function isLoja(uid) { return isOwner(uid) && exists(/databases/$(database)/documents/lojas/$(uid)); }
     function isRevendedora() { return signed() && exists(/databases/$(database)/documents/lojas/$(request.auth.uid)); }
     function dono(uid) { return isLoja(uid) || isAdmin(); }
+    // Plano de acesso: assinante tem tudo; gratuito não cadastra peças próprias;
+    // gratuito com o prazo vencido não muda mais nada na loja (a loja continua no ar com o que já publicou).
+    function assinante(uid) {
+      let p = /databases/$(database)/documents/planos/$(uid);
+      return exists(p) && get(p).data.get('plano', '') == 'assinante';
+    }
+    function vencido(uid) {
+      let p = /databases/$(database)/documents/planos/$(uid);
+      let c = /databases/$(database)/documents/config/planos;
+      return exists(p) && get(p).data.get('plano', 'gratuito') != 'assinante'
+        && get(p).data.get('primeiroAcesso', null) is timestamp
+        && exists(c) && get(c).data.get('diasGratis', 0) is int && get(c).data.get('diasGratis', 0) > 0
+        && request.time >= get(p).data.primeiroAcesso + duration.value(get(c).data.diasGratis, 'd');
+    }
+    // pode mudar a loja: ADM sempre; a dona enquanto o período gratuito não venceu (ou é assinante)
+    function edita(uid) { return isAdmin() || (isLoja(uid) && !vencido(uid)); }
     function isCor(v) { return v is string && v.matches('^#[0-9a-fA-F]{6}$'); }
     // foto guardada pela revendedora: imagem embutida (data:image/…) ou endereço https
     function isFoto(v) { return v is string && v.size() <= 300000 && v.matches('^(data:image/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+|https://[^\\s"<>]+)$'); }
@@ -87,7 +103,7 @@ service cloud.firestore {
     // Rascunho da revendedora: o que ela mudou e ainda não publicou (só ela e o ADM veem)
     match /rascunhos/{uid}/docs/{nome} {
       allow read, delete: if dono(uid);
-      allow create, update: if dono(uid) && (
+      allow create, update: if edita(uid) && (
         (nome == 'loja' && request.resource.data.keys().hasOnly(['nome', 'cor', 'logo', 'frase', 'sobre', 'aviso', 'frete', 'freteRegra', 'parcelas', 'insta', 'whats', 'barra', 'rodape', 'modo', 'destaques', 'em'])
           && lojaOk(request.resource.data, request.resource.data.keys().removeAll(['em'])))
         || (nome == 'precos' && precosOk(request.resource.data))
@@ -121,19 +137,19 @@ service cloud.firestore {
     }
     match /precos/{uid} {
       allow read, delete: if dono(uid);
-      allow create, update: if dono(uid) && precosOk(request.resource.data);
+      allow create, update: if edita(uid) && precosOk(request.resource.data);
     }
 
     match /catalogos/{uid}/partes/{parte} {
       allow read: if true;
-      allow write: if dono(uid) && parte.matches('^p([0-9]|[1-3][0-9])$');
+      allow write: if edita(uid) && parte.matches('^p([0-9]|[1-3][0-9])$');
     }
 
     match /banners/{uid} {
       allow read: if true;
-      allow create, update: if dono(uid) && request.resource.data.keys().hasOnly(['itens', 'em'])
+      allow create, update: if edita(uid) && request.resource.data.keys().hasOnly(['itens', 'em'])
         && request.resource.data.itens is list && request.resource.data.itens.size() <= 4;
-      allow delete: if dono(uid);
+      allow delete: if edita(uid);
     }
 
     match /contas/{uid} {
@@ -167,7 +183,7 @@ service cloud.firestore {
       // e não grava dados pessoais aqui (o documento é público)
       // A revendedora só mexe nos campos de aparência que o painel tem (lista fechada).
       allow update: if isAdmin()
-        || (isLoja(uid)
+        || (isLoja(uid) && !vencido(uid)
             && lojaOk(request.resource.data, request.resource.data.diff(resource.data).affectedKeys()));
 
       // Acessos: a loja pública só consegue somar +1, no dia de hoje, numa loja que existe.
@@ -206,21 +222,24 @@ service cloud.firestore {
       }
 
       // Peças próprias da revendedora (dados de origem; o que a cliente vê sai em catalogos/)
+      // Peças próprias: só no plano assinante (a revendedora gratuita pode apagar as que já tinha)
       match /proprios/{id} {
-        allow read, write: if dono(uid);
+        allow read: if dono(uid);
+        allow delete: if edita(uid);
+        allow create, update: if isAdmin() || (isLoja(uid) && assinante(uid));
       }
 
       // Fotos próprias (trocadas ou de peças próprias): a loja pública lê; só a dona e o ADM gravam
       match /fotos/{id} {
         allow read: if true;
-        allow create, update: if dono(uid)
+        allow create, update: if edita(uid)
           && request.resource.data.keys().hasOnly(['fotos', 'v'])
           && request.resource.data.fotos is list
           && request.resource.data.fotos.size() >= 1 && request.resource.data.fotos.size() <= 3
           && isFoto(request.resource.data.fotos[0])
           && (request.resource.data.fotos.size() < 2 || isFoto(request.resource.data.fotos[1]))
           && (request.resource.data.fotos.size() < 3 || isFoto(request.resource.data.fotos[2]));
-        allow delete: if dono(uid);
+        allow delete: if edita(uid);
       }
 
       // Carrinhos: a cliente final (sem login) cria e atualiza o próprio carrinho até finalizar.

@@ -70,6 +70,9 @@ a{color:inherit}
 .plano::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
 .plano.gratuito{background:var(--soft);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
 .plano.vencido{background:color-mix(in srgb,var(--warn,#b45309) 14%,var(--surface));color:var(--warn,#b45309)}
+.trava{border:1px solid var(--line);background:var(--soft);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.trava h2,.trava h3{display:flex;align-items:center;gap:8px;margin:0}.trava svg{width:20px;height:20px;flex:none}
+.hint .ico{width:14px;height:14px;vertical-align:-2px}.nav button .lk{display:inline-flex;opacity:.55}.nav button .lk svg{width:12px;height:12px}
 .plano.assinante{background:color-mix(in srgb,var(--brand) 12%,var(--surface));color:var(--brand)}
 .note{background:var(--soft);border-radius:12px;padding:12px 14px;font-size:13.5px}
 .aviso{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
@@ -270,7 +273,7 @@ const I={
  chat:sv('<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/>'),upload:sv('<path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4"/>'),
  share:sv('<path d="M12 15V3M7 8l5-5 5 5M5 12v8h14v-8"/>'),copy:sv('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'),
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
- plus:sv('<path d="M12 5v14M5 12h14"/>'),x:sv('<path d="M6 6l12 12M18 6 6 18"/>'),
+ plus:sv('<path d="M12 5v14M5 12h14"/>'),lock:sv('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),x:sv('<path d="M6 6l12 12M18 6 6 18"/>'),
  edit:sv('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
  cam:sv('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>')
 };
@@ -350,9 +353,10 @@ function shell(){
   ir(ui.tab);
 }
 function navHTML(){const ab=(LEADS||[]).filter(l=>l.status==="abandonado").length;
-  $("nav").innerHTML=TABS.map(([k,l,i])=>`<button type="button" data-tab="${k}" aria-current="${ui.tab===k}">${i}<span>${l}</span>${k==="pedidos"&&ab?`<span class="dot num">${ab}</span>`:""}</button>`).join("")}
+  $("nav").innerHTML=TABS.map(([k,l,i])=>`<button type="button" data-tab="${k}" aria-current="${ui.tab===k}">${i}<span>${l}</span>${VENC()&&!ABAS_VENC.includes(k)?`<span class="lk" aria-label="bloqueada">${I.lock}</span>`:""}${k==="pedidos"&&ab?`<span class="dot num">${ab}</span>`:""}</button>`).join("")}
 /* cada troca de aba invalida as anteriores: uma aba lenta que termina de carregar depois não sobrescreve a atual */
 function ir(t){if(!TABS.some(x=>x[0]===t))t="inicio";ui.tab=t;ui.vez++;if(location.hash)history.replaceState(null,"",location.pathname);navHTML();scrollTo(0,0);$("main").onclick=$("main").onchange=null;
+  if(VENC()&&!ABAS_VENC.includes(t))return tBloqueada();
   ({inicio:tInicio,pedidos:tPedidos,pecas:tPecas,aparencia:tAparencia,precos:tPrecos,conta:tConta})[t]()}
 const vez=()=>{const v=ui.vez;return()=>v===ui.vez};
 const loading=()=>$("main").innerHTML=`<div class="skel"></div><div class="skel"></div>`;
@@ -361,6 +365,17 @@ let saveT={};
    Tudo o que a revendedora muda fica guardado em rascunhos/{uid}/docs/* e só vai para a loja
    quando ela toca em "Publicar atualização". */
 let PLANO="gratuito",PLANO_RESTA=null;
+/* assinante: tudo liberado. gratuito: sem peças próprias. gratuito vencido: loja no ar, painel só para ver */
+const ASS=()=>PLANO==="assinante";
+const VENC=()=>!ASS()&&PLANO_RESTA!==null&&PLANO_RESTA<=0;
+const ABAS_VENC=["inicio","pedidos"];
+const MSG_ASS="Cadastrar peças suas é do plano Assinante. Fale com a Veraneio para assinar.";
+function travaVenc(){return `<div class="trava" role="status"><h3>${I.lock}Seu período gratuito terminou</h3>
+  <p class="hint" style="margin:0">Sua loja continua no ar com o que você já publicou, e você segue vendo seus pedidos. Para voltar a mudar peças, preços e a aparência da loja, fale com a Veraneio e torne-se <b>Assinante</b>.</p></div>`}
+function tBloqueada(){$("main").innerHTML=`${travaVenc()}
+  <div class="box"><h3>Sua conta</h3><div class="linkbox"><code>${esc(U.email)}</code></div>
+    <div class="row"><button class="btn btn-ghost btn-sm" type="button" id="out">Sair</button></div></div>`;
+  $("out").onclick=()=>A.signOut(auth)}
 /* selo do plano no Início: assinante, gratuito com dias restantes, ou gratuito encerrado */
 function seloPlano(){if(PLANO==="assinante")return `<span class="plano assinante" aria-label="Seu acesso ao app">Assinante</span>`;
   if(PLANO_RESTA===null)return `<span class="plano gratuito" aria-label="Seu acesso ao app">Acesso gratuito</span>`;
@@ -369,7 +384,7 @@ function seloPlano(){if(PLANO==="assinante")return `<span class="plano assinante
 let RAS={loja:false,precos:false,banners:false,mudou:false},filaRas=Promise.resolve(),pubAndando=false;
 const rasRef=n=>doc(db,"rascunhos",U.uid,"docs",n);
 const temRascunho=()=>RAS.loja||RAS.precos||RAS.banners||RAS.mudou;
-function pubBar(){const b=$("pubbar");if(!b)return;b.hidden=!temRascunho()&&!pubAndando;
+function pubBar(){const b=$("pubbar");if(!b)return;b.hidden=VENC()||(!temRascunho()&&!pubAndando);
   $("pubBtn").disabled=pubAndando;$("pubBtn").textContent=pubAndando?"Publicando…":"Publicar atualização";
   $("pubTxt").textContent=pubAndando?"Atualizando a sua loja…":"Você tem mudanças que ainda não estão na loja."}
 function rascunho(nome,dados,merge){RAS[nome]=true;pubBar();
@@ -389,7 +404,7 @@ async function publicarAtualizacao(){
     if(RAS.banners)await setDoc(doc(db,"banners",U.uid),{itens:BAN||[],em:serverTimestamp()});
     await Promise.all([carregarProds(),carregarProprios()]);
     await setDoc(doc(db,"precos",U.uid),{...precosLimpos(),atualizadoEm:serverTimestamp()});
-    await C.publicarLoja(F,db,U.uid,PR,PRODS,PROPRIOS);
+    await C.publicarLoja(F,db,U.uid,PR,PRODS,ASS()?PROPRIOS:[]);
     await limparFotosVelhas();
     await Promise.all(["loja","precos","banners","mudou"].map(n=>RAS[n]?deleteDoc(rasRef(n)).catch(()=>{}):null));
     RAS={loja:false,precos:false,banners:false,mudou:false};
@@ -432,7 +447,7 @@ async function tInicio(){
   const top=Object.entries(views).sort((a,b)=>b[1]-a[1]).slice(0,5),mt=top.length?top[0][1]:1;
   const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>nv((DIAS[dkey(d)]||{}).visitas)),mx=Math.max(1,...vals);
   $("main").innerHTML=`${avisoHTML()}
-    <div class="row" style="justify-content:flex-end">${seloPlano()}</div>
+    <div class="row" style="justify-content:flex-end">${seloPlano()}</div>${VENC()?travaVenc():""}
     <div class="box"><h3>Link da sua loja</h3>
       <div class="linkbox"><code id="lk">${esc(lojaURL().replace(/^https?:\/\//,""))}</code></div>
       <div class="row"><button class="btn btn-brand btn-sm" type="button" id="shr">${I.share}Compartilhar</button><button class="btn btn-ghost btn-sm" type="button" id="cpy">${I.copy}Copiar link</button></div>
@@ -595,8 +610,8 @@ async function tPecas(){
   if(!ok())return;
   const cats=[...new Set(todas().map(p=>p.cat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   if(ui.pcat!=="Todas"&&!cats.includes(ui.pcat))ui.pcat="Todas";
-  $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h2>Peças da loja</h2><button class="btn btn-brand btn-sm" type="button" id="novaPeca">${I.plus}Nova peça</button></div>
-    <p class="lead">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos. Desligue <b>No site</b> para tirar uma peça da loja. Em <b>Editar</b> você muda o nome e a foto da peça, e em <b>Nova peça</b> cadastra uma peça sua.</p>
+  $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h2>Peças da loja</h2><button class="btn ${ASS()?"btn-brand":"btn-ghost"} btn-sm" type="button" id="novaPeca">${ASS()?I.plus:I.lock}Nova peça</button></div>
+    <p class="lead">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos. Desligue <b>No site</b> para tirar uma peça da loja. Em <b>Editar</b> você muda o nome e a foto da peça${ASS()?`, e em <b>Nova peça</b> cadastra uma peça sua.`:`. <span class="hint">Cadastrar peças suas é do plano <b>Assinante</b>.</span>`}</p>
     <div class="field"><span class="flabel">Como você trabalha</span><div class="seg" id="modo" role="radiogroup" aria-label="Como você trabalha">
       <button type="button" data-modo="catalogo" aria-pressed="${modo()==="catalogo"}">Catálogo todo</button><button type="button" data-modo="pronta" aria-pressed="${modo()==="pronta"}">Só pronta entrega</button></div>
       <span class="hint" id="modoHint"></span></div>
@@ -606,7 +621,7 @@ async function tPecas(){
       <select id="pcat" aria-label="Categoria">${["Todas",...cats].map(c=>`<option value="${esc(c)}" ${ui.pcat===c?"selected":""}>${c==="Todas"?"Todas as categorias":esc(c)}</option>`).join("")}</select></div>
     <div class="massa" id="massa"></div>
     <div class="plist" id="plist"></div></div>`;
-  $("novaPeca").onclick=()=>formPropria();
+  $("novaPeca").onclick=()=>ASS()?formPropria():toast(MSG_ASS);
   $("modo").onclick=e=>{const v=e.target.closest("[data-modo]")?.dataset.modo;if(!v||v===modo())return;PR.modo=v;
     $("modo").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.modo===v));
     salvarLoja({modo:v},true);
@@ -616,7 +631,7 @@ async function tPecas(){
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
   $("plist").onclick=e=>{const r=e.target.closest("[data-rest]");if(r){restaurar(r.dataset.rest);return}
     const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
-    const ed=e.target.closest("[data-edit]");if(ed)formPropria(ed.dataset.edit)};
+    const ed=e.target.closest("[data-edit]");if(ed)ASS()?formPropria(ed.dataset.edit):toast(MSG_ASS)};
   $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site;if(!id)return;
     const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
     if(t.dataset.pe){if(t.checked){pe.add(id);oc.delete(id)}else pe.delete(id)}
@@ -656,6 +671,7 @@ function segPecas(){
 function massa(){
   const el=$("massa");if(!el)return;
   if(ui.pf==="excl"){el.innerHTML=`<span class="hint">Peças excluídas não aparecem na sua loja nem nas listas. Toque em “Restaurar” para trazer de volta.</span>`;return}
+  if(ui.pf==="minhas"&&!ASS()){el.innerHTML=`<span class="hint">${I.lock} No plano gratuito as peças cadastradas por você não aparecem na loja. Elas voltam quando você for Assinante.</span>`;return}
   if(ui.pcat==="Todas"&&!ui.pq.trim()){el.innerHTML=`<span class="hint">Escolha uma categoria para marcar ou tirar do site várias peças de uma vez.</span>`;return}
   const l=filtradas(),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),n=l.length;if(!n){el.innerHTML="";return}
   const nPe=l.filter(p=>pe.has(p.id)&&!oc.has(p.id)).length,nOc=l.filter(p=>oc.has(p.id)).length;
