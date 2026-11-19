@@ -186,6 +186,20 @@ dialog::backdrop{background:rgba(15,14,12,.5)}
 .order .it{font-size:12px;color:var(--muted);margin-top:2px}
 .order .it .bad{color:var(--crit)}
 .dia{font-size:12px;font-weight:600;color:var(--muted);margin-top:16px;text-transform:capitalize}
+.kmods{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin:0 0 28px}
+.kmod{display:flex;flex-direction:column;gap:2px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:12px 14px;cursor:pointer;color:inherit}
+.kmod:hover{border-color:var(--muted)}
+.kmod.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.kmod b{font-size:15px;font-weight:600}
+.kmod span{font-size:13px;color:var(--muted)}
+.khead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--ink);margin-bottom:16px}
+.kres{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.kres b{color:var(--ink);font-weight:600}
+.card.kc{cursor:default}
+.card.kc:hover .nm{text-decoration:none}
+.kacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:22px 0 40px;padding-top:14px;border-top:1px solid var(--line)}
+.kacts .sp{flex:1}
+.kcfg input{width:100%;min-width:70px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:var(--surface)}
 @media (max-width:640px){
   .top .wrap{gap:0 16px}
   .brand{padding-block:10px 0;width:100%}
@@ -238,6 +252,7 @@ img{max-width:100%}[hidden]{display:none!important}
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="pecas" aria-selected="true">Peças</button>
       <button role="tab" data-tab="contagem" aria-selected="false">Contagem</button>
+      <button role="tab" data-tab="kits" aria-selected="false">Kits</button>
       <button role="tab" data-tab="compras" aria-selected="false" data-gestor>Compras</button>
       <button role="tab" data-tab="analises" aria-selected="false">Análises</button>
       <button role="tab" data-tab="vendas" aria-selected="false">Vendas</button>
@@ -355,6 +370,20 @@ img{max-width:100%}[hidden]{display:none!important}
     <p class="muted" style="font-size:12px;margin-top:14px">Projeção: estoque atual ÷ média de peças vendidas por dia nos últimos 30 dias.<span data-gestor> Lucro: preço efetivamente pago (já com desconto do pedido rateado) menos o custo total da peça.</span></p>
   </section>
 
+  <!-- KITS ALEATÓRIOS -->
+  <section id="tab-kits" hidden>
+    <div id="kitPend"></div>
+    <header style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:12px"><h2>Montar kit</h2><span class="muted" style="font-size:13px">Escolha o modelo: o app sorteia peças com lucro alto e estoque sobrando.</span></header>
+    <div class="kmods" id="kitMods"></div>
+    <div id="kitGerado"></div>
+    <div class="cols">
+      <div class="panel"><header><h3>Kits montados</h3><span class="lbl" id="kitHistN"></span></header><div id="kitHist"></div></div>
+      <div class="panel" data-gestor><header><h3>Modelos de kit</h3><span class="lbl">só o gestor altera</span></header>
+        <p class="muted" style="margin:6px 0 10px;font-size:13px">Categorias: deixe em branco para misturar tudo (sem acessórios e sem a linha Ouro), escreva só os nomes para limitar (“Brincos, Colares”) ou com quantidade para fixar (“Brincos 4, Colares 3, Anéis 3”). O valor do kit entra na declaração e no cálculo do lucro.</p>
+        <div id="kitCfg"></div></div>
+    </div>
+  </section>
+
   <!-- VENDAS -->
   <section id="tab-vendas" hidden>
     <div class="cols">
@@ -458,7 +487,7 @@ const downloads={async save({filename,data}){const b=data instanceof Blob?data:n
 let membro=null,resolver;const pronto=new Promise(r=>resolver=r);
 const user={isOwner:async()=>membro?.type==='manager',canEdit:async()=>membro?.type==='manager',can:async()=>true,id:async()=>auth.currentUser?.uid||null,me:async()=>({id:auth.currentUser?.uid,name:membro?.name||''})};
 window.claude={use:n=>pronto.then(()=>({db,assets,downloads,user})[n]??null)};
-window.FB={fs,auth,membro:()=>membro,
+window.FB={fs,auth,membro:()=>membro,appCfg:()=>cfg,
   async api(acao,extra={}){const u=auth.currentUser;if(!u)throw new Error('Entre no app de novo.');const tok=await u.getIdToken();
     const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao,...extra})});
     const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.erro||('Erro '+r.status));return j.resultado},
@@ -509,7 +538,7 @@ function shardId(cod){const m=/^([A-Z]+)(\d+)$/.exec(cod);return m?m[1]+'-'+Math
 function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
 
 const G=()=>S.gestor&&!S.verEquipe;
-const S={ct:{filtro:'pend',cat:'',cod:null,ultimo:null},cpQtd:{},compras:[],autoFeito:false,gestor:false,verEquipe:false,cfg:null,prod:new Map(),dias:new Map(),idx:new Map(),tab:'pecas',view:'grade',status:'',limite:120,per:30,canEdit:false,db:null,assets:null,mcp:null};
+const S={kit:null,kitHist:[],zap:[],ct:{filtro:'pend',cat:'',cod:null,ultimo:null},cpQtd:{},compras:[],autoFeito:false,gestor:false,verEquipe:false,cfg:null,prod:new Map(),dias:new Map(),idx:new Map(),tab:'pecas',view:'grade',status:'',limite:120,per:30,canEdit:false,db:null,assets:null,mcp:null};
 try{const v=localStorage.getItem('ve_view');if(v)S.view=v;S.verEquipe=localStorage.getItem('ve_equipe')==='1'}catch(e){}
 
 /* ---------- regras de custo ---------- */
@@ -548,11 +577,14 @@ function vendidoDesde(cod,iso){const a=S.idx.get(cod);if(!a)return 0;const lim=i
 function vendidoVar(cod,desdeIso,dias){const a=S.idx.get(cod)||[];const lim=desdeIso?Date.parse(desdeIso):-Infinity,limD=dias?addDias(hojeISO(),-dias+1):null;const m={};
   for(const x of a){if(x.t<=lim)continue;if(limD&&x.dia<limD)continue;const k=x.v||'(sem tamanho)';m[k]=(m[k]||0)+x.q}return m}
 function vendidoDias(cod,dias){const lim=addDias(hojeISO(),-dias+1);const a=S.idx.get(cod);if(!a)return {q:0,rec:0};let q=0,rec=0;for(const v of a)if(v.dia>=lim){q+=v.q;rec+=v.q*v.p}return {q,rec}}
+// saídas fora das vendas (kits montados) depois de uma data
+function saidasDe(p,desde){let q=0;for(const x of Object.values(p.saidas||{}))if(x&&x.t&&Date.parse(x.t)>desde)q+=+x.q||0;return q}
+function mesclar(cur,patch){const nx={...cur,...patch};if(patch.saidas){const s={...(cur.saidas||{})};for(const [k,v] of Object.entries(patch.saidas)){if(v===window.__DEL)delete s[k];else s[k]=v}nx.saidas=s}return nx}
 function estado(p){
   const r={atual:null,media:0,dias:null,fim:null,st:'none'};
-  r.media=vendidoDias(p.codigo,30).q/30;
+  r.media=(vendidoDias(p.codigo,30).q+saidasDe(p,Date.parse(addDias(hojeISO(),-29)+'T00:00:00')))/30;
   if(p.estoque==null||p.estoque==='')return r;
-  r.atual=(+p.estoque)-vendidoDesde(p.codigo,p.contadoEm);
+  r.atual=(+p.estoque)-vendidoDesde(p.codigo,p.contadoEm)-saidasDe(p,p.contadoEm?Date.parse(p.contadoEm):-Infinity);
   if(r.media>0){r.dias=Math.max(0,r.atual)/r.media;r.fim=addDias(hojeISO(),Math.floor(r.dias))}
   const min=p.estoqueMin??S.cfg?.estoqueMinPadrao??2;
   r.st=r.atual<=0?'crit':(r.atual<=min||(r.dias!=null&&r.dias<=(S.cfg?.diasAlerta||15)))?'warn':'ok';
@@ -764,7 +796,7 @@ function aplicarPerfil(){const g=G();$$('[data-gestor]').forEach(el=>el.hidden=!
   $('#btnSync').hidden=!G();
   const b=$('#btnPerfil');b.hidden=!S.gestor;b.textContent=S.verEquipe?'Voltar à visão do gestor':'Ver como equipe';}
 function render(){aplicarPerfil();renderSyncInfo();renderFiltros();
-  if(S.tab==='pecas')renderPecas();else if(S.tab==='analises')renderAnalises();else if(S.tab==='vendas')renderVendas();else if(S.tab==='contagem')renderContagem();else if(S.tab==='compras')renderCompras();else renderAjustes()}
+  if(S.tab==='pecas')renderPecas();else if(S.tab==='analises')renderAnalises();else if(S.tab==='vendas')renderVendas();else if(S.tab==='contagem')renderContagem();else if(S.tab==='compras')renderCompras();else if(S.tab==='kits')renderKits();else renderAjustes()}
 let rT;const renderSoon=()=>{clearTimeout(rT);rT=setTimeout(render,60)};
 
 /* ---------- gravação ---------- */
@@ -773,7 +805,7 @@ function enfileirar(chave,fn){const prev=filas.get(chave)||Promise.resolve();con
 function erroDb(e){if(e?.code==='invalid_argument'){banner('Você está com acesso só de leitura neste app.','crit')}else toast('Não consegui salvar ('+(e?.code||'erro')+'). Tente de novo.');throw e}
 function salvarProduto(cod,patch){
   if(!S.db)return Promise.reject();const sid=shardId(cod);
-  const cur=S.prod.get(cod)||{};S.prod.set(cod,{...cur,...patch,codigo:cod});renderSoon();
+  const cur=S.prod.get(cod)||{};S.prod.set(cod,{...mesclar(cur,patch),codigo:cod});renderSoon();
   return enfileirar('p:'+sid,async()=>{const ref=S.db.doc('produtos/'+sid);
     try{await ref.update({itens:{[cod]:patch}})}catch(e){if(e?.code==='invalid_argument'){const g=await ref.get();if(!g.exists)return ref.set({itens:{[cod]:{...patch,codigo:cod}}});}erroDb(e)}});
 }
@@ -921,7 +953,7 @@ function erroImport(e){
 async function salvarLote(patches){
   const porShard=new Map();
   for(const [cod,patch] of patches){const sid=shardId(cod);if(!porShard.has(sid))porShard.set(sid,{});porShard.get(sid)[cod]=patch;
-    const cur=S.prod.get(cod)||{};S.prod.set(cod,{...cur,...patch,codigo:cod})}
+    const cur=S.prod.get(cod)||{};S.prod.set(cod,{...mesclar(cur,patch),codigo:cod})}
   renderSoon();
   for(const [sid,itens] of porShard){
     await enfileirar('p:'+sid,async()=>{const ref=S.db.doc('produtos/'+sid);
@@ -1068,6 +1100,223 @@ function abrirKit(key,nome){kitKey=key;edCod=null;const k=(S.cfg?.kits||{})[key]
 function lerKit(){const itens=[],erros=[];for(const l of $('#kitTxt').value.split('\n')){const t=l.trim();if(!t)continue;const m=/^([A-Za-z]{1,4}\d{1,4})\s*[x×*]?\s*(\d+)?$/.exec(t);if(!m){erros.push(t);continue}const c=m[1].toUpperCase();itens.push({c,q:+(m[2]||1)})}return {itens,erros}}
 function kitPrev(){const {itens,erros}=lerKit();$('#kitPrev').innerHTML=itens.map(x=>`${esc(x.c)}×${x.q} ${S.prod.has(x.c)?esc(S.prod.get(x.c).nome):'<span style="color:var(--crit)">código não cadastrado</span>'}`).join('<br>')+(erros.length?`<br><span style="color:var(--crit)">Não entendi: ${erros.map(esc).join(', ')}</span>`:'')}
 
+/* ---------- KITS ALEATÓRIOS ---------- */
+// Monta kits com peças sorteadas: prioriza lucro alto e estoque sobrando; a confirmação dá baixa e gera a declaração de conteúdo
+const KIT_PADRAO=[
+  {nome:'Kit 10 peças',qtd:10,mix:'Colares 4, Pulseiras 1, Brincos 4, Anéis 1'},
+  {nome:'Kit 15 peças',qtd:15,mix:'Colares 5, Pulseiras 2, Brincos 6, Anéis 2'},
+  {nome:'Kit 20 peças',qtd:20,mix:'Brincos 9, Colares 6, Pulseiras 3, Anéis 2'},
+  {nome:'Kit 37 peças',qtd:37,mix:'Brincos 16, Colares 11, Pulseiras 5, Anéis 3, Tornozeleiras 1, Nuri 1'},
+  {nome:'Kit 60 peças',qtd:60,mix:'Brincos 21, Colares 16, Pulseiras 9, Anéis 7, Tornozeleiras 3, Braceletes 2, Piercings 2'}].map(m=>({valor:null,precoMax:null,...m}));
+const REM_PADRAO={nome:"VERANEIO SEMIJOIAS LTDA",cnpj:"54.016.029/0001-90",rua:"Rua Pedro Franco",numero:"413",comp:"Predio Bege",bairro:"Conselheiro Paulino",cidade_nome:"Nova Friburgo",uf:"RJ",cep:"28635-420",tel:"(22) 99222-0268"};
+function kitModelos(){const a=Array.isArray(S.cfg?.kitModelos)?S.cfg.kitModelos:[];return KIT_PADRAO.map((d,i)=>({...d,...(a[i]||{})}))}
+function kitRegras(){return {sobraMin:3,margemMin:50,tamanhos:false,...(S.cfg?.kitRegras||{})}}
+function remetente(){const c=(window.FB&&FB.appCfg&&FB.appCfg())||{};const r=c.remetente&&c.remetente.rua?c.remetente:REM_PADRAO;
+  return {...r,end:[r.rua,r.numero?', '+r.numero:'',r.comp?' - '+r.comp:'',r.bairro?' - '+r.bairro:''].join('').trim()}}
+// compara categoria sem ligar para plural/acento (Anel = Anéis); a linha Ouro e os acessórios só entram quando escritos
+const raiz=w=>w.replace(/eis$/,'el').replace(/(oes|aes)$/,'ao').replace(/s$/,'');
+const palavras=t=>norm(t).split(/[^a-z0-9]+/).filter(Boolean).map(raiz);
+function catOk(p,nome){const a=palavras(p.categoria),b=palavras(nome);if(!b.length||!b.every(w=>a.includes(w)))return false;
+  if(a.includes('ouro')&&!b.includes('ouro'))return false;if(a.some(w=>w.startsWith('acess'))&&!b.some(w=>w.startsWith('acess')))return false;return true}
+const temCat=nome=>ativos().some(p=>catOk(p,nome));
+// item que não é categoria (ex.: Kit limpeza): procura a peça pelo nome ou código
+function pecaPorNome(nome,usados){const b=norm(nome);return ativos().filter(p=>!usados.has(p.codigo)&&(norm(p.nome).includes(b)||norm(p.codigo)===b)).map(p=>({p,e:estado(p)})).filter(x=>x.e.atual==null||x.e.atual>=1).sort((x,y)=>(y.e.atual??0)-(x.e.atual??0))}
+function lerMix(mix){const grupos=[],so=[];
+  for(const parte of String(mix||'').split(/[,;\n]/)){const t=parte.trim();if(!t)continue;let m=/^(.+?)\s*[:=x×]?\s*(\d+)$/.exec(t);
+    if(m){grupos.push({cat:m[1].trim(),q:+m[2]});continue}m=/^(\d+)\s*[x×]?\s*(.+)$/.exec(t);if(m){grupos.push({cat:m[2].trim(),q:+m[1]});continue}so.push(t)}
+  return {grupos,so}}
+// sem categorias definidas: mistura tudo, menos acessórios e a linha de ouro
+const semAcess=x=>!/acess|^ouro/.test(norm(x.p.categoria));
+function kitPool(mod,usados){
+  const R=kitRegras(),alerta=S.cfg?.diasAlerta||15,base=[];
+  for(const p of ativos()){
+    if(usados.has(p.codigo))continue;
+    const e=estado(p);if(e.atual==null||e.atual<1)continue;
+    const c=custo(p),pr=precoRef(p);if(!c.completo||!pr||pr<=c.total)continue;
+    if(!R.tamanhos&&(p.porVariacao||Object.keys(p.estoqueVar||{}).length))continue;
+    if(+mod.precoMax&&pr>+mod.precoMax)continue;
+    const min=p.estoqueMin??S.cfg?.estoqueMinPadrao??2;
+    base.push({p,e,c,pr,m:(pr-c.total)/pr*100,sobra:e.atual-min,cob:e.dias==null?9999:e.dias});
+  }
+  // posição (0 a 1) de cada peça na margem e no estoque sobrando; o peso favorece quem está bem nas duas
+  const pct=f=>{const s=[...base].sort((a,b)=>f(a)-f(b)),m=new Map();s.forEach((x,i)=>m.set(x,s.length>1?i/(s.length-1):1));return m};
+  const pm=pct(x=>x.m),ps=pct(x=>Math.min(x.sobra,50)+Math.min(x.cob,365)/365);
+  for(const x of base){const s=.6*pm.get(x)+.4*ps.get(x);x.w=s*s+.02}
+  // 0 = regra completa; 1 = regra mais solta; 2 = qualquer peça com estoque
+  const nivel=[x=>x.sobra>=R.sobraMin&&x.m>=R.margemMin&&x.cob>=alerta*2,x=>x.sobra>=1&&x.m>=R.margemMin-10,()=>true];
+  return {base,nivel};
+}
+function sortear(lista,n,usados,cap){const arr=lista.filter(x=>!usados.has(x.p.codigo)),out=[],porCat={};
+  while(out.length<n&&arr.length){
+    let cand=cap?arr.filter(x=>(porCat[x.p.categoria]||0)<cap):arr;if(!cand.length)cand=arr;
+    let r=Math.random()*cand.reduce((s,x)=>s+x.w,0),pick=cand[cand.length-1];for(const x of cand){r-=x.w;if(r<=0){pick=x;break}}
+    arr.splice(arr.indexOf(pick),1);out.push(pick);usados.add(pick.p.codigo);porCat[pick.p.categoria]=(porCat[pick.p.categoria]||0)+1}
+  return out}
+function escolher(mod,n,filtro,usados,cap){const {base,nivel}=kitPool(mod,usados),res=[];let lv=0;
+  for(let i=0;i<nivel.length&&res.length<n;i++){const got=sortear(base.filter(x=>filtro(x)&&nivel[i](x)),n-res.length,usados,cap);if(got.length)lv=i;res.push(...got)}
+  return {res,lv}}
+function filtroResto(mod){const {so}=lerMix(mod.mix);return so.length?(x=>so.some(c=>catOk(x.p,c))):semAcess}
+function gerarKit(mi,ped){
+  const mod=kitModelos()[mi];if(!mod)return;const n=Math.max(1,Math.round(+mod.qtd||10)),{grupos}=lerMix(mod.mix),usados=new Set(),itens=[];let lv=0;
+  const faltas=[];
+  for(const g of grupos){
+    if(!temCat(g.cat)){const l=pecaPorNome(g.cat,usados).slice(0,g.q);l.forEach(x=>usados.add(x.p.codigo));itens.push(...l.map(x=>({c:x.p.codigo,g:g.cat,fixo:1})));if(l.length<g.q)faltas.push(`${g.q-l.length} ${g.cat}`);continue}
+    const r=escolher(mod,g.q,x=>catOk(x.p,g.cat),usados,0);lv=Math.max(lv,r.lv);itens.push(...r.res.map(x=>({c:x.p.codigo,g:g.cat})));if(r.res.length<g.q)faltas.push(`${g.q-r.res.length} ${g.cat}`)}
+  if(n>itens.length){const r=escolher(mod,n-itens.length,filtroResto(mod),usados,Math.ceil(n*.4));lv=Math.max(lv,r.lv);itens.push(...r.res.map(x=>({c:x.p.codigo,g:null})))}
+  const ordem=new Map(kitPool(mod,new Set()).base.map(x=>[x.p.codigo,x.p.categoria||'']));itens.sort((a,b)=>(ordem.get(a.c)||'').localeCompare(ordem.get(b.c)||'','pt-BR'));
+  S.kit={mi,nome:mod.nome,n:Math.max(n,itens.length),faltas,itens,vistos:new Set(itens.map(x=>x.c)),lv,ped:ped||S.kit?.ped||null,valor:ped?.p>0?ped.p:(+mod.valor||null)};
+  renderKits();
+}
+function trocarPeca(i){const k=S.kit,it=k?.itens[i];if(!it)return;if(it.fixo){const l=pecaPorNome(it.g,new Set(k.itens.map(x=>x.c)));if(!l.length)return toast('Não há outra peça com esse nome em estoque.');k.itens[i]={...it,c:l[0].p.codigo};return renderKits()}const mod=kitModelos()[k.mi],filtro=it.g?(x=>catOk(x.p,it.g)):filtroResto(mod);
+  const atuais=new Set(k.itens.map(x=>x.c));let r=escolher(mod,1,filtro,new Set([...k.vistos,...atuais]),0);
+  if(!r.res.length){k.vistos=new Set(atuais);r=escolher(mod,1,filtro,new Set(atuais),0)}
+  if(!r.res.length)return toast('Não há outra peça com estoque para trocar.');
+  const novo=r.res[0].p.codigo;k.itens[i]={c:novo,g:it.g};k.vistos.add(novo);renderKits()}
+function addPecaKit(){const inp=$('#kitAdd'),c=inp.value.trim().toUpperCase();if(!c)return;const p=S.prod.get(c);
+  if(!p)return toast(`Código ${c} não cadastrado.`);if(S.kit.itens.some(x=>x.c===c))return toast(`${c} já está no kit.`);
+  const e=estado(p);if(e.atual!=null&&e.atual<1)return toast(`${c} está sem estoque.`);
+  S.kit.itens.push({c,g:null});S.kit.vistos.add(c);inp.value='';renderKits()}
+// tamanho do kit pelo nome do produto: "Kit 3 Avançado 20 Peças" → 20
+const qtdKit=n=>+((/(\d+)\s*p[eç]/i.exec(n)||/(\d+)/.exec(n)||[])[1])||0;
+function kitPendentes(){const kits=S.cfg?.kits||{},ap=S.cfg?.apelidos||{},lim=addDias(hojeISO(),-20),out=[],feitos={},qs=new Set(kitModelos().map(m=>+m.qtd));
+  for(const r of S.kitHist||[])if(r.pedKey&&!r.desfeito)feitos[r.pedKey]=(feitos[r.pedKey]||0)+(r.dispensado?999:1);
+  for(const [dia,doc] of S.dias){if(dia<lim)continue;
+    for(const [key,ped] of Object.entries(doc.pedidos||{})){let tot=0,nome='',p=0;
+      for(const it of ped.itens||[]){if(it.c||!it.n||!/\bkits?\b/i.test(it.n)||!qs.has(qtdKit(it.n)))continue;const k=norm(it.n);if(kits[k])continue;const a=ap[k];if(a&&a!=='-')continue;
+        tot+=+it.q||1;if(!nome){nome=it.n;p=+it.p||0}}
+      if(!tot)continue;const falta=tot-(feitos[key]||0);if(falta>0)out.push({key,dia,canal:ped.canal,ref:ped.ref||'',cliente:ped.cliente||'',nome,p,falta})}}
+  return out.sort((a,b)=>a.dia<b.dia?1:a.dia>b.dia?-1:0)}
+function montarDoPedido(key){const x=kitPendentes().find(o=>o.key===key);if(!x)return;const mods=kitModelos(),num=qtdKit(x.nome);
+  let mi=mods.findIndex(m=>+m.qtd===num);if(mi<0&&num){let best=Infinity;mods.forEach((m,i)=>{const d=Math.abs(+m.qtd-num);if(d<best){best=d;mi=i}})}if(mi<0)mi=0;
+  S.kit=null;gerarKit(mi,x);$('#kitGerado').scrollIntoView({behavior:'smooth',block:'start'})}
+function kitItensDet(){return (S.kit?.itens||[]).map(x=>{const p=S.prod.get(x.c);if(!p)return null;const e=estado(p),cu=custo(p),pr=precoRef(p)||0;return {...x,p,e,cu,pr,m:pr?(pr-cu.total)/pr*100:0}}).filter(Boolean)}
+function renderKits(){
+  const g=G(),mods=kitModelos(),pend=kitPendentes();
+  $('#kitPend').innerHTML=pend.length?`<div class="panel" style="margin-bottom:28px"><header><h3>Pedidos com kit para montar</h3><span class="lbl">${pend.length} nos últimos 20 dias</span></header>
+    ${pend.map(x=>`<div class="order"><div class="h"><span><b>${x.canal==='yampi'?'Yampi':'WhatsApp'}</b> ${esc(x.ref)} <span class="muted">${esc(x.cliente)}</span> · ${esc(x.nome)}${x.falta>1?` <b>×${x.falta}</b>`:''}</span>
+      <span class="inl"><button class="btn sm pri" data-kitped="${esc(x.key)}">Montar kit</button><button class="btn sm" data-kitdisp="${esc(x.key)}">Já montei</button></span></div>
+      <div class="it">${fmtData(x.dia)}${x.p?' · kit pago '+money(x.p):''}</div></div>`).join('')}</div>`:'';
+  $('#kitMods').innerHTML=mods.map((m,i)=>`<button class="kmod${S.kit?.mi===i?' on':''}" data-kitgerar="${i}"><b>${esc(m.nome)}</b><span>${+m.qtd||0} peças${m.valor?' · '+money(+m.valor):''}</span></button>`).join('');
+  const k=S.kit;let h='';
+  if(k){const its=kitItensDet(),tab=its.reduce((s,x)=>s+x.pr,0),cus=its.reduce((s,x)=>s+x.cu.total,0),base=k.valor??tab,luc=base-cus;
+    h=`<div class="khead"><div><h2>${esc(k.nome)}</h2><div class="muted">${its.length} peças${k.ped?` · pedido ${esc(k.ped.ref)} ${esc(k.ped.cliente)}`:''}</div></div>
+      <div class="kres"><span>Valor de tabela <b class="num">${money(tab)}</b></span>${k.valor!=null?`<span>Valor do kit <b class="num">${money(k.valor)}</b></span>`:''}${g?`<span>Custo <b class="num">${money(cus)}</b></span><span>Lucro <b class="num">${money(luc)}</b>${base>0?` (${Math.round(luc/base*100)}%)`:''}</span>`:''}</div></div>
+      ${k.lv>0?`<div class="notice">Não havia peças suficientes com lucro alto e estoque sobrando em todas as categorias; algumas vieram pela regra mais solta. Confira antes de confirmar.</div>`:''}
+      ${k.faltas?.length?`<div class="notice crit">Faltou no estoque: ${k.faltas.map(esc).join(', ')}. ${k.faltas.some(f=>/limpeza/i.test(f))?'Cadastre o kit limpeza como peça (com código) para ele entrar e dar baixa. ':''}O resto do kit foi completado com outras peças.</div>`:''}
+      ${its.length<k.n?`<div class="notice crit">Só encontrei ${its.length} de ${k.n} peças com estoque. Adicione mais pelo código.</div>`:''}
+      <div class="grid">${its.map((x,i)=>{const f=foto(x.p);return `<div class="card kc"><div class="ph">${f?`<img loading="lazy" src="${f}" alt="">`:`<span class="code">${esc(x.p.codigo)}</span>`}</div>
+        <div class="body"><span class="cod">${esc(x.p.codigo)} · ${esc(x.p.categoria||'')}</span><span class="nm">${esc(x.p.nome)}</span>
+        <div class="row"><span>Estoque <b class="num">${x.e.atual??'—'}</b>${x.e.atual!=null?` → ${x.e.atual-1}`:''}</span></div><div class="row"><span><b class="num">${money(x.pr)}</b></span>${g?`<span>margem <b class="num">${Math.round(x.m)}%</b></span>`:''}</div>
+        <div class="inl" style="margin-top:6px"><button class="btn sm" data-ktroca="${i}" aria-label="Trocar ${esc(x.p.codigo)}">Trocar</button><button class="btn sm" data-ktira="${i}" aria-label="Tirar ${esc(x.p.codigo)}">Tirar</button></div></div></div>`}).join('')}</div>
+      <div class="kacts"><span class="inl"><input id="kitAdd" placeholder="Código" aria-label="Código da peça para adicionar"><button class="btn sm" id="kitAddOk">Adicionar peça</button></span><span class="sp"></span>
+        <button class="btn" id="kitDesc">Descartar</button><button class="btn" id="kitRe">Sortear de novo</button><button class="btn pri" id="kitConf"${its.length?'':' disabled'}>Confirmar peças</button></div>`}
+  $('#kitGerado').innerHTML=h;
+  // histórico
+  const hist=(S.kitHist||[]).filter(r=>!r.dispensado&&r.itens).sort((a,b)=>a.em<b.em?1:-1),nH=S.kitHistN||15;
+  $('#kitHistN').textContent=hist.length?hist.length+' montados':'';
+  $('#kitHist').innerHTML=hist.length?hist.slice(0,nH).map(r=>`<div class="order"><div class="h"><span><b>${esc(r.modelo)}</b> <span class="muted">${esc(r.dest?.nome||r.cliente||'')}${r.pedido?' · '+esc(r.pedido):''}</span>${r.desfeito?' <span class="pill p-crit">desfeito</span>':''}</span>
+      <span class="inl"><button class="btn sm" data-kitdecl="${esc(r.id)}">Declaração</button>${g&&!r.desfeito?`<button class="btn sm" data-kitundo="${esc(r.id)}">Desfazer</button>`:''}</span></div>
+      <div class="it">${new Date(r.em).toLocaleString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}${r.por?' · '+esc(r.por):''} · ${r.itens.length} pç: ${r.itens.map(x=>esc(x.c)).join(', ')}</div></div>`).join('')
+      +(hist.length>nH?`<div class="vermais"><button class="btn sm" id="kitHistMais">Ver mais</button></div>`:'')
+    :`<div class="empty">Nenhum kit montado ainda.</div>`;
+  // ajustes dos modelos (gestor)
+  if(g&&!$('#kitCfg').contains(document.activeElement)){const R=kitRegras();
+    $('#kitCfg').innerHTML=`<div class="tblwrap"><table class="kcfg"><thead><tr><th>Nome</th><th class="r">Peças</th><th class="r">Valor do kit R$</th><th>Categorias (opcional)</th><th class="r">Preço máx. por peça</th></tr></thead><tbody>
+      ${mods.map((m,i)=>`<tr><td><input id="km-n-${i}" value="${esc(m.nome)}" aria-label="Nome do modelo ${i+1}"></td><td class="r"><input id="km-q-${i}" type="number" min="1" step="1" value="${+m.qtd||''}" style="width:64px" aria-label="Peças do modelo ${i+1}"></td>
+        <td class="r"><input id="km-v-${i}" type="number" min="0" step="0.01" value="${m.valor??''}" style="width:90px" aria-label="Valor do modelo ${i+1}"></td><td><input id="km-m-${i}" value="${esc(m.mix||'')}" placeholder="ex.: Brincos 4, Colares 4" aria-label="Categorias do modelo ${i+1}"></td>
+        <td class="r"><input id="km-p-${i}" type="number" min="0" step="0.01" value="${m.precoMax??''}" style="width:90px" aria-label="Preço máximo por peça do modelo ${i+1}"></td></tr>`).join('')}</tbody></table></div>
+      <div class="fields" style="margin-top:12px">
+        <div class="f"><label for="kr-s">Estoque sobrando mínimo (acima do mínimo da peça)</label><input id="kr-s" type="number" min="0" step="1" value="${R.sobraMin}"></div>
+        <div class="f"><label for="kr-m">Margem mínima (%)</label><input id="kr-m" type="number" min="0" max="95" step="1" value="${R.margemMin}"></div>
+        <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="kr-t"${R.tamanhos?' checked':''}> Pode sortear peças com tamanho (anéis por numeração)</label>
+      </div><div style="margin-top:10px"><button class="btn pri" id="kitCfgOk">Salvar modelos</button></div>`}
+}
+function lerKitCfg(){const mods=[0,1,2,3,4].map(i=>{const v=id=>$('#'+id+'-'+i).value.trim();const num=id=>{const x=v(id);return x===''?null:+x};
+  return {nome:v('km-n')||`Kit ${num('km-q')||10} peças`,qtd:Math.max(1,Math.round(num('km-q')||10)),valor:num('km-v'),mix:v('km-m'),precoMax:num('km-p')}});
+  return {kitModelos:mods,kitRegras:{sobraMin:Math.max(0,+$('#kr-s').value||0),margemMin:Math.max(0,+$('#kr-m').value||0),tamanhos:$('#kr-t').checked}}}
+function destDoPedido(ped){const d={nome:'',tel:'',cpf:'',end:'',cidade:'',uf:'',cep:''};if(!ped)return d;
+  const s=ped.key.startsWith('w-')&&(S.zap||[]).find(v=>'w-'+v.id===ped.key);
+  if(s){const sd=s.shipping_data||{},[cid,uf]=String(sd.cidade||'').split(/[\/\-]/).map(x=>x.trim());
+    Object.assign(d,{nome:sd.nome||s.client||'',tel:sd.tel||'',cpf:sd.cpf||'',end:[sd.rua,sd.num?', '+sd.num:'',sd.comp?' - '+sd.comp:'',sd.bairro?' - '+sd.bairro:''].join('').trim(),cidade:cid||'',uf:uf||'',cep:sd.cep||''})}
+  if(!d.nome)d.nome=ped.cliente||'';return d}
+function abrirConfKit(){const k=S.kit,its=kitItensDet();if(!its.length)return;const d=destDoPedido(k.ped),tab=its.reduce((s,x)=>s+x.pr,0);
+  const sem=its.filter(x=>x.e.atual!=null&&x.e.atual<1);if(sem.length)return toast(`Sem estoque agora: ${sem.map(x=>x.c).join(', ')}. Troque antes de confirmar.`);
+  const f=(id,l,v,cls)=>`<div class="f${cls?' '+cls:''}"><label for="${id}">${l}</label><input id="${id}" value="${esc(v||'')}"></div>`;
+  $('#edForm').innerHTML=`<div class="edhead"><div><span class="cod">${its.length} peças</span><h3>Confirmar ${esc(k.nome)}</h3></div><button class="btn sm" value="cancel">Fechar</button></div>
+  <div style="padding:16px 20px;display:grid;gap:12px">
+    <p class="muted" style="margin:0;font-size:13px">Ao confirmar, sai 1 unidade de cada peça do estoque e abre a declaração de conteúdo para imprimir. Os dados do destinatário são opcionais: o que ficar em branco sai em branco na declaração.</p>
+    <div class="fields">${f('kdNome','Destinatário',d.nome,'full')}${f('kdTel','Telefone',d.tel)}${f('kdCpf','CPF/CNPJ',d.cpf)}${f('kdEnd','Endereço',d.end,'full')}${f('kdCid','Cidade',d.cidade)}
+      <div class="fields" style="gap:12px">${f('kdUf','UF',d.uf)}${f('kdCep','CEP',d.cep)}</div>
+      ${f('kdPed','Pedido',k.ped?.ref||'')}<div class="f"><label for="kdVal">Valor declarado do kit (R$)</label><input id="kdVal" type="number" min="0" step="0.01" value="${(k.valor??tab).toFixed(2)}"></div>
+      <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="kdLista" checked> Listar cada peça na declaração (senão sai “Semijoias”, ${its.length} un.)</label></div>
+  </div>
+  <div class="edfoot"><button class="btn" value="cancel">Cancelar</button><button type="button" class="btn pri" id="kitConfOk">Confirmar, dar baixa e imprimir</button></div>`;
+  const dlg=$('#dlg');if(!dlg.open)dlg.showModal()}
+async function confirmarKit(){
+  const k=S.kit,its=kitItensDet();if(!its.length)return null;
+  const sem=its.filter(x=>x.e.atual!=null&&x.e.atual<1);if(sem.length){toast(`Sem estoque agora: ${sem.map(x=>x.c).join(', ')}. Troque antes de confirmar.`);return null}
+  const v=id=>$('#'+id).value.trim(),em=new Date().toISOString(),id='k'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),doc='_kits-'+hojeISO().slice(0,7);
+  const rec={id,em,por:(window.FB&&FB.membro&&FB.membro()?.name)||'',modelo:k.nome,pedido:v('kdPed'),pedKey:k.ped?.key||null,cliente:k.ped?.cliente||'',
+    valorDecl:Math.max(0,+v('kdVal')||0),listar:$('#kdLista').checked,
+    dest:{nome:v('kdNome'),tel:v('kdTel'),cpf:v('kdCpf'),end:v('kdEnd'),cidade:v('kdCid'),uf:v('kdUf').toUpperCase(),cep:v('kdCep')},
+    itens:its.map(x=>({c:x.c,n:x.p.nome||'',cat:x.p.categoria||'',pr:Math.round(x.pr*100)/100,cu:Math.round(x.cu.total*100)/100}))};
+  try{
+    await S.db.doc('produtos/'+doc).update({kits:{[id]:rec}});
+    await salvarLote(new Map(its.map(x=>[x.c,{saidas:{[id]:{q:1,t:em}}}])));
+  }catch(e){erroDb(e);return null}
+  S.kitHist=[...(S.kitHist||[]).filter(r=>r.id!==id),{...rec,doc}];S.kit=null;$('#dlg').close();renderKits();
+  toast(`${its.length} peças baixadas do estoque`);return rec}
+async function desfazerKit(id){const r=(S.kitHist||[]).find(x=>x.id===id);if(!r)return;
+  try{await salvarLote(new Map(r.itens.map(x=>[x.c,{saidas:{[id]:window.__DEL}}])));await S.db.doc('produtos/'+r.doc).update({kits:{[id]:{desfeito:true,desfeitoEm:new Date().toISOString()}}});
+    r.desfeito=true;renderKits();toast(`Kit desfeito: ${r.itens.length} peças voltaram ao estoque`)}catch(e){erroDb(e)}}
+async function dispensarPedido(key){const id='d'+Date.now().toString(36),doc='_kits-'+hojeISO().slice(0,7),rec={id,em:new Date().toISOString(),pedKey:key,dispensado:true};
+  try{await S.db.doc('produtos/'+doc).update({kits:{[id]:rec}});S.kitHist=[...(S.kitHist||[]),{...rec,doc}];renderKits()}catch(e){erroDb(e)}}
+function declHTML(r){
+  const rem=remetente(),d=r.dest||{},itens=r.itens||[],now=new Date(r.em||Date.now());
+  const meses=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const somaPr=itens.reduce((s,x)=>s+(+x.pr||0),0),tot=+r.valorDecl||somaPr;
+  let vals=itens.map(x=>somaPr>0?Math.round(tot*(+x.pr||0)/somaPr*100)/100:Math.round(tot/itens.length*100)/100);
+  if(vals.length){const dif=Math.round((tot-vals.reduce((s,v)=>s+v,0))*100)/100;vals[vals.length-1]=Math.round((vals[vals.length-1]+dif)*100)/100}
+  const linhas=r.listar!==false?itens.map((x,i)=>({n:`Semijoia - ${x.n||x.cat||'peça'} (${x.c})`,q:1,v:vals[i]})):[{n:'Semijoias',q:itens.length,v:tot}];
+  const br=v=>(+v||0).toFixed(2).replace('.',',');
+  const cel=(l,v)=>`<div class="lbl">${l}</div><div class="val">${esc(v||'')}</div>`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Declaração de Conteúdo — ${esc(d.nome||r.modelo)}</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;color:#000;background:#fff;padding:15mm}
+h1{text-align:center;font-size:14px;font-weight:bold;letter-spacing:.15em;border:2px solid #000;padding:8px}
+.st{text-align:center;font-size:11px;font-weight:bold;letter-spacing:.12em;background:#e0e0e0;border:1px solid #000;border-top:none;padding:5px}
+table{width:100%;border-collapse:collapse}.info td{border:1px solid #000;padding:5px 7px;vertical-align:top}
+.lbl{font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.05em}.val{font-size:11px;min-height:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;border:1px solid #000;border-top:none}.two>div:first-child{border-right:1px solid #000}
+.g2{display:grid;grid-template-columns:1fr 1fr}.g2>div+div,.g3>div+div{border-left:1px solid #ccc;padding-left:6px}.g3{display:grid;grid-template-columns:1fr 80px}
+.it{border:1px solid #000;border-top:none}.it th{background:#e0e0e0;border:1px solid #000;padding:5px 7px;font-size:10px;text-align:center;letter-spacing:.06em}
+.it td{border:1px solid #000;padding:4px 7px}.c{text-align:center}.r{text-align:right}.tot td{background:#e0e0e0;font-weight:bold}
+.box{border:1px solid #000;border-top:none;padding:10px 12px}.box p{margin-bottom:8px;line-height:1.5;text-align:justify;font-size:10.5px}
+.sign{display:flex;align-items:flex-end;gap:10px;margin-top:20px}.sign span{display:inline-block;border-bottom:1px solid #000;text-align:center;padding:0 4px}
+@media print{body{padding:0}@page{margin:12mm}}</style></head><body>
+<h1>DECLARAÇÃO DE CONTEÚDO</h1>
+<div class="two"><div><div class="st">R E M E T E N T E</div><table class="info">
+<tr><td>${cel('Nome:',rem.nome)}</td></tr><tr><td>${cel('Endereço:',rem.end)}</td></tr>
+<tr><td class="g3"><div>${cel('Cidade:',rem.cidade_nome)}</div><div>${cel('UF:',rem.uf)}</div></td></tr>
+<tr><td class="g2"><div>${cel('CEP:',rem.cep)}</div><div>${cel('CPF/CNPJ:',rem.cnpj)}</div></td></tr></table></div>
+<div><div class="st">D E S T I N A T Á R I O</div><table class="info">
+<tr><td class="g2"><div>${cel('Nome:',d.nome)}</div><div>${cel('Telefone:',d.tel)}</div></td></tr><tr><td>${cel('Endereço:',d.end)}</td></tr>
+<tr><td class="g3"><div>${cel('Cidade:',d.cidade)}</div><div>${cel('UF:',d.uf)}</div></td></tr>
+<tr><td class="g2"><div>${cel('CEP:',d.cep)}</div><div>${cel('CPF/CNPJ:',String(d.cpf||'').replace(/\D/g,''))}</div></td></tr></table></div></div>
+<div class="st" style="border-top:1px solid #000">I D E N T I F I C A Ç Ã O &nbsp; D O S &nbsp; B E N S</div>
+<table class="it"><thead><tr><th style="width:40px">ITEM</th><th style="text-align:left">CONTEÚDO</th><th style="width:70px">QUANT.</th><th style="width:80px">VALOR</th></tr></thead><tbody>
+${linhas.map((x,i)=>`<tr><td class="c">${i+1}</td><td>${esc(x.n)}</td><td class="c">${x.q}</td><td class="r">${br(x.v)}</td></tr>`).join('')}
+<tr class="tot"><td colspan="2" class="r">TOTAIS</td><td class="c">${itens.length}</td><td class="r">${br(tot)}</td></tr></tbody></table>
+<div class="st">D E C L A R A Ç Ã O</div><div class="box">
+<p>Declaro que não me enquadro no conceito de contribuinte previsto no art. 4º da Lei Complementar nº 87/1996, uma vez que não realizo, com habitualidade ou em volume que caracterize intuito comercial, operações de circulação de mercadoria, ainda que se iniciem no exterior, ou estou dispensado da emissão da nota fiscal por força da legislação tributária vigente, responsabilizando-me, nos termos da lei e a quem de direito, por informações inverídicas.</p>
+<p>Declaro ainda que não estou postando conteúdo inflamável, explosivo, causador de combustão espontânea, tóxico, corrosivo, gás ou qualquer outro conteúdo que constitua perigo, conforme o art. 13 da Lei Postal nº 6.538/78.</p>
+<div class="sign"><div style="flex:1"><div style="border-bottom:1px solid #000">&nbsp;</div><div style="font-size:9px;text-align:center">Local</div></div>
+<div>,&nbsp;<span style="min-width:30px">${String(now.getDate()).padStart(2,'0')}</span>&nbsp;de&nbsp;<span style="min-width:60px">${meses[now.getMonth()]}</span>&nbsp;de&nbsp;<span style="min-width:40px">${now.getFullYear()}</span></div></div>
+<div style="margin-top:24px;border-top:1px solid #000;padding-top:4px;text-align:right;font-size:10px">Assinatura do Declarante/Remetente</div></div>
+<div class="box" style="font-size:10px">${esc(r.modelo)}${r.pedido?' · Pedido '+esc(r.pedido):''} · ${itens.length} peças: ${itens.map(x=>esc(x.c)).join(', ')}</div>
+</body></html>`}
+function abrirDecl(r,w){w=w||window.open('','_blank','width=820,height=940');if(!w){toast('O navegador bloqueou a janela. Use o botão “Declaração” no histórico.');return}
+  w.document.open();w.document.write(declHTML(r));w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},400)}
+
 /* ---------- EXPORTAR ---------- */
 function carregarXLSX(){return window.XLSX?Promise.resolve():new Promise((ok,no)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';sc.onload=ok;sc.onerror=no;document.head.appendChild(sc)})}
 async function exportar(){
@@ -1143,6 +1392,21 @@ document.addEventListener('click',async ev=>{
   if(t.id==='kitSave'){const {itens,erros}=lerKit();if(erros.length||!itens.length)return toast(erros.length?'Corrija as linhas em vermelho.':'Coloque pelo menos uma peça.');
     const k=(S.cfg.kits||{})[kitKey];const nome=k?.nome||$('#edForm h3').textContent;await salvarCfg({kits:{...(S.cfg.kits||{}),[kitKey]:{nome,itens}}}).catch(()=>{});rebuildIdx();$('#dlg').close();toast('Kit salvo');return}
   if(t.id==='kitDel'){const ks={...(S.cfg.kits||{})};delete ks[kitKey];S.cfg={...S.cfg,kits:ks};await enfileirar('cfg',()=>S.db.doc('config/geral').update({kits:{[kitKey]:window.__DEL}}).catch(erroDb)).catch(()=>{});rebuildIdx();$('#dlg').close();toast('Kit excluído');return}
+  if(t.dataset.kitgerar!==undefined){gerarKit(+t.dataset.kitgerar);return}
+  if(t.dataset.ktroca!==undefined){trocarPeca(+t.dataset.ktroca);return}
+  if(t.dataset.ktira!==undefined){S.kit.itens.splice(+t.dataset.ktira,1);renderKits();return}
+  if(t.id==='kitAddOk'){addPecaKit();return}
+  if(t.id==='kitRe'){gerarKit(S.kit.mi,S.kit.ped);return}
+  if(t.id==='kitDesc'){S.kit=null;renderKits();return}
+  if(t.id==='kitConf'){abrirConfKit();return}
+  if(t.id==='kitConfOk'){t.disabled=true;const w=window.open('','_blank','width=820,height=940');try{w&&w.document.write('<p style="font-family:sans-serif;padding:24px">Gerando a declaração…</p>')}catch(e){}
+    const r=await confirmarKit();if(r)abrirDecl(r,w);else{try{w&&w.close()}catch(e){}t.disabled=false}return}
+  if(t.dataset.kitped){montarDoPedido(t.dataset.kitped);return}
+  if(t.dataset.kitdisp){if(t.dataset.ok){await dispensarPedido(t.dataset.kitdisp)}else{t.dataset.ok=1;t.textContent='Confirmar'}return}
+  if(t.dataset.kitdecl){const r=(S.kitHist||[]).find(x=>x.id===t.dataset.kitdecl);if(r)abrirDecl(r);return}
+  if(t.dataset.kitundo){if(t.dataset.ok){t.disabled=true;await desfazerKit(t.dataset.kitundo)}else{t.dataset.ok=1;t.textContent='Confirmar: devolver ao estoque'}return}
+  if(t.id==='kitHistMais'){S.kitHistN=(S.kitHistN||15)+30;renderKits();return}
+  if(t.id==='kitCfgOk'){await salvarCfg(lerKitCfg()).catch(()=>{});toast('Modelos de kit salvos');renderKits();return}
   if(t.id==='btnExport'){t.disabled=true;await exportar();t.disabled=false;return}
   if(t.id==='edVarOk'){const p=S.prod.get(edCod);const ev={...(p.estoqueVar||{})};let any=false;for(const i of $$('[data-var]'))if(i.value!==''){ev[i.dataset.var]=+i.value;any=true}
     const nv=$('#evNova').value.trim();if(nv){ev[nv]=ev[nv]??0;any=true}if(!any)return;
@@ -1185,6 +1449,7 @@ document.addEventListener('change',async ev=>{const el=ev.target;
 });
 document.addEventListener('input',ev=>{if(ev.target.id==='kitTxt')return kitPrev();if(ev.target.closest('#edForm'))calcEditor()});
 document.addEventListener('keydown',ev=>{
+  if(ev.key==='Enter'&&ev.target.id==='kitAdd'){ev.preventDefault();addPecaKit();return}
   if(ev.key==='Enter'&&(ev.target.id==='ctQtd'||ev.target.dataset.ctvar!==undefined)){ev.preventDefault();const vs=$$('[data-ctvar]'),i=vs.indexOf(ev.target);if(i>=0&&i<vs.length-1){vs[i+1].focus();return}ctSalvar();return}
   if(ev.key==='Enter'&&ev.target.dataset.cnt){ev.preventDefault();ev.target.dispatchEvent(new Event('change',{bubbles:true}));const all=$$('[data-cnt]'),i=all.indexOf(ev.target);all[i+1]?.focus()}});
 
@@ -1197,7 +1462,7 @@ render();
   if(!db)return;
   S.db=db;
   db.doc('config/geral').onSnapshot(s=>{S.cfg=s.exists?s.data():{categorias:{},multMin:2.1,multIdeal:2.6,ignorarCanais:['yampi','site']};if(S.juntar)S.juntar();else{rebuildIdx();renderSoon()}},e=>banner('Perdi a conexão com o banco do app. Recarregue a página.','crit'));
-  db.collection('produtos').limit(1000).onSnapshot(snap=>{const m=new Map();for(const d of snap.docs){const it=d.data()?.itens||{};for(const [c,p] of Object.entries(it))m.set(c,{...p,codigo:c})}S.prod=m;renderSoon()},e=>banner('Perdi a conexão com o banco do app. Recarregue a página.','crit'));
+  db.collection('produtos').limit(1000).onSnapshot(snap=>{const m=new Map(),kh=[];for(const d of snap.docs){if(d.id.startsWith('_kits')){for(const r of Object.values(d.data()?.kits||{}))if(r&&r.id)kh.push({...r,doc:d.id});continue}const it=d.data()?.itens||{};for(const [c,p] of Object.entries(it))m.set(c,{...p,codigo:c})}S.prod=m;S.kitHist=kh;renderSoon()},e=>banner('Perdi a conexão com o banco do app. Recarregue a página.','crit'));
   // Vendas: Yampi (gravadas pela função a cada 10 min) + app de vendas do WhatsApp (ao vivo)
   let yDias=new Map(),zap=[];
   const juntar=()=>{const m=new Map();const add=(dia,k,v)=>{if(!m.has(dia))m.set(dia,{data:dia,pedidos:{}});m.get(dia).pedidos[k]=v};
@@ -1211,7 +1476,7 @@ render();
     S.dias=m;rebuildIdx();renderSoon()};
   S.juntar=juntar;
   db.collection('vendasDia').orderBy('data','desc').limit(1000).onSnapshot(snap=>{const m=new Map();for(const d of snap.docs){const v=d.data()||{},dia=v.data||d.id.split('~')[0];if(!m.has(dia))m.set(dia,{});Object.assign(m.get(dia),v.pedidos||{})}yDias=m;juntar()},e=>banner('Não consegui ler as vendas da Yampi: '+(e.message||e),'crit'));
-  FB.fs.collection('sales').where('date','>=',addDias(hojeISO(),-180)).onSnapshot(snap=>{zap=snap.docs.map(d=>({id:d.id,...d.data()}));juntar()},e=>banner('Não consegui ler as vendas do app de vendas: '+(e.message||e),'crit'));
+  FB.fs.collection('sales').where('date','>=',addDias(hojeISO(),-180)).onSnapshot(snap=>{zap=snap.docs.map(d=>({id:d.id,...d.data()}));S.zap=zap;juntar()},e=>banner('Não consegui ler as vendas do app de vendas: '+(e.message||e),'crit'));
   db.doc('config/sync').onSnapshot(s=>{S.sync=s.exists?s.data():null;renderSyncInfo()},()=>{});
   db.doc('config/job').onSnapshot(s=>{const j=s.exists?s.data():null;if(!j||j.status!=='rodando')return;const l=(j.log||[]).slice(-1)[0];if(l){if(j.acao==='sincronizar')$('#syncLog').textContent=l+'\n'+$('#syncLog').textContent;else $('#impLog').textContent=l+'\n'+$('#impLog').textContent}},()=>{});
   db.collection('compras').limit(500).onSnapshot(snap=>{S.compras=snap.docs.map(d=>d.data());if(S.tab==='compras'||S.tab==='analises')renderSoon()},()=>{});
