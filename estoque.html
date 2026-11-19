@@ -1110,7 +1110,7 @@ const KIT_PADRAO=[
   {nome:'Kit 60 peças',qtd:60,mix:'Brincos 21, Colares 16, Pulseiras 9, Anéis 7, Tornozeleiras 3, Braceletes 2, Piercings 2'}].map(m=>({valor:null,precoMax:null,...m}));
 const REM_PADRAO={nome:"VERANEIO SEMIJOIAS LTDA",cnpj:"54.016.029/0001-90",rua:"Rua Pedro Franco",numero:"413",comp:"Predio Bege",bairro:"Conselheiro Paulino",cidade_nome:"Nova Friburgo",uf:"RJ",cep:"28635-420",tel:"(22) 99222-0268"};
 function kitModelos(){const a=Array.isArray(S.cfg?.kitModelos)?S.cfg.kitModelos:[];return KIT_PADRAO.map((d,i)=>({...d,...(a[i]||{})}))}
-function kitRegras(){return {sobraMin:3,margemMin:50,tamanhos:false,...(S.cfg?.kitRegras||{})}}
+function kitRegras(){return {sobraMin:3,margemMin:50,precoMax:25.9,tamanhos:false,...(S.cfg?.kitRegras||{})}}
 function remetente(){const c=(window.FB&&FB.appCfg&&FB.appCfg())||{};const r=c.remetente&&c.remetente.rua?c.remetente:REM_PADRAO;
   return {...r,end:[r.rua,r.numero?', '+r.numero:'',r.comp?' - '+r.comp:'',r.bairro?' - '+r.bairro:''].join('').trim()}}
 // compara categoria sem ligar para plural/acento (Anel = Anéis); a linha Ouro e os acessórios só entram quando escritos
@@ -1134,7 +1134,8 @@ function kitPool(mod,usados){
     const e=estado(p);if(e.atual==null||e.atual<1)continue;
     const c=custo(p),pr=precoRef(p);if(!c.completo||!pr||pr<=c.total)continue;
     if(!R.tamanhos&&(p.porVariacao||Object.keys(p.estoqueVar||{}).length))continue;
-    if(+mod.precoMax&&pr>+mod.precoMax)continue;
+    // teto de preço: o menor entre a regra geral e o do modelo
+    const teto=Math.min(+R.precoMax||Infinity,+mod.precoMax||Infinity);if(pr>teto+0.001)continue;
     const min=p.estoqueMin??S.cfg?.estoqueMinPadrao??2;
     base.push({p,e,c,pr,m:(pr-c.total)/pr*100,sobra:e.atual-min,cob:e.dias==null?9999:e.dias});
   }
@@ -1175,6 +1176,7 @@ function trocarPeca(i){const k=S.kit,it=k?.itens[i];if(!it)return;if(it.fixo){co
 function addPecaKit(){const inp=$('#kitAdd'),c=inp.value.trim().toUpperCase();if(!c)return;const p=S.prod.get(c);
   if(!p)return toast(`Código ${c} não cadastrado.`);if(S.kit.itens.some(x=>x.c===c))return toast(`${c} já está no kit.`);
   const e=estado(p);if(e.atual!=null&&e.atual<1)return toast(`${c} está sem estoque.`);
+  const teto=+kitRegras().precoMax;if(teto&&(precoRef(p)||0)>teto+0.001)toast(`Atenção: ${c} custa ${money(precoRef(p))}, acima do limite de ${money(teto)} para kit.`);
   S.kit.itens.push({c,g:null});S.kit.vistos.add(c);inp.value='';renderKits()}
 // tamanho do kit pelo nome do produto: "Kit 3 Avançado 20 Peças" → 20
 // só kit completo ("N peças"); "Kit 10 Pulseiras" e "kit 8 Brincos" não contam
@@ -1229,12 +1231,13 @@ function renderKits(){
       <div class="fields" style="margin-top:12px">
         <div class="f"><label for="kr-s">Estoque sobrando mínimo (acima do mínimo da peça)</label><input id="kr-s" type="number" min="0" step="1" value="${R.sobraMin}"></div>
         <div class="f"><label for="kr-m">Margem mínima (%)</label><input id="kr-m" type="number" min="0" max="95" step="1" value="${R.margemMin}"></div>
+        <div class="f"><label for="kr-p">Preço máximo da peça em qualquer kit (R$)</label><input id="kr-p" type="number" min="0" step="0.01" value="${R.precoMax??''}"></div>
         <label class="chk" style="grid-column:1/-1"><input type="checkbox" id="kr-t"${R.tamanhos?' checked':''}> Pode sortear peças com tamanho (anéis por numeração)</label>
       </div><div style="margin-top:10px"><button class="btn pri" id="kitCfgOk">Salvar modelos</button></div>`}
 }
 function lerKitCfg(){const mods=[0,1,2,3,4].map(i=>{const v=id=>$('#'+id+'-'+i).value.trim();const num=id=>{const x=v(id);return x===''?null:+x};
   return {nome:v('km-n')||`Kit ${num('km-q')||10} peças`,qtd:Math.max(1,Math.round(num('km-q')||10)),valor:num('km-v'),mix:v('km-m'),precoMax:num('km-p')}});
-  return {kitModelos:mods,kitRegras:{sobraMin:Math.max(0,+$('#kr-s').value||0),margemMin:Math.max(0,+$('#kr-m').value||0),tamanhos:$('#kr-t').checked}}}
+  return {kitModelos:mods,kitRegras:{sobraMin:Math.max(0,+$('#kr-s').value||0),margemMin:Math.max(0,+$('#kr-m').value||0),precoMax:$('#kr-p').value===''?null:Math.max(0,+$('#kr-p').value),tamanhos:$('#kr-t').checked}}}
 function destDoPedido(ped){const d={nome:'',tel:'',cpf:'',end:'',cidade:'',uf:'',cep:''};if(!ped)return d;
   const s=ped.key.startsWith('w-')&&(S.zap||[]).find(v=>'w-'+v.id===ped.key);
   if(s){const sd=s.shipping_data||{},[cid,uf]=String(sd.cidade||'').split(/[\/\-]/).map(x=>x.trim());
