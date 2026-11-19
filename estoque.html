@@ -1177,7 +1177,8 @@ function addPecaKit(){const inp=$('#kitAdd'),c=inp.value.trim().toUpperCase();if
   const e=estado(p);if(e.atual!=null&&e.atual<1)return toast(`${c} está sem estoque.`);
   S.kit.itens.push({c,g:null});S.kit.vistos.add(c);inp.value='';renderKits()}
 // tamanho do kit pelo nome do produto: "Kit 3 Avançado 20 Peças" → 20
-const qtdKit=n=>+((/(\d+)\s*p[eç]/i.exec(n)||/(\d+)/.exec(n)||[])[1])||0;
+// só kit completo ("N peças"); "Kit 10 Pulseiras" e "kit 8 Brincos" não contam
+const qtdKit=n=>+((/(\d+)\s*pe[cç]as?\b/i.exec(n)||[])[1])||0;
 function kitPendentes(){const kits=S.cfg?.kits||{},ap=S.cfg?.apelidos||{},lim=addDias(hojeISO(),-20),out=[],feitos={},qs=new Set(kitModelos().map(m=>+m.qtd));
   for(const r of S.kitHist||[])if(r.pedKey&&!r.desfeito)feitos[r.pedKey]=(feitos[r.pedKey]||0)+(r.dispensado?999:1);
   for(const [dia,doc] of S.dias){if(dia<lim)continue;
@@ -1192,7 +1193,7 @@ function montarDoPedido(key){const x=kitPendentes().find(o=>o.key===key);if(!x)r
 function kitItensDet(){return (S.kit?.itens||[]).map(x=>{const p=S.prod.get(x.c);if(!p)return null;const e=estado(p),cu=custo(p),pr=precoRef(p)||0;return {...x,p,e,cu,pr,m:pr?(pr-cu.total)/pr*100:0}}).filter(Boolean)}
 function renderKits(){
   const g=G(),mods=kitModelos(),pend=kitPendentes();
-  $('#kitPend').innerHTML=pend.length?`<div class="panel" style="margin-bottom:28px"><header><h3>Pedidos com kit para montar</h3><span class="lbl">${pend.length} nos últimos 20 dias</span></header>
+  $('#kitPend').innerHTML=pend.length?`<div class="panel" style="margin-bottom:28px"><header><h3>Pedidos com kit para montar</h3><span class="inl"><span class="lbl">${pend.length} nos últimos 20 dias</span><button class="btn sm" id="kitDispTodos">Marcar todos como já montados</button></span></header>
     ${pend.map(x=>`<div class="order"><div class="h"><span><b>${x.canal==='yampi'?'Yampi':'WhatsApp'}</b> ${esc(x.ref)} <span class="muted">${esc(x.cliente)}</span> · ${esc(x.nome)}${x.falta>1?` <b>×${x.falta}</b>`:''}</span>
       <span class="inl"><button class="btn sm pri" data-kitped="${esc(x.key)}">Montar kit</button><button class="btn sm" data-kitdisp="${esc(x.key)}">Já montei</button></span></div>
       <div class="it">${fmtData(x.dia)}${x.p?' · kit pago '+money(x.p):''}</div></div>`).join('')}</div>`:'';
@@ -1269,8 +1270,9 @@ async function confirmarKit(){
 async function desfazerKit(id){const r=(S.kitHist||[]).find(x=>x.id===id);if(!r)return;
   try{await salvarLote(new Map(r.itens.map(x=>[x.c,{saidas:{[id]:window.__DEL}}])));await S.db.doc('produtos/'+r.doc).update({kits:{[id]:{desfeito:true,desfeitoEm:new Date().toISOString()}}});
     r.desfeito=true;renderKits();toast(`Kit desfeito: ${r.itens.length} peças voltaram ao estoque`)}catch(e){erroDb(e)}}
-async function dispensarPedido(key){const id='d'+Date.now().toString(36),doc='_kits-'+hojeISO().slice(0,7),rec={id,em:new Date().toISOString(),pedKey:key,dispensado:true};
-  try{await S.db.doc('produtos/'+doc).update({kits:{[id]:rec}});S.kitHist=[...(S.kitHist||[]),{...rec,doc}];renderKits()}catch(e){erroDb(e)}}
+async function dispensarPedido(...keys){const doc='_kits-'+hojeISO().slice(0,7),em=new Date().toISOString(),recs={};
+  keys.forEach((key,i)=>{const id='d'+Date.now().toString(36)+i;recs[id]={id,em,pedKey:key,dispensado:true}});
+  try{await S.db.doc('produtos/'+doc).update({kits:recs});S.kitHist=[...(S.kitHist||[]),...Object.values(recs).map(r=>({...r,doc}))];renderKits()}catch(e){erroDb(e)}}
 function declHTML(r){
   const rem=remetente(),d=r.dest||{},itens=r.itens||[],now=new Date(r.em||Date.now());
   const meses=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -1401,6 +1403,7 @@ document.addEventListener('click',async ev=>{
   if(t.id==='kitConf'){abrirConfKit();return}
   if(t.id==='kitConfOk'){t.disabled=true;const w=window.open('','_blank','width=820,height=940');try{w&&w.document.write('<p style="font-family:sans-serif;padding:24px">Gerando a declaração…</p>')}catch(e){}
     const r=await confirmarKit();if(r)abrirDecl(r,w);else{try{w&&w.close()}catch(e){}t.disabled=false}return}
+  if(t.id==='kitDispTodos'){if(t.dataset.ok){t.disabled=true;await dispensarPedido(...kitPendentes().map(x=>x.key));toast('Lista de pedidos limpa')}else{t.dataset.ok=1;t.textContent='Confirmar: tirar todos da lista'}return}
   if(t.dataset.kitped){montarDoPedido(t.dataset.kitped);return}
   if(t.dataset.kitdisp){if(t.dataset.ok){await dispensarPedido(t.dataset.kitdisp)}else{t.dataset.ok=1;t.textContent='Confirmar'}return}
   if(t.dataset.kitdecl){const r=(S.kitHist||[]).find(x=>x.id===t.dataset.kitdecl);if(r)abrirDecl(r);return}
