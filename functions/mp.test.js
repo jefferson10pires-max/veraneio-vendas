@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { criarAssinaturas, avisoAutentico, maisMeses, novoPagoAte, DIA, Erro } from "./mp.js";
+import { criarAssinaturas, avisoAutentico, conferirAviso, maisMeses, novoPagoAte, DIA, Erro } from "./mp.js";
 
 const AGORA = Date.UTC(2026, 10, 20, 12);
 function montar({ docs = {}, respostas = {} } = {}) {
@@ -122,4 +122,14 @@ test("sem valor configurado, token inválido ou cancelamento sem cartão: recusa
   await assert.rejects(s.gerarPix("u1", "a@b.com"), /sem_valor/);
   await assert.rejects(s.assinarCartao("u1", "a@b.com", { token: "<script>" }), /cartao_invalido/);
   await assert.rejects(s.cancelarCartao("u1"), /sem_cartao/);
+});
+
+test("conferir aviso: id da URL ou do corpo, com ou sem request-id; sempre exige o segredo", () => {
+  const segredo = "abc", ts = "1700000000";
+  const sig = (m) => `ts=${ts},v1=` + createHmac("sha256", segredo).update(m).digest("hex");
+  assert.deepEqual(conferirAviso({ assinatura: sig(`id:55;request-id:r1;ts:${ts};`), requestId: "r1", idUrl: "55", idCorpo: "55", segredo }), { dataId: "55", variante: "url+rid" });
+  assert.deepEqual(conferirAviso({ assinatura: sig(`id:55;ts:${ts};`), requestId: "r1", idUrl: "55", segredo }), { dataId: "55", variante: "url" });
+  assert.deepEqual(conferirAviso({ assinatura: sig(`id:77;request-id:r1;ts:${ts};`), requestId: "r1", idUrl: "", idCorpo: "77", segredo }), { dataId: "77", variante: "corpo+rid" });
+  assert.equal(conferirAviso({ assinatura: sig(`id:55;ts:${ts};`), requestId: "r1", idUrl: "55", segredo: "outro" }), null);
+  assert.equal(conferirAviso({ assinatura: sig(`id:55;ts:${ts};`), requestId: "r1", idUrl: "56", segredo }), null);
 });

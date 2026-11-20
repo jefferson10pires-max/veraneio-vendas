@@ -59,6 +59,17 @@ export function avisoAutentico({ assinatura, requestId, dataId, segredo }) {
   return veio.length === esperado.length && timingSafeEqual(veio, esperado);
 }
 
+/** confere o aviso tentando as variações que o Mercado Pago usa (id na URL ou no corpo; com ou sem request-id).
+ *  Todas exigem o HMAC com o nosso segredo; devolve qual bateu (para o log) ou null. */
+export function conferirAviso({ assinatura, requestId, idUrl, idCorpo, segredo }) {
+  const ids = [...new Set([idUrl, idCorpo].filter(Boolean).map(String))];
+  for (const dataId of ids) {
+    if (requestId && avisoAutentico({ assinatura, requestId, dataId, segredo })) return { dataId, variante: dataId === idUrl ? "url+rid" : "corpo+rid" };
+    if (avisoAutentico({ assinatura, requestId: "", dataId, segredo })) return { dataId, variante: dataId === idUrl ? "url" : "corpo" };
+  }
+  return null;
+}
+
 const valorOk = (v) => typeof v === "number" && Number.isFinite(v) && v >= 1 && v <= 10000;
 const dinheiro = (v) => Math.round(v * 100) / 100;
 

@@ -6,7 +6,7 @@ import { logger } from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { criarAssinaturas, avisoAutentico, Erro } from "./mp.js";
+import { criarAssinaturas, conferirAviso, Erro } from "./mp.js";
 
 initializeApp();
 const db = getFirestore();
@@ -85,12 +85,20 @@ async function rotaAssinatura(req, res) {
 
 async function rotaWebhook(req, res) {
   if (req.method !== "POST") throw new Erro("metodo", 405);
-  const dataId = String(req.query["data.id"] || (req.body && req.body.data && req.body.data.id) || "");
-  const tipo = String(req.query.type || (req.body && req.body.type) || "");
-  const ok = avisoAutentico({ assinatura: req.get("x-signature"), requestId: req.get("x-request-id"), dataId, segredo: MP_WEBHOOK_SECRET.value() });
-  if (!ok) { logger.warn("aviso sem assinatura válida", { tipo }); return res.status(401).json({ erro: "assinatura" }); }
-  const r = await servico().aviso(tipo, dataId);
-  logger.info("aviso do mercado pago", { tipo, resultado: r });
+  const q = req.query || {}, b = req.body && typeof req.body === "object" ? req.body : {};
+  const idUrl = String(q["data.id"] || (q.data && q.data.id) || q.id || "");
+  const idCorpo = String((b.data && b.data.id) || "");
+  const tipo = String(q.type || q.topic || b.type || b.topic || "");
+  const assinatura = req.get("x-signature"), requestId = req.get("x-request-id");
+  const ok = conferirAviso({ assinatura, requestId, idUrl, idCorpo, segredo: MP_WEBHOOK_SECRET.value() });
+  if (!ok) {
+    const ts = /ts=(\d+)/.exec(assinatura || "");
+    logger.warn("aviso sem assinatura válida", { tipo, temAssinatura: !!assinatura, temRequestId: !!requestId, idUrl: !!idUrl, idCorpo: !!idCorpo,
+      idsIguais: idUrl === idCorpo, chaves: Object.keys(q).join(","), tsIdadeSeg: ts ? Math.round(Date.now() / 1000 - Number(ts[1].slice(0, 10))) : null });
+    return res.status(401).json({ erro: "assinatura" });
+  }
+  const r = await servico().aviso(tipo, ok.dataId);
+  logger.info("aviso do mercado pago", { tipo, resultado: r, variante: ok.variante });
   return res.json({ ok: true });
 }
 
