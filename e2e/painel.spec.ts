@@ -932,6 +932,88 @@ test.describe("S02 auditoria de segurança — ADM", () => {
   });
 });
 
+test.describe("PE1 pronta entrega da revendedora não some quando a peça sai da Veraneio", () => {
+  const itensDe = (d: any, u: string) => Object.keys(d).filter((k) => k.startsWith(`catalogos/${u}/partes/`)).flatMap((k) => d[k].itens);
+  const base = (extra: any = {}) => seed(40, {
+    "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y3", "y4"] },
+    "lojas/u2": { nome: "Outra Loja", slug: "outra", status: "ativa", cor: "#043034" }, "precos/u2": { margem: 100 },
+    "planos/u2": { plano: "assinante" },
+    "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } }, ...extra });
+  const linha = (page: Page, nome: string) => page.locator(".prow", { hasText: nome });
+
+  test("PE1-H1 ADM desativa / marca esgotado: some da encomenda, fica para quem tem como pronta entrega; Excluir tira de todos", async ({ page }) => {
+    const erros = await preparar(page, { seed: base({ "rascunhos/u2/docs/precos": { margem: 100, pronta: ["y4"] } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await linha(page, "Peça 3").getByRole("button", { name: "Desativar" }).click();
+    await expect(page.locator("#toast")).toContainText("pronta entrega");
+    await expect.poll(async () => itensDe(await db(page), "u1").find((x: any) => x.id === "y3")?.pronta, { timeout: 10000 }).toBe(true);
+    await expect.poll(async () => itensDe(await db(page), "u2").length, { timeout: 10000 }).toBeGreaterThan(0);
+    let d = await db(page);
+    expect(itensDe(d, "u2").some((x: any) => x.id === "y3")).toBe(false);
+    expect(itensDe(d, "u1").find((x: any) => x.id === "y3")).toMatchObject({ pronta: true, nome: "Peça 3" });
+    expect(itensDe(d, "u1").find((x: any) => x.id === "y3").fora).toBeUndefined();
+    const at = Object.keys(d).filter((k) => k.startsWith("atacado/")).flatMap((k) => d[k].itens);
+    expect(at.find((x: any) => x.id === "y3")).toMatchObject({ fora: true });
+    expect(at.some((x: any) => x.id === "y7" && x.fora)).toBe(false);
+    // peça que ninguém tem como pronta entrega sai de vez (nem vai para o atacado)
+    await linha(page, "Peça 7").getByRole("button", { name: "Desativar" }).click();
+    await expect.poll(async () => itensDe(await db(page), "u1").some((x: any) => x.id === "y7"), { timeout: 10000 }).toBe(false);
+    d = await db(page);
+    expect(Object.keys(d).filter((k) => k.startsWith("atacado/")).flatMap((k) => d[k].itens).some((x: any) => x.id === "y7")).toBe(false);
+    // y4 é pronta da u2 só no rascunho (ainda não publicou): continua no atacado, para o painel dela
+    await expect.poll(async () => itensDe(await db(page), "u1").some((x: any) => x.id === "y7"), { timeout: 10000 }).toBe(false);
+    await page.locator(".prow", { hasText: /Peça 4(?!\d)/ }).getByRole("button", { name: "Desativar" }).click();
+    await expect.poll(async () => { const x = await db(page); return Object.keys(x).filter((k) => k.startsWith("atacado/")).flatMap((k) => x[k].itens).find((i: any) => i.id === "y4")?.fora; }, { timeout: 10000 }).toBe(true);
+    // Excluir: sai de todo mundo, até da pronta entrega
+    await linha(page, "Peça 3").getByRole("button", { name: "Excluir" }).click();
+    await linha(page, "Peça 3").getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect(page.locator("#toast")).toContainText("inclusive da pronta entrega");
+    await expect.poll(async () => itensDe(await db(page), "u1").some((x: any) => x.id === "y3"), { timeout: 10000 }).toBe(false);
+    expect(erros).toEqual([]);
+  });
+
+  test("PE1-H2 painel: peça que saiu da Veraneio aparece só para quem tem como pronta entrega; desmarcar tira na publicação", async ({ page }) => {
+    const at = atacado(40);
+    const fora = (i: number) => ({ ...at[i], fora: true });
+    const erros = await preparar(page, { seed: base({ "atacado/p0": { itens: [...at.filter((p) => !["y3", "y9"].includes(p.id)), fora(3), fora(9)] } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.locator("#pq").fill("Peça 3");
+    await expect(page.locator(".pr", { hasText: /Peça 3(?!\d)/ })).toContainText("Saiu do catálogo Veraneio");
+    await page.locator("#pq").fill("Peça 9");
+    await expect(page.locator("#plist .pr")).toHaveCount(0);
+    await page.locator("#pq").fill("Peça 4");
+    await expect(page.locator(".pr", { hasText: "Peça 4" })).not.toContainText("Saiu do catálogo");
+    await page.locator("#pq").fill("Peça 3");
+    await page.locator("[data-pe='y3']").uncheck();
+    await expect(page.locator("#toast")).toContainText("saiu do catálogo Veraneio");
+    await publicar(page);
+    const its = itensDe(await db(page), "u1");
+    expect(its.some((x: any) => x.id === "y3" || x.id === "y9")).toBe(false);
+    expect(its.find((x: any) => x.id === "y4")).toMatchObject({ pronta: true });
+    expect(erros).toEqual([]);
+  });
+
+  test("PE1-H3 atualização da Yampi: peça que sumiu do site da Veraneio continua na pronta entrega", async ({ page }) => {
+    const erros = await preparar(page, { seed: base({ "sistema/yampi": { total: 40, novos: 0, em: { __ts: 0 } } }) });
+    // Yampi devolve todas as peças menos a y3 (tirada do site)
+    await page.route(/api\.dooki\.com\.br/, async (r) => {
+      const u = r.request().url();
+      if (u.includes("/count")) return r.fulfill({ json: { data: { total_pages: 1 } } });
+      const slug = new URL(u).searchParams.get("slug");
+      const data = slug === "aneis" ? atacado(30).filter((p) => p.id !== "y3").map((p) => ({ id: Number(p.id.slice(1)), name: p.nome, slug: "p" + p.id,
+        prices: { data: { price: p.preco } }, images: { data: [] }, skus: { data: [] }, categories: { data: [{ name: "Anéis" }] } })) : [];
+      return r.fulfill({ json: { data, meta: { name: "Anéis" } } });
+    });
+    await entrar(page, "adm@teste.com", "/adm");
+    await expect.poll(async () => (await db(page))["produtos/y3"]?.ativo, { timeout: 20000 }).toBe(false);
+    await expect.poll(async () => itensDe(await db(page), "u2").some((x: any) => x.id === "y3"), { timeout: 20000 }).toBe(false);
+    expect(itensDe(await db(page), "u1").find((x: any) => x.id === "y3")).toMatchObject({ pronta: true });
+    expect(erros).toEqual([]);
+  });
+});
+
 test.describe("D01 desativar e excluir produto no ADM", () => {
   const base = () => seed(40, { "produtos/m1": { nome: "Peça Manual", cat: "Anéis", banho: "Ouro 18k", preco: 30, ativo: true, ordem: 1, fotos: [] }, "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } });
   const abrirProdutos = async (page: Page) => {

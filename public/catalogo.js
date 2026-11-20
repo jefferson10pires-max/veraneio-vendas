@@ -82,7 +82,8 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   else if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const so = pr.modo === "pronta";
   const vale = (id) => !oc.has(id) && (!so || pe.has(id));
-  const itens = atacado.filter((p) => vale(p.id)).map((p) => {
+  // peça que saiu do catálogo da Veraneio (p.fora) só continua na loja de quem marcou como pronta entrega
+  const itens = atacado.filter((p) => vale(p.id) && (!p.fora || pe.has(p.id))).map((p) => {
     const f = fo[p.id] && nFotos(fo[p.id].n) ? fo[p.id] : null;
     return {
       id: p.id, nome: String(pr.nomes[p.id] || "").trim().slice(0, 80) || p.nome || "", cat: p.cat || "", banho: p.banho || "",
@@ -123,6 +124,9 @@ export function paraAtacado(p) {
   };
 }
 export const ativoNaLoja = (p) => p.ativo !== false && !p.esgotado && Number(p.preco) > 0;
+/** peça fora do catálogo da Veraneio (inativa, esgotada ou saiu da Yampi) que ainda pode ficar como pronta entrega de uma revendedora.
+ *  Só "Excluir" no ADM tira a peça de todo mundo. */
+export const ficaNaPronta = (p) => !ativoNaLoja(p) && !p.excluido && Number(p.preco) > 0;
 
 /* ---------------- Yampi (API pública da loja, sem token) ---------------- */
 export const YAMPI_ALIAS = "veraneio";

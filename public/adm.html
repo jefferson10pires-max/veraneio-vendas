@@ -555,13 +555,13 @@ function tProd(){
       <div class="field" style="margin-top:12px"><span class="flabel">Promoções da Veraneio</span><div class="seg" id="promoSeg" role="radiogroup" aria-label="Promoções da Veraneio">
         <button type="button" data-promo="nao" aria-pressed="${CFG_ADM.promo!=="sim"}">Não repassar</button><button type="button" data-promo="sim" aria-pressed="${CFG_ADM.promo==="sim"}">Repassar</button></div>
         <span class="hint">${CFG_ADM.promo==="sim"?"Desconto no site da Veraneio <b>baixa o preço</b> nas lojas das revendedoras.":"Desconto no site da Veraneio <b>não muda</b> o preço nas lojas: o sistema usa sempre o preço cheio (o “de”)."} Peças com <b>Preço travado</b> nunca mudam de preço na atualização. Vale a partir da próxima atualização.</span></div>
-      <span class="hint">Traz peças novas, preços, tamanhos e fotos, e <b>tira das lojas</b> as peças que não estão mais à venda ou visíveis no site da Veraneio. Roda sozinho quando você abre o ADM e a última atualização tem mais de 12 horas. “Novo”, ordem, esgotado e banho você ajusta aqui e não são sobrescritos.</span></div>
+      <span class="hint">Traz peças novas, preços, tamanhos e fotos, e <b>tira das lojas</b> as peças que não estão mais à venda ou visíveis no site da Veraneio (quem marcou a peça como pronta entrega continua com ela). Roda sozinho quando você abre o ADM e a última atualização tem mais de 12 horas. “Novo”, ordem, esgotado e banho você ajusta aqui e não são sobrescritos.</span></div>
     <div class="box"><div class="row" style="justify-content:space-between"><h2>Produtos</h2><button class="btn btn-brand btn-sm" type="button" id="np">+ Produto</button></div>
     <p class="lead">Preço de atacado. Cada loja recebe o preço com a margem da revendedora.</p>
     <div class="tools"><label class="sbox"><span class="sr">Buscar</span>${I.search}<input id="pq" type="search" placeholder="Buscar produto" value="${esc(ui.pq)}"></label>
       <select id="pc" aria-label="Categoria">${["Todas",...cats].map(c=>`<option ${ui.pcat===c?"selected":""}>${esc(c)}</option>`).join("")}</select>
       <select id="pst" aria-label="Situação">${[["todos","Todos"],["ativos","Ativos"],["inativos","Desativados"],["excluidos",`Excluídos (${PRODS.filter(p=>p.excluido).length})`]].map(([v,t])=>`<option value="${v}" ${ui.pst===v?"selected":""}>${t}</option>`).join("")}</select></div>
-    <div class="hint">${l.length} de ${PRODS.filter(p=>!p.excluido).length} produtos · ${PRODS.filter(p=>!p.excluido&&p.ativo!==false).length} ativos · Desativar tira das lojas e dá para ativar de novo; Excluir tira da lista também.</div>
+    <div class="hint">${l.length} de ${PRODS.filter(p=>!p.excluido).length} produtos · ${PRODS.filter(p=>!p.excluido&&p.ativo!==false).length} ativos · Desativar tira das lojas (menos de quem marcou como pronta entrega) e dá para ativar de novo; Excluir tira de todas as lojas e da lista.</div>
     <div id="pl">${l.length?l.slice(0,ui.plim||80).map(p=>`<div class="prow ${p.ativo===false?"off":""}" data-ed="${esc(p.id)}" role="button" tabindex="0">
       <div class="th">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:"sem foto"}</div>
       <div class="nm">${esc(p.nome)}<small>${esc([p.cat,p.banho].filter(Boolean).join(" · "))}</small></div><div class="pv num">${brl(p.preco)}</div>
@@ -630,9 +630,16 @@ async function importarYampi(forcar){
 }
 /* monta o catálogo de atacado a partir dos produtos e publica em todas as lojas */
 async function publicarTodas(prog=()=>{}){
-  const at=PRODS.filter(C.ativoNaLoja).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt")).map(C.paraAtacado);
-  prog("Gravando catálogo de atacado");await C.gravarAtacado(F,db,at);
   const pr=await getDocs(collection(db,"precos"));let n=0;const falhas=[];
+  /* a pronta entrega é estoque da revendedora: peça que saiu do catálogo da Veraneio continua na loja de quem marcou
+     (vale o que ela publicou e o que está no rascunho). Vai no atacado com fora:true; publicarLoja só mostra para quem tem. */
+  const pe=new Set(),junta=x=>{if(Array.isArray(x))x.forEach(i=>{if(typeof i==="string")pe.add(i)})};
+  pr.docs.forEach(d=>junta(d.data().pronta));
+  await Promise.all(pr.docs.map(d=>getDoc(doc(db,"rascunhos",d.id,"docs","precos")).then(r=>{if(r.exists())junta(r.data().pronta)}).catch(()=>{})));
+  const ord=(a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt");
+  const at=[...PRODS.filter(C.ativoNaLoja).sort(ord).map(C.paraAtacado),
+    ...PRODS.filter(p=>C.ficaNaPronta(p)&&pe.has(p.id)).sort(ord).map(p=>({...C.paraAtacado(p),novo:false,fora:true}))];
+  prog("Gravando catálogo de atacado");await C.gravarAtacado(F,db,at);
   /* peças próprias só ficam na loja de quem é assinante (se não der para ler os planos, mantém como está) */
   let pl=null;try{pl=Object.create(null);(await getDocs(collection(db,"planos"))).docs.forEach(d=>pl[d.id]=d.data().plano)}catch(e){pl=null}
   /* uma loja com problema não impede as outras de serem atualizadas */
@@ -650,11 +657,11 @@ async function mudarProd(id,dados,msg){const p=PRODS.find(x=>x.id===id);if(!p)re
   try{await setDoc(doc(db,"produtos",id),{...dados,atualizadoEm:serverTimestamp()},{merge:true});Object.assign(p,dados);publicar();tProd();toast(msg)}
   catch(err){toast("Não foi possível salvar. Confira a internet.")}}
 function alternarProd(id){const p=PRODS.find(x=>x.id===id);if(!p)return;const on=p.ativo===false;
-  mudarProd(id,{ativo:on,desligadoAdm:!on},on?"Produto ativado. Volta para as lojas em alguns segundos.":"Produto desativado. Sai das lojas em alguns segundos.")}
+  mudarProd(id,{ativo:on,desligadoAdm:!on},on?"Produto ativado. Volta para as lojas em alguns segundos.":"Produto desativado. Sai das lojas em alguns segundos (fica só na loja de quem marcou como pronta entrega).")}
 function restaurarProd(id){mudarProd(id,{excluido:false,ativo:true,desligadoAdm:false},"Produto restaurado e ativo nas lojas.")}
 async function excluirProd(id,btn){const p=PRODS.find(x=>x.id===id);if(!p)return;
   if(btn&&btn.dataset.arm!=="1"){const t=btn.textContent;btn.dataset.arm="1";btn.textContent="Toque de novo para excluir";setTimeout(()=>{if(btn.isConnected){btn.dataset.arm="";btn.textContent=t}},3500);return}
-  if(p.yampiId){await mudarProd(id,{excluido:true,ativo:false,desligadoAdm:true},"Produto excluído. Ele fica em “Excluídos” se quiser restaurar.");return}
+  if(p.yampiId){await mudarProd(id,{excluido:true,ativo:false,desligadoAdm:true},"Produto excluído de todas as lojas, inclusive da pronta entrega. Ele fica em “Excluídos” se quiser restaurar.");return}
   try{await deleteDoc(doc(db,"produtos",id));PRODS=PRODS.filter(x=>x.id!==id);publicar();tProd();toast("Produto excluído.")}
   catch(err){toast("Não foi possível excluir. Confira a internet.")}}
 function formProd(id){
@@ -677,7 +684,7 @@ function formProd(id){
     ${p.promoYampi?`<span class="hint">Em promoção na Veraneio: ${brl(p.precoCheioYampi)} por <b>${brl(p.promoYampi)}</b>.</span>`:""}`:""}
     <label class="check"><input type="checkbox" id="pA" ${p.ativo!==false?"checked":""}>Ativo (aparece nas lojas)</label>
     <label class="check"><input type="checkbox" id="pNv" ${p.novo?"checked":""}>Marcar como novidade</label>
-    <label class="check"><input type="checkbox" id="pE" ${p.esgotado?"checked":""}>Esgotado (some das lojas até voltar)</label>
+    <label class="check"><input type="checkbox" id="pE" ${p.esgotado?"checked":""}>Esgotado (sai das lojas até voltar; fica para quem marcou como pronta entrega)</label>
     <span class="err" id="pErr"></span></form>
     <div class="sh-foot px">${p._novo||p.excluido?"":`<button class="btn btn-ghost" type="button" id="pDel" style="margin-right:auto">Excluir</button>`}<button class="btn btn-ghost" type="button" data-x>Cancelar</button><button class="btn btn-brand" type="submit" form="pf" id="pBtn">Salvar</button></div>`);
   const pDel=$("pDel");if(pDel)pDel.onclick=async()=>{if(pDel.dataset.arm==="1")fechar();await excluirProd(p.id,pDel)};

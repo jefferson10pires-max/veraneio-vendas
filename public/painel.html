@@ -422,7 +422,9 @@ function flash(){const el=$("saved");if(!el)return;el.textContent="Salvo ✓";cl
 /* ---------- dados ---------- */
 async function carregarLeads(){if(LEADS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"leads"),orderBy("ts","desc"),limit(300)));LEADS=s.docs.map(d=>limparLead({...d.data(),id:d.id}))}
 async function carregarDias(){if(DIAS)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"dias"),where("data",">=",dkey(daysAgo(29))),where("data","<=",dkey(daysAgo(-1)))));DIAS=Object.create(null);s.docs.forEach(d=>DIAS[d.id]=d.data())}
-async function carregarProds(){if(PRODS)return;PRODS=(await C.lerAtacado(F,db)).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt",{numeric:true}))}
+async function carregarProds(){if(PRODS)return;const pe=new Set(PR.pronta||[]);
+  /* peça que saiu do catálogo da Veraneio só aparece para quem tem como pronta entrega */
+  PRODS=(await C.lerAtacado(F,db)).filter(p=>!p.fora||pe.has(p.id)).sort((a,b)=>(a.ordem??999)-(b.ordem??999)||String(a.nome).localeCompare(b.nome,"pt",{numeric:true}))}
 async function carregarCat(){if(CAT)return;await carregarProds();CAT={};PRODS.forEach(p=>CAT[p.id]=p)}
 let BAN=null;async function carregarBanners(){if(BAN)return;const s=await getDoc(doc(db,"banners",U.uid));BAN=(s.exists()&&s.data().itens)||[]}
 
@@ -637,6 +639,7 @@ async function tPecas(){
     if(t.dataset.pe){if(t.checked){pe.add(id);oc.delete(id)}else pe.delete(id)}
     else{if(t.checked)oc.delete(id);else{oc.add(id);pe.delete(id)}}
     PR.pronta=[...pe];PR.ocultas=[...oc];
+    if(!pe.has(id)&&(PRODS||[]).some(p=>p.id===id&&p.fora))toast("Essa peça saiu do catálogo Veraneio: sem pronta entrega, ela sai da sua loja quando você publicar e não volta para a lista.");
     const row=t.closest(".pr");if(row){row.classList.toggle("off",oc.has(id));const x=row.querySelector("[data-pe]");x.disabled=oc.has(id);x.checked=pe.has(id)}
     segPecas();massa();salvarPrecos()};
   $("massa").onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;
@@ -693,7 +696,7 @@ function pecas(){
     <div class="pacts"><button class="btn btn-ghost btn-sm" type="button" data-rest="${esc(p.id)}" aria-label="Restaurar ${esc(nm)}">Restaurar</button></div></div>`;
     return `<div class="pr ${o?"off":""}">
     <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
-    <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${precoTxt(p)}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}</div>
+    <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${precoTxt(p)}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}${p.fora?`<small class="orig">Saiu do catálogo Veraneio. Fica na sua loja enquanto estiver como pronta entrega.</small>`:""}</div>
     <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(nm)}">${I.edit}Editar</button>`
       :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Editar peça: ${esc(nm)}">${I.edit}Editar</button>`}</div>
     <div class="sws"><label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!o?"checked":""} ${o?"disabled":""} aria-label="Pronta entrega: ${esc(nm)}">Pronta entrega</label>
