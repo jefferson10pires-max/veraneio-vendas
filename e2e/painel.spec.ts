@@ -1549,3 +1549,34 @@ test.describe("PAG1 assinatura paga (Mercado Pago)", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("MD1 'só pronta entrega' não volta para o catálogo todo", () => {
+  const itensDe = (d: any, u: string) => Object.keys(d).filter((k) => k.startsWith(`catalogos/${u}/partes/`)).flatMap((k) => d[k].itens);
+  test("MD1-H1 republicação do ADM respeita o modo escolhido na loja, mesmo com cópia velha no precos", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "lojas/u1": { ...seed(40)["lojas/u1"], modo: "pronta" },
+      "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y1", "y2"], modo: "catalogo" },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.locator("#toast")).toContainText("Catálogo atualizado", { timeout: 10000 });
+    const its = itensDe(await db(page), "u1");
+    expect(its.map((x: any) => x.id).sort()).toEqual(["y1", "y2"]);
+    expect(erros).toEqual([]);
+  });
+  test("MD1-H2 painel abre no modo da loja (rascunho incluído) e publica o precos com ele", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y3"], modo: "catalogo" },
+      "rascunhos/u1/docs/loja": { modo: "pronta" }, "rascunhos/u1/docs/mudou": { em: { __ts: Date.now() } } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await expect(page.locator("#modo [data-modo='pronta']")).toHaveAttribute("aria-pressed", "true");
+    await publicar(page);
+    const d = await db(page);
+    expect(d["lojas/u1"].modo).toBe("pronta");
+    expect(d["precos/u1"].modo).toBe("pronta");
+    expect(itensDe(d, "u1").map((x: any) => x.id)).toEqual(["y3"]);
+    expect(erros).toEqual([]);
+  });
+});

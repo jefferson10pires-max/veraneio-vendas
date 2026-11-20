@@ -323,6 +323,8 @@ async function carregarConta(u){
     RAS={loja:rl&&rl.exists(),precos:rp&&rp.exists(),banners:rb&&rb.exists(),mudou:rm&&rm.exists()};
     if(RAS.loja){const d=rl.data();delete d.em;Object.assign(L,d)}
     PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{},descs:{},promos:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
+    /* "como você trabalha" é escolhido na loja (lojas.modo, ou o rascunho dela): é ele que vale, não uma cópia velha no precos */
+    if(["pronta","catalogo","todo"].includes(L.modo))PR.modo=L.modo;
     BAN=RAS.banners?(rb.data().itens||[]):null;
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     /* plano de acesso ao app (o ADM muda); no 1º acesso registra a data */
@@ -403,8 +405,8 @@ const erroPag=e=>ERROS_PAG[e&&e.codigo]||"Não foi possível falar com o Mercado
 async function recarregarPlano(){const era=ASS();
   try{const [pl,as]=await Promise.all([getDoc(doc(db,"planos",U.uid)),getDoc(doc(db,"assinaturas",U.uid)).catch(()=>null)]);
     if(pl.exists())PLDOC=pl.data();ASSIN=as&&as.exists()?as.data():{};calcPlano()}catch(e){console.error(e)}
-  if(ASS()&&!era){try{await Promise.all([carregarProds(),carregarProprios()]);const pr=await getDoc(doc(db,"precos",U.uid));
-    if(pr.exists())await C.publicarLoja(F,db,U.uid,pr.data(),PRODS,PROPRIOS)}catch(e){console.error("republicar",e)}}
+  if(ASS()&&!era){try{await Promise.all([carregarProds(),carregarProprios()]);const [pr,lo]=await Promise.all([getDoc(doc(db,"precos",U.uid)),getDoc(doc(db,"lojas",U.uid))]);const m=lo.exists()?lo.data().modo:null;
+    if(pr.exists())await C.publicarLoja(F,db,U.uid,{...pr.data(),...(["pronta","catalogo","todo"].includes(m)?{modo:m}:{})},PRODS,PROPRIOS)}catch(e){console.error("republicar",e)}}
   ir(ui.tab)}
 function folhaPix(){const w=abrirFolha("Pagar com Pix",`<div id="pxB" style="display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center"><p class="hint">Gerando o Pix…</p></div>`);
   let vivo=true,timer=null;w._fechar=()=>{vivo=false;clearTimeout(timer)};

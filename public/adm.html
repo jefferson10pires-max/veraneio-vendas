@@ -496,7 +496,8 @@ function linhaAssinatura(uid){const s=sit(uid),c=(ASSIN[uid]||{}).cartao;if(!s.a
   if(c)partes.push(c.status==="authorized"?`cartão ativo${c.proxima?` · próxima cobrança ${dataBR(c.proxima)}`:""}`:c.status==="cancelled"?"cartão cancelado":c.status==="paused"?"cartão pausado":"cartão aguardando");
   return `<div class="hint"><b>${esc(partes.join(" · "))}</b></div>`}
 async function republicarPlano(lj,assin){
-  try{const pr=await getDoc(doc(db,"precos",lj.uid));await C.publicarLoja(F,db,lj.uid,pr.exists()?pr.data():{},await C.lerAtacado(F,db),assin?undefined:[]);return true}
+  try{const [pr,lo]=await Promise.all([getDoc(doc(db,"precos",lj.uid)),getDoc(doc(db,"lojas",lj.uid))]);const m=lo.exists()?lo.data().modo:null;
+    await C.publicarLoja(F,db,lj.uid,{...(pr.exists()?pr.data():{}),...(["pronta","catalogo","todo"].includes(m)?{modo:m}:{})},await C.lerAtacado(F,db),assin?undefined:[]);return true}
   catch(err){console.error(err);toast("Plano mudado, mas a loja não foi atualizada. Use “Republicar catálogo em todas as lojas” em Produtos.");return false}}
 function formAssinante(lj){
   abrir(`${head("Tornar assinante")}<form class="px" id="asf" novalidate style="display:flex;flex-direction:column;gap:12px;padding-bottom:18px">
@@ -700,6 +701,8 @@ async function importarYampi(forcar){
 /* monta o catálogo de atacado a partir dos produtos e publica em todas as lojas */
 async function publicarTodas(prog=()=>{}){
   const pr=await getDocs(collection(db,"precos"));let n=0;const falhas=[];
+  /* "só pronta entrega" ou "catálogo todo" vale o que está publicado na loja (lojas.modo) */
+  const modoLoja=Object.create(null);try{(await getDocs(collection(db,"lojas"))).docs.forEach(d=>{const m=d.data().modo;if(["pronta","catalogo","todo"].includes(m))modoLoja[d.id]=m})}catch(e){}
   /* a pronta entrega é estoque da revendedora: peça que saiu do catálogo da Veraneio continua na loja de quem marcou
      (vale o que ela publicou e o que está no rascunho). Vai no atacado com fora:true; publicarLoja só mostra para quem tem. */
   const pe=new Set(),junta=x=>{if(Array.isArray(x))x.forEach(i=>{if(typeof i==="string")pe.add(i)})};
@@ -714,7 +717,7 @@ async function publicarTodas(prog=()=>{}){
     (await getDocs(collection(db,"planos"))).docs.forEach(d=>pl[d.id]=C.situacaoPlano(d.data(),cfg).assinante?"assinante":"gratuito")}catch(e){pl=null}
   /* uma loja com problema não impede as outras de serem atualizadas */
   for(const d of pr.docs){prog(`Atualizando lojas ${++n}/${pr.size}`);
-    try{await C.publicarLoja(F,db,d.id,d.data(),at,!pl||pl[d.id]==="assinante"?"publicados":[])}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
+    try{await C.publicarLoja(F,db,d.id,{...d.data(),...(modoLoja[d.id]?{modo:modoLoja[d.id]}:{})},at,!pl||pl[d.id]==="assinante"?"publicados":[])}catch(e){console.error("publicarLoja",d.id,e);falhas.push(d.id)}}
   if(falhas.length){const nomes=falhas.map(u=>(LOJAS.find(l=>l.uid===u)||{}).nome||u);throw new Error(`${falhas.length} loja(s) não foram atualizadas: ${nomes.join(", ")}`)}
 }
 let pubT=null;
