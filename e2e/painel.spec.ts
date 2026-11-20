@@ -1203,13 +1203,16 @@ test.describe("PL1 plano de acesso (gratuito / assinante)", () => {
     await expect(c.locator(".pill.pl-gratuito")).toHaveText("Gratuito");
     await expect(c).toContainText(/1º acesso em \d{2}\/\d{2}\/\d{4} \(5 dias\)/);
     await c.getByRole("button", { name: "Tornar assinante" }).click();
+    await page.getByRole("button", { name: "Marcar como assinante" }).click();
     await expect.poll(async () => (await db(page))["planos/u1"].plano).toBe("assinante");
+    expect((await db(page))["planos/u1"]).toMatchObject({ origem: "manual", pagoAte: null });
     await expect(page.locator(".rescard").first().locator(".pill.pl-assinante")).toHaveText("Assinante");
     await page.locator("#rst").selectOption("gratuito");
     await expect(page.locator(".rescard")).toHaveCount(0);
     await page.locator("#rst").selectOption("assinante");
     await expect(page.locator(".rescard")).toHaveCount(1);
     await page.locator(".rescard").first().getByRole("button", { name: "Voltar para gratuito" }).click();
+    await page.locator("#gfOk").click();
     await expect.poll(async () => (await db(page))["planos/u1"].plano).toBe("gratuito");
     expect((await db(page))["planos/u1"].primeiroAcesso).toBeTruthy();
     expect(erros).toEqual([]);
@@ -1227,9 +1230,11 @@ test.describe("PZ1 prazo do período gratuito", () => {
     await entrar(page, "adm@teste.com", "/adm");
     await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
     await expect(page.locator(".rescard", { hasText: "Loja Velha" })).not.toContainText("encerrou");
+    await page.getByRole("button", { name: "Planos e cobrança" }).click();
     await page.getByLabel("Período gratuito (dias)").fill("30");
-    await page.getByRole("button", { name: "Salvar prazo" }).click();
-    await expect(page.locator("#toast")).toContainText("30 dias");
+    await page.locator("#pzOk").click();
+    await expect(page.locator("#toast")).toContainText("Planos e cobrança salvos");
+    await expect(page.locator("#main")).toContainText("Grátis: 30 dias");
     expect((await db(page))["config/planos"].diasGratis).toBe(30);
     await expect(page.locator(".rescard", { hasText: "Loja Velha" }).locator(".pill.pl-vencido")).toHaveText("Gratuito encerrado");
     await expect(page.locator(".rescard", { hasText: "Loja Velha" })).toContainText("encerrou há 10");
@@ -1304,11 +1309,13 @@ test.describe("PG1 o que o plano gratuito libera", () => {
     await entrar(page, "adm@teste.com", "/adm");
     await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
     await page.locator(".rescard").first().getByRole("button", { name: "Voltar para gratuito" }).click();
+    await page.locator("#gfOk").click();
     await expect(page.locator("#toast")).toContainText("peças próprias saíram");
     let itens = catalogo(await db(page));
     expect(itens.some((x: any) => x.proprio)).toBe(false);
     expect(itens.length).toBeGreaterThan(0);
     await page.locator(".rescard").first().getByRole("button", { name: "Tornar assinante" }).click();
+    await page.getByRole("button", { name: "Marcar como assinante" }).click();
     await expect(page.locator("#toast")).toContainText("agora é assinante");
     itens = catalogo(await db(page));
     expect(itens.find((x: any) => x.id === "rX")).toMatchObject({ nome: "Colar Meu", proprio: true });
@@ -1376,5 +1383,169 @@ test.describe("PR1 desconto nas peças", () => {
     await publicar(page);
     const it = catalogo(await db(page)).find((x: any) => x.id === "rX");
     expect([it.de, it.preco]).toEqual([100, 85]);
+  });
+});
+
+test.describe("PAG1 assinatura paga (Mercado Pago)", () => {
+  const dia = 864e5;
+  const CFG = { diasGratis: 30, tolerancia: 3, valor: 39.9, valorPix: 35, mpPublicKey: "TEST-abcdef12-3456" };
+  const gravar = (page: Page, k: string, v: any) => page.evaluate(([k, v]) => { const d = JSON.parse(localStorage.getItem("fake:db") || "{}"); d[k] = v; localStorage.setItem("fake:db", JSON.stringify(d)); }, [k, v] as const);
+  /** servidor de pagamentos de mentira: guarda as chamadas e responde como o real */
+  async function servidor(page: Page, resp: (b: any) => any) {
+    const chamadas: any[] = [];
+    await page.route("**/api/assinatura", async (r) => {
+      const b = JSON.parse(r.request().postData() || "{}");
+      chamadas.push({ ...b, auth: r.request().headers()["authorization"] });
+      const x = await resp(b);
+      return r.fulfill({ status: x && x.__status || 200, json: x });
+    });
+    return chamadas;
+  }
+  const SDK_FAKE = `window.MercadoPago=class{constructor(k){window.__mpKey=k}bricks(){return{create:async(n,id,o)=>{window.__mpOpts=o;const el=document.getElementById(id);
+    el.innerHTML='<input aria-label="Número do cartão"><button type="button" id="mpSub">Assinar</button>';
+    el.querySelector('#mpSub').onclick=()=>o.callbacks.onSubmit({token:"abcdef0123456789abcdef"}).catch(()=>{});return{unmount(){el.innerHTML=""}}}}}}`;
+
+  test("PAG1-H1 ADM configura valores, tolerância e chave pública (sem apagar o prazo)", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "config/planos": { diasGratis: 30 }, "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    await page.getByRole("button", { name: "Planos e cobrança" }).click();
+    await expect(page.getByLabel("Período gratuito (dias)")).toHaveValue("30");
+    await page.getByLabel("Assinatura no cartão (R$ por mês)").fill("39,90");
+    await page.getByLabel("Mensalidade no Pix (R$)").fill("35");
+    await page.getByLabel("Tolerância depois do vencimento (dias)").fill("3");
+    await page.getByLabel("Chave pública do Mercado Pago (Public Key)").fill("APP_USR-segredo<x>");
+    await page.locator("#pzOk").click();
+    await expect(page.locator("#pzE")).toContainText("APP_USR- ou TEST-");
+    await page.getByLabel("Chave pública do Mercado Pago (Public Key)").fill("TEST-abcdef12-3456");
+    await page.locator("#pzOk").click();
+    await expect(page.locator("#toast")).toContainText("salvos");
+    expect((await db(page))["config/planos"]).toMatchObject({ diasGratis: 30, valor: 39.9, valorPix: 35, tolerancia: 3, mpPublicKey: "TEST-abcdef12-3456" });
+    await expect(page.locator("#main")).toContainText("R$ 39,90/mês no cartão");
+    expect(erros).toEqual([]);
+  });
+
+  test("PAG1-H2 ADM marca assinante manual até uma data; cartão mostra 'pago até' e origem", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "config/planos": CFG, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 5 * dia } }, "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    await page.locator(".rescard").first().getByRole("button", { name: "Tornar assinante" }).click();
+    await page.getByLabel("Até a data").check();
+    await page.getByLabel("Pago até").fill("2020-01-01");
+    await page.getByRole("button", { name: "Marcar como assinante" }).click();
+    await expect(page.locator("#asE")).toContainText("a partir de hoje");
+    const futuro = new Date(Date.now() + 60 * dia), iso = futuro.toISOString().slice(0, 10);
+    await page.getByLabel("Pago até").fill(iso);
+    await page.getByRole("button", { name: "Marcar como assinante" }).click();
+    await expect(page.locator("#toast")).toContainText("agora é assinante até");
+    const p = (await db(page))["planos/u1"];
+    expect(p).toMatchObject({ plano: "assinante", origem: "manual" });
+    expect(p.pagoAte.__ts).toBeGreaterThan(Date.now() + 59 * dia);
+    await expect(page.locator(".rescard").first()).toContainText(`Assinante (manual) · pago até ${futuro.toLocaleDateString("pt-BR")}`);
+    expect(erros).toEqual([]);
+  });
+
+  test("PAG1-H3 painel: paga com Pix na mesma tela, vira Assinante e as peças próprias voltam para a loja", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "config/planos": CFG,
+      "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 2 * dia } },
+      "precos/u1": { margem: 100, arred: "90", over: {} },
+      "lojas/u1/proprios/rX": { nome: "Colar Meu", cat: "Colares", preco: 100 } }) });
+    let pago = false;
+    const ch = await servidor(page, async (b) => {
+      if (b.acao === "pix") return { id: "555", qr: "00020126PIXCOPIAECOLA", qrImg: "iVBORw0KGgo=", valor: 35, expira: Date.now() + 30 * 60e3 };
+      if (b.acao === "conferir") {
+        if (!pago) { pago = true; return { pago: false }; }
+        await gravar(page, "planos/u1", { plano: "assinante", origem: "pix", pagoAte: { __ts: Date.now() + 31 * dia }, primeiroAcesso: { __ts: Date.now() - 2 * dia } });
+        return { pago: true };
+      }
+      return { __status: 400, erro: "acao" };
+    });
+    await entrar(page);
+    await expect(page.getByRole("heading", { name: "Seja Assinante" })).toBeVisible();
+    await page.getByRole("button", { name: /Pagar com Pix · R\$ 35,00/ }).click();
+    await expect(page.getByRole("img", { name: "QR Code do Pix" })).toBeVisible();
+    await expect(page.locator("#pxC")).toHaveValue("00020126PIXCOPIAECOLA");
+    await expect(page.getByText("Pagamento confirmado!")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("#toast")).toContainText("Você é Assinante");
+    expect(ch.every((c) => c.auth === "Bearer tok-u1")).toBe(true);
+    expect(ch.map((c) => c.acao)).toEqual(["pix", "conferir", "conferir"]);
+    expect(ch.some((c) => "valor" in c)).toBe(false); // o valor nunca sai do navegador
+    await expect.poll(async () => { const x = await db(page); return Object.keys(x).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => x[k].itens).some((i: any) => i.id === "rX"); }, { timeout: 5000 }).toBe(true);
+    const d = await db(page);
+    const itens = Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens);
+    expect(itens.find((x: any) => x.id === "rX")).toMatchObject({ proprio: true });
+    await page.locator("#flX").click();
+    await expect(page.locator(".plano.assinante")).toHaveText("Assinante");
+    expect(erros).toEqual([]);
+  });
+
+  test("PAG1-H4 painel: assina no cartão com o formulário do Mercado Pago embutido e depois cancela", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "config/planos": CFG, "planos/u1": { plano: "gratuito", primeiroAcesso: { __ts: Date.now() - 2 * dia } } }) });
+    await page.route(/sdk\.mercadopago\.com/, (r) => r.fulfill({ contentType: "text/javascript", body: SDK_FAKE }));
+    const ch = await servidor(page, async (b) => {
+      if (b.acao === "cartao") {
+        await gravar(page, "planos/u1", { plano: "assinante", origem: "cartao", pagoAte: { __ts: Date.now() + 2 * dia }, primeiroAcesso: { __ts: Date.now() - 2 * dia } });
+        await gravar(page, "assinaturas/u1", { cartao: { id: "pre1", status: "authorized" } });
+        return { status: "authorized" };
+      }
+      if (b.acao === "cancelar") { await gravar(page, "assinaturas/u1", { cartao: { id: "pre1", status: "cancelled" } }); return { status: "cancelled" }; }
+      return { __status: 400, erro: "acao" };
+    });
+    await entrar(page);
+    await page.getByRole("button", { name: /Assinar no cartão · R\$ 39,90\/mês/ }).click();
+    await expect(page.getByLabel("Número do cartão")).toBeVisible();
+    expect(await page.evaluate(() => (window as any).__mpKey)).toBe("TEST-abcdef12-3456");
+    expect(await page.evaluate(() => (window as any).__mpOpts.initialization.amount)).toBe(39.9);
+    await page.locator("#mpSub").click();
+    await expect(page.getByText("Assinatura feita!")).toBeVisible();
+    expect(ch[0]).toMatchObject({ acao: "cartao", token: "abcdef0123456789abcdef" });
+    await page.locator("#flX").click();
+    await expect(page.getByText("No cartão, renova sozinha todo mês.")).toBeVisible();
+    await page.getByRole("button", { name: "Cancelar assinatura" }).click();
+    await page.locator("#ccOk").click();
+    await expect(page.locator("#toast")).toContainText("Assinatura cancelada");
+    expect(ch[1]).toMatchObject({ acao: "cancelar" });
+    expect(erros).toEqual([]);
+  });
+
+  test("PAG1-H5 venceu: na tolerância avisa e deixa pagar; passou da tolerância trava com botão de pagar; sem vencimento não mostra cobrança", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "config/planos": CFG,
+      "planos/u1": { plano: "assinante", origem: "pix", pagoAte: { __ts: Date.now() - 1 * dia }, primeiroAcesso: { __ts: Date.now() - 90 * dia } } }) });
+    await entrar(page);
+    await expect(page.locator(".plano")).toContainText("pagamento atrasado");
+    await expect(page.locator("#main")).toContainText("Pague até");
+    await expect(page.getByRole("button", { name: /Pagar com Pix/ })).toBeVisible();
+    await gravar(page, "planos/u1", { plano: "assinante", origem: "pix", pagoAte: { __ts: Date.now() - 5 * dia }, primeiroAcesso: { __ts: Date.now() - 90 * dia } });
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Sua assinatura venceu" })).toBeVisible();
+    await expect(page.locator(".plano")).toHaveText("Assinatura vencida");
+    await page.locator("#nav").getByRole("button", { name: "Peças bloqueada", exact: true }).click();
+    await expect(page.getByRole("button", { name: /Assinar no cartão/ })).toBeVisible();
+    await gravar(page, "planos/u1", { plano: "assinante", origem: "manual", pagoAte: null, primeiroAcesso: { __ts: Date.now() - 90 * dia } });
+    await page.reload();
+    await expect(page.locator(".plano")).toHaveText("Assinante");
+    await expect(page.getByRole("button", { name: /Pagar com Pix|Assinar no cartão/ })).toHaveCount(0);
+    expect(erros).toEqual([]);
+  });
+
+  test("PAG1-H6 ADM: voltar para gratuito quem tem cartão ativo cancela a cobrança no Mercado Pago antes", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "config/planos": CFG,
+      "planos/u1": { plano: "assinante", origem: "cartao", pagoAte: { __ts: Date.now() + 20 * dia }, primeiroAcesso: { __ts: Date.now() - 90 * dia } },
+      "assinaturas/u1": { cartao: { id: "pre1", status: "authorized", proxima: { __ts: Date.now() + 19 * dia } } },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    let falha = true;
+    const ch = await servidor(page, async () => { if (falha) { falha = false; return { __status: 502, erro: "mp_falhou" }; } return { status: "cancelled" }; });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Revendedoras" }).click();
+    await expect(page.locator(".rescard").first()).toContainText("Assinante (cartão)");
+    await expect(page.locator(".rescard").first()).toContainText("cartão ativo · próxima cobrança");
+    await page.locator(".rescard").first().getByRole("button", { name: "Voltar para gratuito" }).click();
+    await page.getByRole("button", { name: "Cancelar cartão e voltar para gratuito" }).click();
+    await expect(page.locator("#gfE")).toContainText("Nada foi mudado");
+    expect((await db(page))["planos/u1"].plano).toBe("assinante");
+    await page.getByRole("button", { name: "Cancelar cartão e voltar para gratuito" }).click();
+    await expect.poll(async () => (await db(page))["planos/u1"].plano).toBe("gratuito");
+    expect(ch.map((c) => [c.acao, c.uid])).toEqual([["cancelar", "u1"], ["cancelar", "u1"]]);
+    expect(erros).toEqual([]);
   });
 });

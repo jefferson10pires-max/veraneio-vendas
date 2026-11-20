@@ -21,7 +21,7 @@
             },
             {
               "key": "Content-Security-Policy",
-              "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.dooki.com.br https://wsrv.nl; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+              "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://sdk.mercadopago.com https://www.mercadopago.com https://http2.mlstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' data: blob: https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.dooki.com.br https://wsrv.nl https://api.mercadopago.com https://api.mercadolibre.com https://*.mercadopago.com https://*.mercadolibre.com https://*.mlstatic.com; frame-src https://*.mercadopago.com https://*.mercadolibre.com https://*.mercadolivre.com https://*.mlstatic.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
             },
             {
               "key": "X-Content-Type-Options",
@@ -48,6 +48,13 @@
       ],
       "rewrites": [
         {
+          "source": "/api/**",
+          "function": {
+            "functionId": "api",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "/painel",
           "destination": "/painel.html"
         },
@@ -71,6 +78,18 @@
           "destination": "https://vitrine-de-semijoias.web.app/:path",
           "type": 302
         }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "pagamentos",
+      "runtime": "nodejs22",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "*.test.js"
       ]
     }
   ]

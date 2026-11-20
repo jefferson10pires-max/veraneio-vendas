@@ -64,7 +64,9 @@ export const limit = (n) => ({ k: "limit", n });
 export const serverTimestamp = () => ({ __ts: Date.now() });
 export const increment = (n) => ({ __inc: n });
 export const deleteField = () => ({ __del: 1 });
-export const Timestamp = { fromDate: (d) => ({ __ts: d.getTime() }) };
+const mkTs = (t) => ({ __ts: t, toMillis: () => t, toDate: () => new Date(t) });
+export const Timestamp = { fromDate: (d) => mkTs(d.getTime()), fromMillis: (t) => mkTs(t), now: () => mkTs(Date.now()) };
+export async function getIdToken(u) { return "tok-" + (u && u.uid); }
 const vivo = (v) => {
   if (v && typeof v === "object") {
     if ("__ts" in v) { const t = v.__ts; return { toDate: () => new Date(t), toMillis: () => t, __ts: t }; }

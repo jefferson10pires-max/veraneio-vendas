@@ -216,3 +216,38 @@ export async function buscarYampi(categorias, progresso = () => {}) {
   for (const [id, r] of ranks) { const m = produtos.get(id); if (m) m.rank = r; }
   return { produtos, novidades };
 }
+
+/* ---------- plano de acesso da revendedora ----------
+ * planos/{uid}: { plano: 'gratuito'|'assinante', primeiroAcesso, pagoAte (null = sem vencimento), origem: 'manual'|'cartao'|'pix' }
+ * config/planos: { diasGratis (0 = sem prazo), tolerancia (dias depois do vencimento), valor, valorPix, mpPublicKey }
+ * Mesma conta das regras do banco (firestore.rules → planoAtivo / vencido). */
+const DIA_MS = 864e5;
+export const emMs = (t) => {
+  if (t == null) return null;
+  if (typeof t === "number") return t;
+  if (typeof t.toMillis === "function") return t.toMillis();
+  if (typeof t.seconds === "number") return t.seconds * 1000;
+  if (t instanceof Date) return t.getTime();
+  return null;
+};
+export function situacaoPlano(p, cfg, agora = Date.now()) {
+  p = p || {}; cfg = cfg || {};
+  const dias = Math.max(0, Math.floor(Number(cfg.diasGratis) || 0));
+  const tol = Math.max(0, Math.floor(Number(cfg.tolerancia) || 0));
+  const marcado = p.plano === "assinante";
+  const pagoAte = emMs(p.pagoAte), ini = emMs(p.primeiroAcesso);
+  const limite = pagoAte == null ? null : pagoAte + tol * DIA_MS;
+  const assinante = marcado && (limite == null || agora < limite);
+  const restaGratis = !assinante && dias > 0 && ini != null ? dias - Math.floor((agora - ini) / DIA_MS) : null;
+  return {
+    assinante,
+    expirou: marcado && !assinante,                       // assinatura venceu (passou da tolerância)
+    atrasado: assinante && pagoAte != null && agora >= pagoAte, // venceu, ainda na tolerância
+    semVencimento: assinante && pagoAte == null,
+    pagoAte, limite,
+    diasParaVencer: pagoAte == null ? null : Math.ceil((pagoAte - agora) / DIA_MS),
+    restaGratis,
+    vencido: !assinante && restaGratis !== null && restaGratis <= 0, // painel travado
+    origem: marcado ? (p.origem || "manual") : null,
+  };
+}

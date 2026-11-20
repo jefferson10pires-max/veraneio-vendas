@@ -12,3 +12,4 @@ e2e/arquivos/grande.jpg
 *.pem
 *service-account*.json
 *-adminsdk-*.json
+functions/node_modules

@@ -315,6 +315,53 @@ test("R27 dentro do prazo, sem prazo (0) ou assinante: painel grava normal", asy
   await assertSucceeds(setDoc(doc(rev(), "catalogos/rev/partes/p0"), { itens: [] }));
 });
 
+// --- assinatura paga: validade (pagoAte + tolerância), quem grava, config de valores ---
+const assin = (pagoAteDias, tolerancia, extra = {}) => env.withSecurityRulesDisabled(async (c) => {
+  const db = c.firestore();
+  await setDoc(doc(db, "planos/rev"), { plano: "assinante", primeiroAcesso: Timestamp.fromMillis(Date.now() - 400 * dia),
+    pagoAte: pagoAteDias == null ? null : Timestamp.fromMillis(Date.now() + pagoAteDias * dia), origem: "pix", ...extra });
+  await setDoc(doc(db, "config/planos"), { diasGratis: 30, tolerancia });
+});
+test("R28 assinatura em dia, na tolerância ou sem vencimento: tudo liberado; passou da tolerância: trava como gratuito vencido", async () => {
+  await assin(5, 3);
+  await assertSucceeds(setDoc(doc(rev(), "lojas/rev/proprios/a1"), { nome: "A", preco: 1 }));
+  await assin(-2, 3); // venceu há 2 dias, tolerância 3
+  await assertSucceeds(setDoc(doc(rev(), "lojas/rev/proprios/a2"), { nome: "A", preco: 1 }));
+  await assertSucceeds(setDoc(doc(rev(), "precos/rev"), { margem: 50 }));
+  await assin(null, 0); // manual sem vencimento
+  await assertSucceeds(setDoc(doc(rev(), "lojas/rev/proprios/a3"), { nome: "A", preco: 1 }));
+  await assin(-4, 3); // passou da tolerância
+  await assertFails(setDoc(doc(rev(), "lojas/rev/proprios/a4"), { nome: "A", preco: 1 }));
+  await assertFails(setDoc(doc(rev(), "precos/rev"), { margem: 60 }));
+  await assertSucceeds(getDoc(doc(rev(), "planos/rev")));
+});
+test("R29 revendedora não se dá assinatura nem mexe no pagoAte; só o ADM (ou o servidor)", async () => {
+  await plano("gratuito", 1, 30);
+  const r = rev();
+  await assertFails(updateDoc(doc(r, "planos/rev"), { plano: "assinante" }));
+  await assertFails(updateDoc(doc(r, "planos/rev"), { pagoAte: Timestamp.fromMillis(Date.now() + 99 * dia) }));
+  await assertFails(setDoc(doc(r, "assinaturas/rev"), { cartao: { status: "authorized" } }));
+  await assertFails(setDoc(doc(r, "assinaturas/rev/pagamentos/1"), { aplicado: true }));
+  await assertSucceeds(getDoc(doc(r, "assinaturas/rev")));
+  await assertFails(getDoc(doc(env.authenticatedContext("outra").firestore(), "assinaturas/rev")));
+  const a = adm();
+  await assertSucceeds(setDoc(doc(a, "planos/rev"), { plano: "assinante", origem: "manual", pagoAte: null }, { merge: true }));
+  await assertSucceeds(setDoc(doc(a, "planos/rev"), { plano: "assinante", origem: "manual", pagoAte: Timestamp.fromMillis(Date.now() + 90 * dia) }, { merge: true }));
+  await assertFails(setDoc(doc(a, "planos/rev"), { origem: "boleto" }, { merge: true }));
+  await assertFails(setDoc(doc(a, "planos/rev"), { pagoAte: "amanhã" }, { merge: true }));
+});
+test("R30 config dos planos: só ADM, valores e chave pública válidos", async () => {
+  const ok = { diasGratis: 30, tolerancia: 3, valor: 39.9, valorPix: 35, mpPublicKey: "TEST-1234abcd-5678-90ef" };
+  await assertSucceeds(setDoc(doc(adm(), "config/planos"), ok));
+  await assertSucceeds(setDoc(doc(adm(), "config/planos"), { ...ok, mpPublicKey: "APP_USR-abcdef12-3456-7890-abcd-ef1234567890" }));
+  await assertFails(setDoc(doc(rev(), "config/planos"), ok));
+  await assertFails(setDoc(doc(adm(), "config/planos"), { ...ok, valor: -1 }));
+  await assertFails(setDoc(doc(adm(), "config/planos"), { ...ok, tolerancia: 90 }));
+  await assertFails(setDoc(doc(adm(), "config/planos"), { ...ok, mpPublicKey: "APP_USR-x<script>" }));
+  await assertFails(setDoc(doc(adm(), "config/planos"), { ...ok, accessToken: "APP_USR-segredo" }));
+  await assertSucceeds(getDoc(doc(rev(), "config/planos")));
+});
+
 // --- R99: tudo que o app gravou nos testes do painel/ADM (e2e/escritas-gravadas.json, gerado por `npm test`)
 // é reproduzido aqui com as regras reais. Pega casos em que o app grava algo que as regras recusam.
 const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };

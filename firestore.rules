@@ -36,14 +36,23 @@ service cloud.firestore {
     function dono(uid) { return isLoja(uid) || isAdmin(); }
     // Plano de acesso: assinante tem tudo; gratuito não cadastra peças próprias;
     // gratuito com o prazo vencido não muda mais nada na loja (a loja continua no ar com o que já publicou).
+    // Assinante ativa: marcada como assinante e paga (pagoAte + dias de tolerância no futuro) ou sem vencimento (pagoAte nulo).
+    // Quem grava pagoAte é o servidor de pagamentos (Mercado Pago) ou o ADM; a revendedora nunca.
+    function tolerancia() {
+      let c = /databases/$(database)/documents/config/planos;
+      return exists(c) && get(c).data.get('tolerancia', 0) is int ? get(c).data.get('tolerancia', 0) : 0;
+    }
     function assinante(uid) {
       let p = /databases/$(database)/documents/planos/$(uid);
-      return exists(p) && get(p).data.get('plano', '') == 'assinante';
+      return exists(p) && get(p).data.get('plano', '') == 'assinante'
+        && (get(p).data.get('pagoAte', null) == null
+            || (get(p).data.pagoAte is timestamp
+                && request.time < get(p).data.pagoAte + duration.value(tolerancia(), 'd')));
     }
     function vencido(uid) {
       let p = /databases/$(database)/documents/planos/$(uid);
       let c = /databases/$(database)/documents/config/planos;
-      return exists(p) && get(p).data.get('plano', 'gratuito') != 'assinante'
+      return exists(p) && !assinante(uid)
         && get(p).data.get('primeiroAcesso', null) is timestamp
         && exists(c) && get(c).data.get('diasGratis', 0) is int && get(c).data.get('diasGratis', 0) > 0
         && request.time >= get(p).data.primeiroAcesso + duration.value(get(c).data.diasGratis, 'd');
@@ -115,10 +124,26 @@ service cloud.firestore {
     // Prazo do período gratuito (dias), definido pelo ADM; as revendedoras leem para ver quanto falta
     match /config/{id} {
       allow read: if isRevendedora() || isAdmin();
-      allow write: if isAdmin() && id == 'planos'
-        && request.resource.data.keys().hasOnly(['diasGratis', 'em'])
-        && request.resource.data.diasGratis is int
-        && request.resource.data.diasGratis >= 0 && request.resource.data.diasGratis <= 3650;
+      allow write: if isAdmin() && id == 'planos' && configPlanosOk(request.resource.data);
+    }
+    // prazo grátis, tolerância depois do vencimento, valores da assinatura e chave PÚBLICA do Mercado Pago
+    // (a chave secreta fica só no servidor, no cofre do Google)
+    function configPlanosOk(d) {
+      return d.keys().hasOnly(['diasGratis', 'tolerancia', 'valor', 'valorPix', 'mpPublicKey', 'em'])
+        && (!('diasGratis' in d) || (d.diasGratis is int && d.diasGratis >= 0 && d.diasGratis <= 3650))
+        && (!('tolerancia' in d) || (d.tolerancia is int && d.tolerancia >= 0 && d.tolerancia <= 60))
+        && (!('valor' in d) || ((d.valor is int || d.valor is float) && d.valor >= 0 && d.valor <= 10000))
+        && (!('valorPix' in d) || ((d.valorPix is int || d.valorPix is float) && d.valorPix >= 0 && d.valorPix <= 10000))
+        && (!('mpPublicKey' in d) || (d.mpPublicKey is string && d.mpPublicKey.matches('^((APP_USR|TEST)-[A-Za-z0-9-]{8,120})?$')));
+    }
+    // Assinatura no Mercado Pago (cartão recorrente) e pagamentos (Pix/cartão): só o servidor grava.
+    match /assinaturas/{uid} {
+      allow read: if dono(uid);
+      allow write: if false;
+      match /pagamentos/{id} {
+        allow read: if dono(uid);
+        allow write: if false;
+      }
     }
     match /planos/{uid} {
       allow read: if isLoja(uid) || isAdmin();
@@ -131,8 +156,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['primeiroAcesso'])
         && request.resource.data.primeiroAcesso == request.time;
       allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['plano', 'primeiroAcesso', 'mudadoEm'])
-        && request.resource.data.plano in ['gratuito', 'assinante'];
+        && request.resource.data.keys().hasOnly(['plano', 'primeiroAcesso', 'mudadoEm', 'pagoAte', 'origem'])
+        && request.resource.data.plano in ['gratuito', 'assinante']
+        && (request.resource.data.get('pagoAte', null) == null || request.resource.data.pagoAte is timestamp)
+        && (request.resource.data.get('origem', null) == null || request.resource.data.origem in ['manual', 'cartao', 'pix']);
       allow delete: if isAdmin();
     }
     match /precos/{uid} {
