@@ -91,6 +91,9 @@ async function rotaWebhook(req, res) {
   const tipo = String(q.type || q.topic || b.type || b.topic || "");
   const assinatura = req.get("x-signature"), requestId = req.get("x-request-id");
   const ok = conferirAviso({ assinatura, requestId, idUrl, idCorpo, segredo: MP_WEBHOOK_SECRET.value() });
+  // formato antigo (IPN: ?id=&topic=) chega duplicado junto com o aviso novo: não processa nada, só responde 200
+  // para o Mercado Pago parar de reenviar. O aviso novo (assinado) é o único que libera pagamento.
+  if (!ok && (q.topic || b.topic) && !q["data.id"]) { logger.info("aviso formato antigo ignorado", { tipo }); return res.json({ ok: true, ignorado: true }); }
   if (!ok) {
     const ts = /ts=(\d+)/.exec(assinatura || "");
     logger.warn("aviso sem assinatura válida", { tipo, temAssinatura: !!assinatura, temRequestId: !!requestId, idUrl: !!idUrl, idCorpo: !!idCorpo,
