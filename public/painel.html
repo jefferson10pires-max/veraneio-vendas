@@ -161,7 +161,7 @@ a{color:inherit}
 .pr .vals b{color:var(--ink);font-weight:600}
 .pr .vals .profit b{color:var(--ok)}
 .sws{grid-column:2/-1;display:flex;gap:8px;flex-wrap:wrap}
-.pr.off .th,.pr.off .nm{opacity:.45}
+.pr.off .th,.pr.off .nm{opacity:.45}.pr.bloq [data-bloq]{color:var(--muted)}
 .pr .pacts{display:flex;gap:6px}
 .nm .orig,.items .orig{display:block;font-size:11.5px;color:var(--muted)}.items .orig{display:inline}
 .linkbtn{border:0;background:none;padding:0;color:var(--brand);text-decoration:underline;font:inherit;cursor:pointer}
@@ -633,6 +633,7 @@ async function tPecas(){
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
   $("plist").onclick=e=>{const r=e.target.closest("[data-rest]");if(r){restaurar(r.dataset.rest);return}
     const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
+    if(e.target.closest("[data-bloq]"))return toast("Peça bloqueada: no plano gratuito suas peças não aparecem na loja. Ela volta quando você for Assinante.");
     const ed=e.target.closest("[data-edit]");if(ed)ASS()?formPropria(ed.dataset.edit):toast(MSG_ASS)};
   $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site;if(!id)return;
     const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
@@ -694,6 +695,10 @@ function pecas(){
     if(ui.pf==="excl")return `<div class="pr off"><div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(nm)}<small>${esc(p.cat||"")} · excluída da sua loja</small></div>
     <div class="pacts"><button class="btn btn-ghost btn-sm" type="button" data-rest="${esc(p.id)}" aria-label="Restaurar ${esc(nm)}">Restaurar</button></div></div>`;
+    if(p.proprio&&!ASS())return `<div class="pr off bloq">
+    <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}></div>
+    <div class="nm">${esc(nm)}<small>Sua peça · ${esc(p.cat||"")} · ${precoTxt(p)}</small><small class="orig">Não aparece na loja no plano gratuito</small></div>
+    <div class="pacts"><button class="btn btn-ghost btn-sm" type="button" data-bloq="${esc(p.id)}" aria-label="Bloqueada: ${esc(nm)}">${I.lock}Bloqueada</button></div></div>`;
     return `<div class="pr ${o?"off":""}">
     <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${precoTxt(p)}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}${p.fora?`<small class="orig">Saiu do catálogo Veraneio. Fica na sua loja enquanto estiver como pronta entrega.</small>`:""}</div>

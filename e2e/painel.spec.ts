@@ -1266,7 +1266,10 @@ test.describe("PG1 o que o plano gratuito libera", () => {
     await expect(page.locator("#npF")).toHaveCount(0);
     await page.locator("#pf").getByRole("button", { name: /Minhas/ }).click();
     await expect(page.locator("#massa")).toContainText("não aparecem na loja");
-    await page.getByRole("button", { name: /Editar Colar Meu/ }).click();
+    await expect(page.locator(".pr.bloq", { hasText: "Colar Meu" })).toContainText("Não aparece na loja no plano gratuito");
+    await expect(page.getByRole("button", { name: /Editar Colar Meu/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Bloqueada: Colar Meu" }).click();
+    await expect(page.locator("#toast")).toContainText("Peça bloqueada");
     await expect(page.locator("#npF")).toHaveCount(0);
     await page.locator("#pf").getByRole("button", { name: /Todas/ }).click();
     await page.locator("[data-pe]").first().check();
