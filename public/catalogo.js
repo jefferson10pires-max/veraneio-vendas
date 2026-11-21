@@ -86,7 +86,15 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   // (o que ela editou e ainda não publicou não pode ir para a loja)
   const velhas = await F.getDocs(F.collection(db, "catalogos", uid, "partes"));
   let prontos = null;
-  if (proprios === "publicados") { prontos = velhas.docs.flatMap((d) => (d.data().itens || []).filter((x) => x && x.proprio)); proprios = []; }
+  if (proprios === "publicados") {
+    prontos = velhas.docs.flatMap((d) => (d.data().itens || []).filter((x) => x && x.proprio)); proprios = [];
+    // loja sem nenhuma peça própria publicada (ex.: estava no plano gratuito e acabou de assinar): busca as peças dela
+    // (só as que já existiam na última publicação dela: peça criada depois espera ela tocar em Publicar)
+    if (!prontos.length) {
+      prontos = null; const ultima = emMs(src.atualizadoEm);
+      try { proprios = (await lerProprios(F, db, uid)).filter((p) => { const c = emMs(p.criadoEm); return ultima == null || c == null || c <= ultima; }); } catch (e) { proprios = []; }
+    }
+  }
   else if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
   const m = modoLoja(pr.modo), en = new Set(pr.encomenda), comPE = m !== "encomenda";
   const vale = (id) => !oc.has(id) && (m === "pronta" ? pe.has(id) : m === "escolhidas" ? pe.has(id) || en.has(id) : true);

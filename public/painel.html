@@ -335,7 +335,7 @@ async function carregarConta(u){
       if(!pl.exists()){await setDoc(r,{plano:"gratuito",primeiroAcesso:serverTimestamp()});PLDOC={plano:"gratuito",primeiroAcesso:Date.now()}}
       else{PLDOC=pl.data();if(!PLDOC.primeiroAcesso){await updateDoc(r,{primeiroAcesso:serverTimestamp()});PLDOC={...PLDOC,primeiroAcesso:Date.now()}}}
       calcPlano()}catch(e){console.error(e)}
-    aplicarCor();shell();
+    aplicarCor();shell();curarProprios();
   }catch(e){console.error(e);if(auth.currentUser)telaErro();else telaLogin()}
 }
 function aplicarCor(){const c=/^#[0-9a-f]{6}$/i.test(L.cor||"")?L.cor:"#043034";document.documentElement.style.setProperty("--brand",c);document.documentElement.style.setProperty("--brand-ink",inkFor(c))}
@@ -406,9 +406,15 @@ const erroPag=e=>ERROS_PAG[e&&e.codigo]||"Não foi possível falar com o Mercado
 async function recarregarPlano(){const era=ASS();
   try{const [pl,as]=await Promise.all([getDoc(doc(db,"planos",U.uid)),getDoc(doc(db,"assinaturas",U.uid)).catch(()=>null)]);
     if(pl.exists())PLDOC=pl.data();ASSIN=as&&as.exists()?as.data():{};calcPlano()}catch(e){console.error(e)}
-  if(ASS()&&!era){try{await Promise.all([carregarProds(),carregarProprios()]);const [pr,lo]=await Promise.all([getDoc(doc(db,"precos",U.uid)),getDoc(doc(db,"lojas",U.uid))]);const m=lo.exists()?lo.data().modo:null;
-    if(pr.exists())await C.publicarLoja(F,db,U.uid,{...pr.data(),...(C.modoValido(m)?{modo:m}:{})},PRODS,PROPRIOS)}catch(e){console.error("republicar",e)}}
+  if(ASS()&&!era)await republicarPublicado();
   ir(ui.tab)}
+/* republica a loja exatamente como está publicada (preços e modo publicados), com as peças próprias se for assinante */
+async function republicarPublicado(){try{await Promise.all([carregarProds(),carregarProprios()]);const [pr,lo]=await Promise.all([getDoc(doc(db,"precos",U.uid)),getDoc(doc(db,"lojas",U.uid))]);const m=lo.exists()?lo.data().modo:null;
+    if(pr.exists())await C.publicarLoja(F,db,U.uid,{...pr.data(),...(C.modoValido(m)?{modo:m}:{})},PRODS,ASS()?"publicados":[])}catch(e){console.error("republicar",e)}}
+/* assinante (pagou pelo celular e fechou a tela, ou pelo aviso automático) com peças próprias que não estão na loja: devolve */
+async function curarProprios(){try{if(!ASS()||VENC())return;await carregarProprios();if(!PROPRIOS.length)return;
+  const s=await getDocs(collection(db,"catalogos",U.uid,"partes"));if(s.docs.some(d=>(d.data().itens||[]).some(x=>x&&x.proprio)))return;
+  await republicarPublicado()}catch(e){console.error("curarProprios",e)}}
 function folhaPix(){const w=abrirFolha("Pagar com Pix",`<div id="pxB" style="display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center"><p class="hint">Gerando o Pix…</p></div>`);
   let vivo=true,timer=null;w._fechar=()=>{vivo=false;clearTimeout(timer)};
   apiPag("pix").then(q=>{if(!vivo)return;

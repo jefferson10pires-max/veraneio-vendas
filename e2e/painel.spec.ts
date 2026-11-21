@@ -331,7 +331,8 @@ test.describe("P05 promoções da Veraneio e preço travado", () => {
   });
 
   test("E01-H3 mudança não publicada não vai para a loja, nem quando o ADM atualiza o estoque", async ({ page }) => {
-    await abrirAdm(page, { "lojas/u1/proprios/rX": { nome: "Colar Novo", cat: "Colares", preco: 90 } });
+    await abrirAdm(page, { "lojas/u1/proprios/rX": { nome: "Colar Novo", cat: "Colares", preco: 90, criadoEm: { __ts: Date.now() } },
+      "precos/u1": { margem: 100, arred: "90", over: {}, atualizadoEm: { __ts: Date.now() - 864e5 } } });
     await page.goto("/painel");
     await page.getByLabel("E-mail").fill("rev@teste.com"); await page.getByLabel("Senha").fill("senha123");
     await page.getByRole("button", { name: "Entrar" }).click();
@@ -1630,6 +1631,31 @@ test.describe("MD2 quatro jeitos de trabalhar", () => {
     expect(u2.length).toBeGreaterThan(20);
     expect(u2.some((x: any) => x.id === "y4")).toBe(true);
     expect(u2.some((x: any) => x.pronta)).toBe(false);
+    expect(erros).toEqual([]);
+  });
+});
+
+test.describe("CU1 assinante que pagou fora da tela tem as peças próprias de volta", () => {
+  const itens = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens);
+  const base = { "lojas/u1/proprios/rX": { nome: "Colar Meu", cat: "Colares", preco: 100, criadoEm: { __ts: Date.now() - 5 * 864e5 } },
+    "lojas/u1/proprios/rNovo": { nome: "Feita hoje", cat: "Colares", preco: 80, criadoEm: { __ts: Date.now() } },
+    "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["rX", "rNovo"], modo: "pronta", atualizadoEm: { __ts: Date.now() - 864e5 } },
+    "catalogos/u1/partes/p0": { itens: [] } };
+  test("CU1-H1 abrir o painel já devolve as peças próprias para a loja", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { ...base, "lojas/u1": { ...seed(40)["lojas/u1"], modo: "pronta" },
+      "planos/u1": { plano: "assinante", origem: "pix", pagoAte: { __ts: Date.now() + 30 * 864e5 }, primeiroAcesso: { __ts: Date.now() - 9 * 864e5 } } }) });
+    await entrar(page);
+    await expect.poll(async () => itens(await db(page)).map((x: any) => x.id), { timeout: 8000 }).toEqual(["rX"]);
+    expect(erros).toEqual([]);
+  });
+  test("CU1-H2 republicação do ADM traz as peças próprias de quem virou assinante e ainda não tinha nenhuma na loja", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { ...base, "lojas/u1": { ...seed(40)["lojas/u1"], modo: "pronta" },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.locator("#toast")).toContainText("Catálogo atualizado", { timeout: 10000 });
+    expect(itens(await db(page)).map((x: any) => x.id)).toEqual(["rX"]);
     expect(erros).toEqual([]);
   });
 });
