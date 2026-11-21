@@ -718,7 +718,7 @@ async function tPecas(){
     PR.pronta=[...pe];PR.ocultas=[...oc];PR.encomenda=[...en];
     if(!pe.has(id)&&(PRODS||[]).some(p=>p.id===id&&p.fora))toast("Essa peça saiu do catálogo Veraneio: sem pronta entrega, ela sai da sua loja quando você publicar e não volta para a lista.");
     const row=t.closest(".pr");if(row){row.classList.toggle("off",usaSite()&&oc.has(id));const x=row.querySelector("[data-pe]");if(x){x.disabled=usaSite()&&oc.has(id);x.checked=pe.has(id)}}
-    segPecas();massa();salvarPrecos()};
+    segPecas();massa();dicaModo();salvarPrecos()};
   $("massa").onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;
     if(ui.mArm!==b.dataset.m){ui.mArm=b.dataset.m;massa();clearTimeout(ui.mT);ui.mT=setTimeout(()=>{ui.mArm=null;if($("massa"))massa()},4000);return}
     ui.mArm=null;const ids=filtradas().map(p=>p.id),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),en=new Set(PR.encomenda||[]);
@@ -769,15 +769,17 @@ function massa(){
     ...(usaEn()?[nEn<n?b("en",`Marcar todas (${n}) como encomenda`):"",nEn?b("tiraen",`Tirar da encomenda (${nEn})`):""]:[]),
     ...(usaSite()?[nOc<n?b("fora",`Tirar todas (${n-nOc}) do site`):"",nOc?b("volta",`Voltar ao site (${nOc})`):""]:[])].join("");
 }
+function dicaModo(){const el=$("modoHint");if(!el)return;const ids=todas().map(p=>p.id),ocS=new Set(PR.ocultas||[]),peS=new Set(PR.pronta||[]),enS=new Set(PR.encomenda||[]);
+  const nLoja=ids.filter(i=>naLoja(i,ocS,peS,enS)).length,pl=n=>n===1?"<b>1</b> peça":`<b>${n}</b> peças`;
+  el.innerHTML=({catalogo:`Sua loja mostra o catálogo inteiro por encomenda (${pl(nLoja)}). As de pronta entrega ganham o selo verde e uma categoria própria.`,
+    encomenda:`Sua loja mostra o catálogo inteiro por encomenda (${pl(nLoja)}), sem pronta entrega.`,
+    pronta:nLoja?`Sua loja mostra só ${pl(nLoja)} de pronta entrega.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`,
+    escolhidas:nLoja?`Sua loja mostra ${pl(nLoja)}: as que você marcou como <b>Encomenda</b> e as de <b>Pronta entrega</b>.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Encomenda” ou “Pronta entrega” nas peças que quer vender.`})[modo()]+" Atualizações do catálogo não mudam essa escolha.";}
 function pecas(){
   segPecas();massa();
   const ids=new Set(todas().map(p=>p.id));
   const so=!usaSite(),ocS=new Set(PR.ocultas||[]),peS=new Set(PR.pronta||[]),enS=new Set(PR.encomenda||[]);
-  const nLoja=[...ids].filter(i=>naLoja(i,ocS,peS,enS)).length,pl=n=>n===1?"<b>1</b> peça":`<b>${n}</b> peças`;
-  $("modoHint").innerHTML=({catalogo:`Sua loja mostra o catálogo inteiro por encomenda (${pl(nLoja)}). As de pronta entrega ganham o selo verde e uma categoria própria.`,
-    encomenda:`Sua loja mostra o catálogo inteiro por encomenda (${pl(nLoja)}), sem pronta entrega.`,
-    pronta:nLoja?`Sua loja mostra só ${pl(nLoja)} de pronta entrega.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`,
-    escolhidas:nLoja?`Sua loja mostra ${pl(nLoja)}: as que você marcou como <b>Encomenda</b> e as de <b>Pronta entrega</b>.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Encomenda” ou “Pronta entrega” nas peças que quer vender.`})[modo()]+" Atualizações do catálogo não mudam essa escolha.";
+  dicaModo();
   const pe=peS,oc=ocS,en=enS,lista=filtradas();ui.plim=ui.plim||40;const l=lista.slice(0,ui.plim);
   const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="en"?"Nenhuma peça marcada como encomenda ainda. Ligue a chave “Encomenda” nas peças que quer vender por encomenda.":ui.pf==="fora"?"Todas as peças estão no seu site.":ui.pf==="minhas"?"Você ainda não cadastrou peças suas. Toque em “Nova peça”.":"Nenhuma peça encontrada.";
   $("plist").innerHTML=(l.length?l.map(p=>{const o=usaSite()&&oc.has(p.id),fp=temFotoPropria(p),nm=nomeLoja(p);
