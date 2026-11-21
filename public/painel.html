@@ -103,6 +103,7 @@ a{color:inherit}
 .rank .r div i{display:block;height:100%;background:var(--brand);border-radius:999px}
 
 .seg{display:flex;background:var(--bg);border-radius:12px;padding:4px;gap:4px}
+.seg-col{flex-direction:column}.seg-col button{text-align:left;display:flex;flex-direction:column;gap:2px;padding:10px 12px}.seg-col button small{font-weight:400;opacity:.75;font-size:12px;line-height:1.3}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 6px;cursor:pointer;font-size:14px}
 .seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 3px rgb(0 0 0 / .08);font-weight:600}
 .leads{display:flex;flex-direction:column;gap:10px}
@@ -324,7 +325,7 @@ async function carregarConta(u){
     if(RAS.loja){const d=rl.data();delete d.em;Object.assign(L,d)}
     PR=Object.assign({margem:100,arred:"90",over:{},fixo:{},pronta:[],ocultas:[],excluidas:[],fotos:{},nomes:{},descs:{},promos:{}},RAS.precos?rp.data():p.exists()?p.data():{});delete PR.atualizadoEm;
     /* "como você trabalha" é escolhido na loja (lojas.modo, ou o rascunho dela): é ele que vale, não uma cópia velha no precos */
-    if(["pronta","catalogo","todo"].includes(L.modo))PR.modo=L.modo;
+    if(C.modoValido(L.modo))PR.modo=C.modoLoja(L.modo);
     BAN=RAS.banners?(rb.data().itens||[]):null;
     setDoc(doc(db,"acessos",u.uid),{em:serverTimestamp()}).catch(()=>{});
     /* plano de acesso ao app (o ADM muda); no 1º acesso registra a data */
@@ -406,7 +407,7 @@ async function recarregarPlano(){const era=ASS();
   try{const [pl,as]=await Promise.all([getDoc(doc(db,"planos",U.uid)),getDoc(doc(db,"assinaturas",U.uid)).catch(()=>null)]);
     if(pl.exists())PLDOC=pl.data();ASSIN=as&&as.exists()?as.data():{};calcPlano()}catch(e){console.error(e)}
   if(ASS()&&!era){try{await Promise.all([carregarProds(),carregarProprios()]);const [pr,lo]=await Promise.all([getDoc(doc(db,"precos",U.uid)),getDoc(doc(db,"lojas",U.uid))]);const m=lo.exists()?lo.data().modo:null;
-    if(pr.exists())await C.publicarLoja(F,db,U.uid,{...pr.data(),...(["pronta","catalogo","todo"].includes(m)?{modo:m}:{})},PRODS,PROPRIOS)}catch(e){console.error("republicar",e)}}
+    if(pr.exists())await C.publicarLoja(F,db,U.uid,{...pr.data(),...(C.modoValido(m)?{modo:m}:{})},PRODS,PROPRIOS)}catch(e){console.error("republicar",e)}}
   ir(ui.tab)}
 function folhaPix(){const w=abrirFolha("Pagar com Pix",`<div id="pxB" style="display:flex;flex-direction:column;gap:12px;align-items:center;text-align:center"><p class="hint">Gerando o Pix…</p></div>`);
   let vivo=true,timer=null;w._fechar=()=>{vivo=false;clearTimeout(timer)};
@@ -513,7 +514,7 @@ async function tInicio(){
   const ok=vez();loading();
   try{await Promise.all([carregarLeads(),carregarDias(),carregarCat(),carregarAviso()])}catch(e){console.error(e);if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os números agora.</div>`;return}
   if(!ok())return;navHTML();
-  const oc=new Set(PR.ocultas||[]),noSite=PRODS.filter(p=>!oc.has(p.id)).length,nPE=(PR.pronta||[]).filter(i=>CAT[i]&&!oc.has(i)).length;
+  const oc=new Set(PR.ocultas||[]),pS=new Set(PR.pronta||[]),eS=new Set(PR.encomenda||[]),noSite=PRODS.filter(p=>naLoja(p.id,oc,pS,eS)).length,nPE=usaPE()?(PR.pronta||[]).filter(i=>CAT[i]&&!oc.has(i)).length:0;
   const lim=daysAgo(29).getTime(),rec=LEADS.filter(l=>(toDate(l.ts)||new Date()).getTime()>=lim);
   const env=rec.filter(l=>l.status!=="abandonado"),ab=LEADS.filter(l=>l.status==="abandonado");
   const nv=x=>{x=Number(x);return Number.isFinite(x)&&x>0&&x<1e6?x:0};
@@ -533,7 +534,7 @@ async function tInicio(){
       <div class="kpi ${ab.length?"alert":""}"><span>Abandonados</span><b class="num">${ab.length}</b><small>${brl(ab.reduce((s,l)=>s+(l.total||0),0))} para recuperar</small></div>
       <div class="kpi"><span>Acessos no mês</span><b class="num">${vis(30)}</b><small>visitas na loja</small></div>
     </div>${ab.length?`<button class="btn btn-ghost btn-sm" type="button" data-tab-go="pedidos">Ver carrinhos abandonados</button>`:""}</div>
-    <div class="box"><h3>Peças da loja · ${PR.modo==="pronta"?"só pronta entrega":"catálogo todo"}</h3><div class="kpis"><div class="kpi"><span>No site</span><b class="num">${PR.modo==="pronta"?nPE:noSite}</b><small>de ${PRODS.length} peças</small></div><div class="kpi"><span>Pronta entrega</span><b class="num">${nPE}</b><small>com selo verde</small></div></div>
+    <div class="box"><h3>Peças da loja · ${MODO_TXT[modo()][0].toLowerCase()}</h3><div class="kpis"><div class="kpi"><span>No site</span><b class="num">${noSite}</b><small>de ${PRODS.length} peças</small></div><div class="kpi"><span>Pronta entrega</span><b class="num">${nPE}</b><small>com selo verde</small></div></div>
       <button class="btn btn-ghost btn-sm" type="button" data-tab-go2="pecas">${I.tag}Escolher pronta entrega e peças do site</button></div>
     <div class="box"><h3>Acessos por dia · últimas 2 semanas</h3>
       <div class="chart" role="img" aria-label="Acessos por dia">${days.map((d,i)=>`<div class="c ${i===13?"today":""}"><em class="num">${vals[i]}</em><i style="height:${Math.max(2,vals[i]/mx*110)}px"></i><span>${i===13?"hoje":d.getDate()+"/"+(d.getMonth()+1)}</span></div>`).join("")}</div></div>
@@ -647,7 +648,7 @@ async function paraDataURL(file,w,h,modo,q,max){
 
 
 /* ---------- PEÇAS: pronta entrega, o que fica no site, fotos próprias e peças próprias ---------- */
-const FILTROS=[["todas","Todas"],["pe","Pronta entrega"],["minhas","Minhas peças"],["fora","Fora do site"],["excl","Excluídas"]];
+const FILTROS=[["todas","Todas"],["pe","Pronta entrega"],["en","Encomenda"],["minhas","Minhas peças"],["fora","Fora do site"],["excl","Excluídas"]];
 let PROPRIOS=null;
 async function carregarProprios(){if(PROPRIOS)return;PROPRIOS=(await C.lerProprios(F,db,U.uid)).map(p=>({...p,proprio:true}))
   .sort((a,b)=>String(a.nome).localeCompare(String(b.nome),"pt",{numeric:true}))}
@@ -687,9 +688,9 @@ async function tPecas(){
   const cats=[...new Set(todas().map(p=>p.cat).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt"));
   if(ui.pcat!=="Todas"&&!cats.includes(ui.pcat))ui.pcat="Todas";
   $("main").innerHTML=`<div class="box"><div class="row" style="justify-content:space-between"><h2>Peças da loja</h2><button class="btn ${ASS()?"btn-brand":"btn-ghost"} btn-sm" type="button" id="novaPeca">${ASS()?I.plus:I.lock}Nova peça</button></div>
-    <p class="lead">Ligue <b>Pronta entrega</b> nas peças que você tem em mãos. Desligue <b>No site</b> para tirar uma peça da loja. Em <b>Editar</b> você muda o nome e a foto da peça${ASS()?`, e em <b>Nova peça</b> cadastra uma peça sua.`:`. <span class="hint">Cadastrar peças suas é do plano <b>Assinante</b>.</span>`}</p>
-    <div class="field"><span class="flabel">Como você trabalha</span><div class="seg" id="modo" role="radiogroup" aria-label="Como você trabalha">
-      <button type="button" data-modo="catalogo" aria-pressed="${modo()==="catalogo"}">Catálogo todo</button><button type="button" data-modo="pronta" aria-pressed="${modo()==="pronta"}">Só pronta entrega</button></div>
+    <p class="lead">Escolha abaixo como você trabalha. Ligue <b>Pronta entrega</b> nas peças que você tem em mãos${""}. Em <b>Editar</b> você muda o nome e a foto da peça${ASS()?`, e em <b>Nova peça</b> cadastra uma peça sua.`:`. <span class="hint">Cadastrar peças suas é do plano <b>Assinante</b>.</span>`}</p>
+    <div class="field"><span class="flabel">Como você trabalha</span><div class="seg seg-col" id="modo" role="radiogroup" aria-label="Como você trabalha">
+      ${C.MODOS.map(k=>`<button type="button" data-modo="${k}" aria-pressed="${modo()===k}"><b>${MODO_TXT[k][0]}</b><small>${MODO_TXT[k][1]}</small></button>`).join("")}</div>
       <span class="hint" id="modoHint"></span></div>
     <div class="pcbar"><span class="saved" id="pcStatus" aria-live="polite"></span></div>
     <div class="seg seg-wrap" id="pf"></div>
@@ -701,7 +702,7 @@ async function tPecas(){
   $("modo").onclick=e=>{const v=e.target.closest("[data-modo]")?.dataset.modo;if(!v||v===modo())return;PR.modo=v;
     $("modo").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.modo===v));
     salvarLoja({modo:v},true);
-    if(v==="pronta"&&ui.pf==="fora")ui.pf="todas";pecas();salvarPrecos()};
+    if((ui.pf==="fora"&&!usaSite())||(ui.pf==="pe"&&!usaPE())||(ui.pf==="en"&&!usaEn()))ui.pf="todas";pecas();salvarPrecos()};
   $("pf").onclick=e=>{const v=e.target.closest("[data-f]")?.dataset.f;if(v){ui.pf=v;ui.plim=40;pecas()}};
   $("pq").oninput=e=>{ui.pq=e.target.value;ui.plim=40;pecas()};
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
@@ -709,23 +710,33 @@ async function tPecas(){
     const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
     if(e.target.closest("[data-bloq]"))return toast("Peça bloqueada: no plano gratuito suas peças não aparecem na loja. Ela volta quando você for Assinante.");
     const ed=e.target.closest("[data-edit]");if(ed)ASS()?formPropria(ed.dataset.edit):toast(MSG_ASS())};
-  $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site;if(!id)return;
-    const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
+  $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site||t.dataset.en;if(!id)return;
+    const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),en=new Set(PR.encomenda||[]);
     if(t.dataset.pe){if(t.checked){pe.add(id);oc.delete(id)}else pe.delete(id)}
+    else if(t.dataset.en){if(t.checked){en.add(id);oc.delete(id)}else en.delete(id)}
     else{if(t.checked)oc.delete(id);else{oc.add(id);pe.delete(id)}}
-    PR.pronta=[...pe];PR.ocultas=[...oc];
+    PR.pronta=[...pe];PR.ocultas=[...oc];PR.encomenda=[...en];
     if(!pe.has(id)&&(PRODS||[]).some(p=>p.id===id&&p.fora))toast("Essa peça saiu do catálogo Veraneio: sem pronta entrega, ela sai da sua loja quando você publicar e não volta para a lista.");
-    const row=t.closest(".pr");if(row){row.classList.toggle("off",oc.has(id));const x=row.querySelector("[data-pe]");x.disabled=oc.has(id);x.checked=pe.has(id)}
+    const row=t.closest(".pr");if(row){row.classList.toggle("off",usaSite()&&oc.has(id));const x=row.querySelector("[data-pe]");if(x){x.disabled=usaSite()&&oc.has(id);x.checked=pe.has(id)}}
     segPecas();massa();salvarPrecos()};
   $("massa").onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;
     if(ui.mArm!==b.dataset.m){ui.mArm=b.dataset.m;massa();clearTimeout(ui.mT);ui.mT=setTimeout(()=>{ui.mArm=null;if($("massa"))massa()},4000);return}
-    ui.mArm=null;const ids=filtradas().map(p=>p.id),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]);
-    ({pe:()=>ids.forEach(i=>{if(modo()==="pronta")oc.delete(i);if(!oc.has(i))pe.add(i)}),tirape:()=>ids.forEach(i=>pe.delete(i)),
+    ui.mArm=null;const ids=filtradas().map(p=>p.id),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),en=new Set(PR.encomenda||[]);
+    ({pe:()=>ids.forEach(i=>{if(!usaSite())oc.delete(i);if(!oc.has(i))pe.add(i)}),tirape:()=>ids.forEach(i=>pe.delete(i)),
+      en:()=>ids.forEach(i=>{oc.delete(i);en.add(i)}),tiraen:()=>ids.forEach(i=>en.delete(i)),
       fora:()=>ids.forEach(i=>{oc.add(i);pe.delete(i)}),volta:()=>ids.forEach(i=>oc.delete(i))})[b.dataset.m]();
-    PR.pronta=[...pe];PR.ocultas=[...oc];pecas();salvarPrecos()};
+    PR.pronta=[...pe];PR.ocultas=[...oc];PR.encomenda=[...en];pecas();salvarPrecos()};
   pecas();
 }
-const modo=()=>PR.modo==="pronta"?"pronta":"catalogo";
+const modo=()=>C.modoLoja(PR.modo);
+/* como a revendedora trabalha: só muda quando ELA troca aqui (atualização do catálogo/estoque não mexe) */
+const MODO_TXT={catalogo:["Encomenda + pronta entrega","Catálogo todo por encomenda. As peças que você tem em mãos ganham o selo de pronta entrega."],
+  encomenda:["Só encomenda","Catálogo todo por encomenda, sem pronta entrega."],
+  pronta:["Só pronta entrega","Só as peças que você tem em mãos."],
+  escolhidas:["Encomenda escolhida + pronta entrega","Só as peças que você marcar como encomenda, mais as de pronta entrega."]};
+const usaPE=()=>modo()!=="encomenda",usaSite=()=>["catalogo","encomenda"].includes(modo()),usaEn=()=>modo()==="escolhidas";
+/* peças que aparecem na loja, conforme o modo */
+const naLoja=(id,oc,pe,en)=>!oc.has(id)&&(modo()==="pronta"?pe.has(id):modo()==="escolhidas"?pe.has(id)||en.has(id):true);
 /* excluir uma peça da Veraneio só da loja desta revendedora: sai do site, da pronta entrega e das listas (dá para restaurar) */
 function excluirPeca(id){
   const ex=new Set(PR.excluidas||[]),oc=new Set(PR.ocultas||[]);ex.add(id);oc.add(id);
@@ -735,15 +746,15 @@ function restaurar(id){
   PR.excluidas=(PR.excluidas||[]).filter(x=>x!==id);PR.ocultas=(PR.ocultas||[]).filter(x=>x!==id);
   if($("plist"))pecas();salvarPrecos();toast("Peça restaurada. Toque em Publicar atualização para ela voltar à loja.")}
 function filtradas(){
-  const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),ex=new Set(PR.excluidas||[]),q=norm(ui.pq);
+  const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),en=new Set(PR.encomenda||[]),ex=new Set(PR.excluidas||[]),q=norm(ui.pq);
   return todas().filter(p=>(ui.pcat==="Todas"||p.cat===ui.pcat)&&(!q||norm(p.nome+" "+nomeLoja(p)).includes(q))
-    &&(ui.pf==="excl"?ex.has(p.id):!ex.has(p.id)&&(ui.pf==="todas"||(ui.pf==="pe"?pe.has(p.id)&&!oc.has(p.id):ui.pf==="minhas"?p.proprio:oc.has(p.id)))));
+    &&(ui.pf==="excl"?ex.has(p.id):!ex.has(p.id)&&(ui.pf==="todas"||(ui.pf==="pe"?pe.has(p.id)&&!oc.has(p.id):ui.pf==="en"?en.has(p.id)&&!oc.has(p.id):ui.pf==="minhas"?p.proprio:oc.has(p.id)))));
 }
 function segPecas(){
   const ex=new Set(PR.excluidas||[]),l=todas().filter(p=>!ex.has(p.id)),ids=new Set(l.map(p=>p.id)),oc=new Set((PR.ocultas||[]).filter(i=>ids.has(i)));
-  const n={todas:l.length,pe:(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.has(i)).length,minhas:(PROPRIOS||[]).length,fora:oc.size,excl:todas().filter(p=>ex.has(p.id)).length};
+  const n={todas:l.length,pe:(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.has(i)).length,en:(PR.encomenda||[]).filter(i=>ids.has(i)&&!oc.has(i)).length,minhas:(PROPRIOS||[]).length,fora:oc.size,excl:todas().filter(p=>ex.has(p.id)).length};
   if(ui.pf==="excl"&&!n.excl)ui.pf="todas";
-  $("pf").innerHTML=FILTROS.filter(([k])=>!(k==="fora"&&modo()==="pronta")&&!(k==="minhas"&&!n.minhas&&ui.pf!=="minhas")&&!(k==="excl"&&!n.excl))
+  $("pf").innerHTML=FILTROS.filter(([k])=>!(k==="fora"&&!usaSite())&&!(k==="pe"&&!usaPE())&&!(k==="en"&&!usaEn())&&!(k==="minhas"&&!n.minhas&&ui.pf!=="minhas")&&!(k==="excl"&&!n.excl))
     .map(([k,l])=>`<button type="button" data-f="${k}" aria-pressed="${ui.pf===k}">${l} (${n[k]})</button>`).join("");
 }
 function massa(){
@@ -751,21 +762,25 @@ function massa(){
   if(ui.pf==="excl"){el.innerHTML=`<span class="hint">Peças excluídas não aparecem na sua loja nem nas listas. Toque em “Restaurar” para trazer de volta.</span>`;return}
   if(ui.pf==="minhas"&&!ASS()){el.innerHTML=`<span class="hint">${I.lock} No plano gratuito as peças cadastradas por você não aparecem na loja. Elas voltam quando você for Assinante.</span>`;return}
   if(ui.pcat==="Todas"&&!ui.pq.trim()){el.innerHTML=`<span class="hint">Escolha uma categoria para marcar ou tirar do site várias peças de uma vez.</span>`;return}
-  const l=filtradas(),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),n=l.length;if(!n){el.innerHTML="";return}
-  const nPe=l.filter(p=>pe.has(p.id)&&!oc.has(p.id)).length,nOc=l.filter(p=>oc.has(p.id)).length;
+  const l=filtradas(),pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),en=new Set(PR.encomenda||[]),n=l.length;if(!n){el.innerHTML="";return}
+  const nPe=l.filter(p=>pe.has(p.id)&&!oc.has(p.id)).length,nOc=l.filter(p=>oc.has(p.id)).length,nEn=l.filter(p=>en.has(p.id)&&!oc.has(p.id)).length;
   const b=(m,t)=>`<button class="btn btn-ghost btn-sm ${ui.mArm===m?"arm":""}" type="button" data-m="${m}">${ui.mArm===m?"Toque de novo para confirmar":t}</button>`;
-  el.innerHTML=[nPe<n-nOc?b("pe",`Marcar todas (${n-nOc}) como pronta entrega`):"",nPe?b("tirape",`Desmarcar pronta entrega (${nPe})`):"",
-    ...(modo()==="pronta"?[]:[nOc<n?b("fora",`Tirar todas (${n-nOc}) do site`):"",nOc?b("volta",`Voltar ao site (${nOc})`):""])].join("");
+  el.innerHTML=[...(usaPE()?[nPe<n-nOc?b("pe",`Marcar todas (${usaSite()?n-nOc:n}) como pronta entrega`):"",nPe?b("tirape",`Desmarcar pronta entrega (${nPe})`):""]:[]),
+    ...(usaEn()?[nEn<n?b("en",`Marcar todas (${n}) como encomenda`):"",nEn?b("tiraen",`Tirar da encomenda (${nEn})`):""]:[]),
+    ...(usaSite()?[nOc<n?b("fora",`Tirar todas (${n-nOc}) do site`):"",nOc?b("volta",`Voltar ao site (${nOc})`):""]:[])].join("");
 }
 function pecas(){
   segPecas();massa();
   const ids=new Set(todas().map(p=>p.id));
-  const so=modo()==="pronta",nPE=(PR.pronta||[]).filter(i=>ids.has(i)&&!(PR.ocultas||[]).includes(i)).length;
-  $("modoHint").innerHTML=so?(nPE?(nPE===1?`Sua loja mostra só a <b>1</b> peça marcada como pronta entrega.`:`Sua loja mostra só as <b>${nPE}</b> peças marcadas como pronta entrega.`):`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`)
-    :"Sua loja mostra o catálogo Veraneio inteiro. As peças a pronta entrega ganham o selo verde e uma categoria própria.";
-  const pe=new Set(PR.pronta||[]),oc=new Set(PR.ocultas||[]),lista=filtradas();ui.plim=ui.plim||40;const l=lista.slice(0,ui.plim);
-  const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="fora"?"Todas as peças estão no seu site.":ui.pf==="minhas"?"Você ainda não cadastrou peças suas. Toque em “Nova peça”.":"Nenhuma peça encontrada.";
-  $("plist").innerHTML=(l.length?l.map(p=>{const o=!so&&oc.has(p.id),fp=temFotoPropria(p),nm=nomeLoja(p);
+  const so=!usaSite(),ocS=new Set(PR.ocultas||[]),peS=new Set(PR.pronta||[]),enS=new Set(PR.encomenda||[]);
+  const nLoja=[...ids].filter(i=>naLoja(i,ocS,peS,enS)).length,pl=n=>n===1?"<b>1</b> peça":`<b>${n}</b> peças`;
+  $("modoHint").innerHTML=({catalogo:`Sua loja mostra o catálogo inteiro por encomenda (${pl(nLoja)}). As de pronta entrega ganham o selo verde e uma categoria própria.`,
+    encomenda:`Sua loja mostra o catálogo inteiro por encomenda (${pl(nLoja)}), sem pronta entrega.`,
+    pronta:nLoja?`Sua loja mostra só ${pl(nLoja)} de pronta entrega.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Pronta entrega” nas peças que você tem em mãos.`,
+    escolhidas:nLoja?`Sua loja mostra ${pl(nLoja)}: as que você marcou como <b>Encomenda</b> e as de <b>Pronta entrega</b>.`:`<b style="color:var(--danger)">Sua loja está vazia.</b> Ligue “Encomenda” ou “Pronta entrega” nas peças que quer vender.`})[modo()]+" Atualizações do catálogo não mudam essa escolha.";
+  const pe=peS,oc=ocS,en=enS,lista=filtradas();ui.plim=ui.plim||40;const l=lista.slice(0,ui.plim);
+  const vazio=ui.pf==="pe"?"Nenhuma peça a pronta entrega ainda. Ligue a chave “Pronta entrega” nas peças que você tem em mãos.":ui.pf==="en"?"Nenhuma peça marcada como encomenda ainda. Ligue a chave “Encomenda” nas peças que quer vender por encomenda.":ui.pf==="fora"?"Todas as peças estão no seu site.":ui.pf==="minhas"?"Você ainda não cadastrou peças suas. Toque em “Nova peça”.":"Nenhuma peça encontrada.";
+  $("plist").innerHTML=(l.length?l.map(p=>{const o=usaSite()&&oc.has(p.id),fp=temFotoPropria(p),nm=nomeLoja(p);
     if(ui.pf==="excl")return `<div class="pr off"><div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(nm)}<small>${esc(p.cat||"")} · excluída da sua loja</small></div>
     <div class="pacts"><button class="btn btn-ghost btn-sm" type="button" data-rest="${esc(p.id)}" aria-label="Restaurar ${esc(nm)}">Restaurar</button></div></div>`;
@@ -778,7 +793,8 @@ function pecas(){
     <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${precoTxt(p)}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}${p.fora?`<small class="orig">Saiu do catálogo Veraneio. Fica na sua loja enquanto estiver como pronta entrega.</small>`:""}</div>
     <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(nm)}">${I.edit}Editar</button>`
       :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Editar peça: ${esc(nm)}">${I.edit}Editar</button>`}</div>
-    <div class="sws"><label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!o?"checked":""} ${o?"disabled":""} aria-label="Pronta entrega: ${esc(nm)}">Pronta entrega</label>
+    <div class="sws">${usaPE()?`<label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!(usaSite()&&oc.has(p.id))?"checked":""} ${usaSite()&&oc.has(p.id)?"disabled":""} aria-label="Pronta entrega: ${esc(nm)}">Pronta entrega</label>`:""}
+      ${usaEn()?`<label class="pe site"><input type="checkbox" role="switch" data-en="${esc(p.id)}" ${en.has(p.id)&&!oc.has(p.id)?"checked":""} aria-label="Encomenda: ${esc(nm)}">Encomenda</label>`:""}
       ${so?"":`<label class="pe site"><input type="checkbox" role="switch" data-site="${esc(p.id)}" ${o?"":"checked"} aria-label="No site: ${esc(nm)}">No site</label>`}</div></div>`}).join("")
     :`<p class="hint">${vazio}</p>`)+(lista.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${lista.length-l.length})</button>`:"");
   const m=$("mais");if(m)m.onclick=()=>{ui.plim+=60;pecas()};
@@ -930,7 +946,7 @@ async function tPrecos(){
     salvarPrecos();atualizar()};
   linhas();
 }
-const noSite=()=>{const oc=new Set(PR.ocultas||[]),pe=new Set(PR.pronta||[]),so=PR.modo==="pronta";return PRODS.filter(p=>!oc.has(p.id)&&(!so||pe.has(p.id)))};
+const noSite=()=>{const oc=new Set(PR.ocultas||[]),pe=new Set(PR.pronta||[]),en=new Set(PR.encomenda||[]);return PRODS.filter(p=>naLoja(p.id,oc,pe,en))};
 function linhas(){
   const q=norm(ui.mq),todos=noSite().filter(p=>(ui.mcat==="Todas"||p.cat===ui.mcat)&&(!q||norm(p.nome).includes(q)));
   ui.lim=ui.lim||40;const l=todos.slice(0,ui.lim);
@@ -962,14 +978,14 @@ let _cati=null,_catiDe=null;const CATI=()=>{if(_catiDe!==PRODS){_cati={};PRODS.f
 let filaPub=Promise.resolve(),pendPub=0;
 function status(t){const a=$("pcStatus");if(a)a.textContent=t}
 function precosLimpos(){
-  const ids=new Set(todas().map(p=>p.id)),exl=[...new Set((PR.excluidas||[]).filter(i=>ids.has(i)))],oc=[...new Set([...(PR.ocultas||[]),...exl])].filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i));
+  const ids=new Set(todas().map(p=>p.id)),exl=[...new Set((PR.excluidas||[]).filter(i=>ids.has(i)))],oc=[...new Set([...(PR.ocultas||[]),...exl])].filter(i=>ids.has(i)),pe=(PR.pronta||[]).filter(i=>ids.has(i)&&!oc.includes(i)),enc=[...new Set((PR.encomenda||[]).filter(i=>ids.has(i)&&!oc.includes(i)))];PR.encomenda=enc;
   const fo={};for(const [k,v] of Object.entries(PR.fotos||{}))if(ids.has(k)&&v&&v.n)fo[k]=v;
   const nm={};for(const [k,v] of Object.entries(PR.nomes||{}))if(ids.has(k)&&String(v||"").trim())nm[k]=String(v).trim().slice(0,80);
   const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
   const ds={};for(const [k,v] of Object.entries(PR.descs||{}))if(ids.has(k)&&String(v||"").trim())ds[k]=String(v).trim().slice(0,600);
   const pm={};for(const [k,v] of Object.entries(PR.promos||{}))if(ids.has(k)&&C.pctPromo(v))pm[k]=C.pctPromo(v);PR.promos=pm;
   PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;PR.descs=ds;
-  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,modo:modo()}}
+  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,encomenda:enc,modo:modo()}}
 async function gravarPrecosRascunho(){await Promise.all([carregarProds(),carregarProprios()]);await rascunho("precos",precosLimpos())}
 function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;RAS.precos=true;pubBar();saveT.p=setTimeout(()=>{saveT.p=null;
   filaPub=filaPub.then(async()=>{

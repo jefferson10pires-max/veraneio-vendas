@@ -220,14 +220,14 @@ test.describe("P04 modo de trabalho", () => {
     await preparar(page, { seed: seed(800, { "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y1", "y7"], ocultas: ["y7"] } }) });
     await entrar(page);
     await aba(page, "Peças").click();
-    await page.getByRole("button", { name: "Só pronta entrega" }).click();
+    await page.locator("#modo [data-modo='pronta']").click();
     await publicar(page);
     let d = await db(page);
     const ids = () => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens.map((x: any) => x.id));
     expect(ids()).toEqual(["y1"]);
     expect(d["lojas/u1"].modo).toBe("pronta");
     expect(d["precos/u1"].modo).toBe("pronta");
-    await expect(page.locator("#modoHint")).toContainText("só a 1 peça marcada");
+    await expect(page.locator("#modoHint")).toContainText("só 1 peça de pronta entrega");
     await expect(page.getByRole("switch", { name: "No site: Peça 1", exact: true })).toHaveCount(0);
     // marcar outra peça (mesmo que antes estivesse fora do site) coloca ela na loja
     await page.getByPlaceholder("Pesquisar peça").fill("Peça 7");
@@ -235,7 +235,7 @@ test.describe("P04 modo de trabalho", () => {
     await publicar(page);
     d = await db(page);
     expect(ids().sort()).toEqual(["y1", "y7"]);
-    await page.getByRole("button", { name: "Catálogo todo" }).click();
+    await page.locator("#modo [data-modo='catalogo']").click();
     await publicar(page);
     d = await db(page);
     expect(ids().length).toBe(800);
@@ -576,9 +576,9 @@ test.describe("P07 casos de borda: fotos e peças próprias, fontes", () => {
 
   test("P07-E7 modo 'Só pronta entrega': peça própria aparece só se marcada", async ({ page }) => {
     await abrirPecas(page, { "precos/u1": { margem: 100, arred: "90", over: {}, pronta: [], modo: "pronta" }, "lojas/u1/proprios/rA": { nome: "Anel Meu", cat: "Anéis", preco: 50 } });
-    await page.getByRole("button", { name: "Só pronta entrega" }).click();
-    await page.getByRole("button", { name: "Catálogo todo" }).click();
-    await page.getByRole("button", { name: "Só pronta entrega" }).click();
+    await page.locator("#modo [data-modo='pronta']").click();
+    await page.locator("#modo [data-modo='catalogo']").click();
+    await page.locator("#modo [data-modo='pronta']").click();
     await publicar(page);
     expect(catalogo(await db(page)).length).toBe(0);
     await page.getByRole("switch", { name: "Pronta entrega: Anel Meu", exact: true }).check();
@@ -1434,7 +1434,7 @@ test.describe("PAG1 assinatura paga (Mercado Pago)", () => {
     await page.getByLabel("Pago até").fill("2020-01-01");
     await page.getByRole("button", { name: "Marcar como assinante" }).click();
     await expect(page.locator("#asE")).toContainText("a partir de hoje");
-    const futuro = new Date(Date.now() + 60 * dia), iso = futuro.toISOString().slice(0, 10);
+    const futuro = new Date(Date.now() + 60 * dia), iso = `${futuro.getFullYear()}-${String(futuro.getMonth() + 1).padStart(2, "0")}-${String(futuro.getDate()).padStart(2, "0")}`;
     await page.getByLabel("Pago até").fill(iso);
     await page.getByRole("button", { name: "Marcar como assinante" }).click();
     await expect(page.locator("#toast")).toContainText("agora é assinante até");
@@ -1577,6 +1577,59 @@ test.describe("MD1 'só pronta entrega' não volta para o catálogo todo", () =>
     expect(d["lojas/u1"].modo).toBe("pronta");
     expect(d["precos/u1"].modo).toBe("pronta");
     expect(itensDe(d, "u1").map((x: any) => x.id)).toEqual(["y3"]);
+    expect(erros).toEqual([]);
+  });
+});
+
+test.describe("MD2 quatro jeitos de trabalhar", () => {
+  const ids = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens);
+  test("MD2-H1 só encomenda: catálogo todo sem selo de pronta entrega; escolhidas: só encomenda marcada + pronta", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, { "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y1"], ocultas: ["y9"] } }) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await expect(page.locator("#modo button")).toHaveCount(4);
+    await page.locator("#modo [data-modo='encomenda']").click();
+    await expect(page.getByRole("switch", { name: /^Pronta entrega:/ })).toHaveCount(0);
+    await publicar(page);
+    let d = await db(page);
+    expect(ids(d).length).toBe(39);
+    expect(ids(d).some((x: any) => x.pronta)).toBe(false);
+    expect(d["lojas/u1"].modo).toBe("encomenda");
+    // encomenda escolhida + pronta entrega
+    await page.locator("#modo [data-modo='escolhidas']").click();
+    await expect(page.locator("#modoHint")).toContainText("1 peça");
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 5");
+    await page.getByRole("switch", { name: "Encomenda: Peça 5", exact: true }).check();
+    await page.getByPlaceholder("Pesquisar peça").fill("Peça 9");
+    await page.getByRole("switch", { name: "Encomenda: Peça 9", exact: true }).check();
+    await publicar(page);
+    d = await db(page);
+    expect(ids(d).map((x: any) => x.id).sort()).toEqual(["y1", "y5", "y9"]);
+    expect(ids(d).find((x: any) => x.id === "y1").pronta).toBe(true);
+    expect(ids(d).find((x: any) => x.id === "y5").pronta).toBeUndefined();
+    expect(d["precos/u1"]).toMatchObject({ modo: "escolhidas", encomenda: ["y5", "y9"] });
+    await page.getByPlaceholder("Pesquisar peça").fill("");
+    await page.locator("#pf").getByRole("button", { name: /^Encomenda \(2\)/ }).click();
+    await expect(page.locator("#plist .pr")).toHaveCount(2);
+    expect(erros).toEqual([]);
+  });
+  test("MD2-H2 atualização do catálogo pelo ADM mantém 'escolhidas' e 'só encomenda'", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(40, {
+      "lojas/u1": { ...seed(40)["lojas/u1"], modo: "escolhidas" },
+      "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y1"], encomenda: ["y2", "y3"], modo: "escolhidas" },
+      "lojas/u2": { nome: "Outra", slug: "outra", status: "ativa", cor: "#043034", modo: "encomenda" },
+      "precos/u2": { margem: 100, pronta: ["y4"], modo: "catalogo" }, "planos/u2": { plano: "assinante" },
+      "sistema/yampi": { total: 40, novos: 0, em: { __ts: Date.now() } } }) });
+    await entrar(page, "adm@teste.com", "/adm");
+    await page.locator("#nav").getByRole("button", { name: "Produtos" }).click();
+    await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
+    await expect(page.locator("#toast")).toContainText("Catálogo atualizado", { timeout: 10000 });
+    const d = await db(page);
+    expect(ids(d).map((x: any) => x.id).sort()).toEqual(["y1", "y2", "y3"]);
+    const u2 = Object.keys(d).filter((k) => k.startsWith("catalogos/u2/partes/")).flatMap((k) => d[k].itens);
+    expect(u2.length).toBeGreaterThan(20);
+    expect(u2.some((x: any) => x.id === "y4")).toBe(true);
+    expect(u2.some((x: any) => x.pronta)).toBe(false);
     expect(erros).toEqual([]);
   });
 });

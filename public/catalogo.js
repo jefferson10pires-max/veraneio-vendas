@@ -65,12 +65,20 @@ export function comPromo(preco, pct, piso = 0) {
   const novo = Math.max(Math.round(preco * (100 - p)) / 100, Math.round((Number(piso) || 0) * 100) / 100);
   return novo < preco - 0.004 ? { preco: novo, de: preco } : { preco };
 }
+/* Como a revendedora trabalha (lojas.modo — só ela muda; atualização de catálogo/estoque nunca troca):
+ *  catalogo   = encomenda com o catálogo todo + pronta entrega   ("todo" = nome antigo)
+ *  encomenda  = só encomenda, catálogo todo (sem pronta entrega)
+ *  pronta     = só pronta entrega
+ *  escolhidas = encomenda só das peças que ela marcar + pronta entrega */
+export const MODOS = ["catalogo", "encomenda", "pronta", "escolhidas"];
+export const modoLoja = (v) => (v === "todo" ? "catalogo" : MODOS.includes(v) ? v : "catalogo");
+export const modoValido = (v) => v === "todo" || MODOS.includes(v);
 export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   // dados da revendedora podem vir malformados: normaliza tudo antes de usar
   const src = precos && typeof precos === "object" ? precos : {};
   const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
   const arr = (v) => (Array.isArray(v) ? v : []);
-  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), promos: obj(src.promos), pronta: arr(src.pronta), ocultas: arr(src.ocultas) };
+  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), promos: obj(src.promos), pronta: arr(src.pronta), ocultas: arr(src.ocultas), encomenda: arr(src.encomenda) };
   if (!Number.isFinite(Number(pr.margem))) pr.margem = 100;
   const pe = new Set(pr.pronta), oc = new Set(pr.ocultas), fo = pr.fotos;
   const nFotos = (n) => Math.min(3, Math.max(0, Math.floor(Number(n) || 0)));
@@ -80,10 +88,11 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   let prontos = null;
   if (proprios === "publicados") { prontos = velhas.docs.flatMap((d) => (d.data().itens || []).filter((x) => x && x.proprio)); proprios = []; }
   else if (!proprios) { try { proprios = await lerProprios(F, db, uid); } catch (e) { proprios = []; } }
-  const so = pr.modo === "pronta";
-  const vale = (id) => !oc.has(id) && (!so || pe.has(id));
+  const m = modoLoja(pr.modo), en = new Set(pr.encomenda), comPE = m !== "encomenda";
+  const vale = (id) => !oc.has(id) && (m === "pronta" ? pe.has(id) : m === "escolhidas" ? pe.has(id) || en.has(id) : true);
+  const ePE = (id) => comPE && pe.has(id);
   // peça que saiu do catálogo da Veraneio (p.fora) só continua na loja de quem marcou como pronta entrega
-  const itens = atacado.filter((p) => vale(p.id) && (!p.fora || pe.has(p.id))).map((p) => {
+  const itens = atacado.filter((p) => vale(p.id) && (!p.fora || ePE(p.id))).map((p) => {
     const f = fo[p.id] && nFotos(fo[p.id].n) ? fo[p.id] : null;
     return {
       id: p.id, nome: String(pr.nomes[p.id] || "").trim().slice(0, 80) || p.nome || "", cat: p.cat || "", banho: p.banho || "",
@@ -93,7 +102,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
       ...comPromo(precoFinal(p.preco, pr, p.id), pr.promos[p.id], p.preco),
       ...(f ? { fp: { n: nFotos(f.n), v: Number(f.v) || 1 } } : {}),
       ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
-      ...(pe.has(p.id) ? { pronta: true } : {}),
+      ...(ePE(p.id) ? { pronta: true } : {}),
     };
   });
   // peças próprias: preço de venda que a revendedora digitou, sem margem; aparecem primeiro na vitrine
@@ -102,7 +111,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
     fotos: [], ...(nFotos(p.fotosN) ? { fp: { n: nFotos(p.fotosN), v: Number(p.fotosV) || 1 } } : {}),
     novo: !!p.novo, ordem: 0, ...comPromo(Math.round(Number(p.preco) * 100) / 100, pr.promos[p.id]), proprio: true,
     ...(p.var && p.var.ops && p.var.ops.length ? { var: p.var } : {}),
-    ...(pe.has(p.id) ? { pronta: true } : {}),
+    ...(ePE(p.id) ? { pronta: true } : {}),
   }));
   const todos = [...(prontos || meus), ...itens];
   const ps = partes(todos);

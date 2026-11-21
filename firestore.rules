@@ -84,7 +84,7 @@ service cloud.firestore {
 
     // formato que o painel grava; qualquer outra coisa é recusada (um documento malformado travava a republicação de todas as lojas)
     function precosOk(d) {
-      return d.keys().hasOnly(['margem', 'arred', 'over', 'fixo', 'pronta', 'ocultas', 'excluidas', 'fotos', 'nomes', 'descs', 'promos', 'modo', 'atualizadoEm', 'em'])
+      return d.keys().hasOnly(['margem', 'arred', 'over', 'fixo', 'pronta', 'ocultas', 'excluidas', 'fotos', 'nomes', 'descs', 'promos', 'modo', 'encomenda', 'atualizadoEm', 'em'])
         && d.get('margem', 0) is number && d.get('margem', 0) >= 0 && d.get('margem', 0) <= 1000
         && d.get('arred', '') is string
         && d.get('over', {}) is map && d.get('fixo', {}) is map
@@ -92,7 +92,8 @@ service cloud.firestore {
         && d.get('pronta', []) is list && d.get('ocultas', []) is list
         && d.get('excluidas', []) is list
         && d.get('pronta', []).size() <= 5000 && d.get('ocultas', []).size() <= 5000 && d.get('excluidas', []).size() <= 5000
-        && d.get('modo', 'catalogo') in ['catalogo', 'todo', 'pronta'];
+        && d.get('encomenda', []) is list && d.get('encomenda', []).size() <= 5000
+        && d.get('modo', 'catalogo') in ['catalogo', 'todo', 'pronta', 'encomenda', 'escolhidas'];
     }
     // Aviso da Veraneio no painel de todas as revendedoras (só o ADM escreve)
     function avisoOk(d) {
@@ -201,7 +202,7 @@ service cloud.firestore {
         && (!k.hasAny(['cor']) || isCor(d.cor))
         && (!k.hasAny(['nome']) || (d.nome is string && d.nome.size() <= 80))
         && (!k.hasAny(['logo']) || d.logo == null || isFoto(d.logo))
-        && (!k.hasAny(['modo']) || d.modo in ['catalogo', 'todo', 'pronta']);
+        && (!k.hasAny(['modo']) || d.modo in ['catalogo', 'todo', 'pronta', 'encomenda', 'escolhidas']);
     }
     match /lojas/{uid} {
       allow read: if true;

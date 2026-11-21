@@ -497,7 +497,7 @@ function linhaAssinatura(uid){const s=sit(uid),c=(ASSIN[uid]||{}).cartao;if(!s.a
   return `<div class="hint"><b>${esc(partes.join(" · "))}</b></div>`}
 async function republicarPlano(lj,assin){
   try{const [pr,lo]=await Promise.all([getDoc(doc(db,"precos",lj.uid)),getDoc(doc(db,"lojas",lj.uid))]);const m=lo.exists()?lo.data().modo:null;
-    await C.publicarLoja(F,db,lj.uid,{...(pr.exists()?pr.data():{}),...(["pronta","catalogo","todo"].includes(m)?{modo:m}:{})},await C.lerAtacado(F,db),assin?undefined:[]);return true}
+    await C.publicarLoja(F,db,lj.uid,{...(pr.exists()?pr.data():{}),...(C.modoValido(m)?{modo:m}:{})},await C.lerAtacado(F,db),assin?undefined:[]);return true}
   catch(err){console.error(err);toast("Plano mudado, mas a loja não foi atualizada. Use “Republicar catálogo em todas as lojas” em Produtos.");return false}}
 function formAssinante(lj){
   abrir(`${head("Tornar assinante")}<form class="px" id="asf" novalidate style="display:flex;flex-direction:column;gap:12px;padding-bottom:18px">
@@ -702,7 +702,7 @@ async function importarYampi(forcar){
 async function publicarTodas(prog=()=>{}){
   const pr=await getDocs(collection(db,"precos"));let n=0;const falhas=[];
   /* "só pronta entrega" ou "catálogo todo" vale o que está publicado na loja (lojas.modo) */
-  const modoLoja=Object.create(null);try{(await getDocs(collection(db,"lojas"))).docs.forEach(d=>{const m=d.data().modo;if(["pronta","catalogo","todo"].includes(m))modoLoja[d.id]=m})}catch(e){}
+  const modoLoja=Object.create(null);try{(await getDocs(collection(db,"lojas"))).docs.forEach(d=>{const m=d.data().modo;if(C.modoValido(m))modoLoja[d.id]=m})}catch(e){}
   /* a pronta entrega é estoque da revendedora: peça que saiu do catálogo da Veraneio continua na loja de quem marcou
      (vale o que ela publicou e o que está no rascunho). Vai no atacado com fora:true; publicarLoja só mostra para quem tem. */
   const pe=new Set(),junta=x=>{if(Array.isArray(x))x.forEach(i=>{if(typeof i==="string")pe.add(i)})};
