@@ -102,7 +102,7 @@ test.describe("F03 ficha do produto", () => {
     await abrir(page);
     await card(page, "Anel Solitário").locator(".name").click();
     await page.getByRole("button", { name: /adicionar ao carrinho/i }).click();
-    await expect(page.getByText(/escolha o tamanho/i)).toBeVisible();
+    await expect(page.locator("#vErr")).toHaveText("Escolha uma opção de tamanhos antes de adicionar.");
     await expect(page.locator("#badge")).toHaveText("0");
     await page.getByRole("radio", { name: "16" }).click();
     await page.getByRole("button", { name: /adicionar ao carrinho/i }).click();
@@ -291,7 +291,7 @@ test.describe("F10 peça própria no carrinho", () => {
     await abrir(page, itens as any);
     await card(page, "Anel Próprio Lua").locator(".name").click();
     await page.getByRole("button", { name: /adicionar ao carrinho/i }).click();
-    await expect(page.getByText(/escolha o tamanho/i)).toBeVisible();
+    await expect(page.locator("#vErr")).toHaveText("Escolha uma opção de tamanhos antes de adicionar.");
     await expect(page.locator("#badge")).toHaveText("0");
     await page.getByRole("radio", { name: "16" }).click();
     await page.getByRole("button", { name: /adicionar ao carrinho/i }).click();

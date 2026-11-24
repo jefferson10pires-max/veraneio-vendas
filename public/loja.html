@@ -625,7 +625,7 @@ function abrirProduto(id){
     if(b.dataset.op!==undefined){op=b.dataset.op;body.querySelectorAll(".vop").forEach(x=>x.setAttribute("aria-checked",x===b));$("vSel").textContent=op;$("vErr").textContent="";$("vars").classList.remove("erro")}
     else if(b.dataset.pq!==undefined){q=Math.max(1,q+Number(b.dataset.pq));$("pq").textContent=q}
     else{
-      if(p.var&&!op){const v=$("vars");v.classList.remove("erro");void v.offsetWidth;v.classList.add("erro");$("vErr").textContent=`Escolha o ${p.var.nome.toLowerCase().replace(/s$/,"")} antes de adicionar.`;v.scrollIntoView({behavior:"smooth",block:"center"});return}
+      if(p.var&&!op){const v=$("vars");v.classList.remove("erro");void v.offsetWidth;v.classList.add("erro");$("vErr").textContent=`Escolha uma opção de ${p.var.nome.toLowerCase()} antes de adicionar.`;v.scrollIntoView({behavior:"smooth",block:"center"});return}
       addCart(chave(p.id,op),q);closeSheets();toast(`${q>1?q+" peças adicionadas":"Produto adicionado"} ao carrinho`,true)}};
   const g=$("gal");if(g&&$("gcount"))g.addEventListener("scroll",()=>{$("gcount").textContent=`${Math.round(g.scrollLeft/Math.max(1,g.clientWidth))+1}/${fotos.length}`},{passive:true});
   const dl=$("dlFoto");if(dl)dl.onclick=()=>{const g=$("gal"),i=g?Math.round(g.scrollLeft/Math.max(1,g.clientWidth)):0;baixarFoto(fotos[i]||fotos[0],p.nome+(fotos.length>1?`-${i+1}`:""),dl)};
