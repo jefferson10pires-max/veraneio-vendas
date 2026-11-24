@@ -49,8 +49,14 @@ export async function lerProprios(F, db, uid) {
 
 /** opções digitadas pela revendedora ("16, 17, 18") → variação no formato da loja */
 export function opcoesProprias(txt, nome = "Tamanhos") {
-  const ops = [...new Set(String(txt || "").split(/[,;\n]/).map((x) => x.trim()).filter(Boolean))].slice(0, 40);
-  return ops.length ? { nome, ops } : null;
+  const ops = [...new Set(String(txt || "").split(/[,;\n]/).map((x) => x.replace(/\s+/g, " ").trim().slice(0, 30)).filter(Boolean))].slice(0, 40);
+  const n = String(nome || "").replace(/\s+/g, " ").trim().slice(0, 30) || "Opção";
+  return ops.length ? { nome: n, ops } : null;
+}
+/** variação gravada pela revendedora (precos.vars[id]) já limpa; {nome:"",ops:[]} = "sem variação" */
+export function limparVar(v) {
+  if (!v || typeof v !== "object") return null;
+  return opcoesProprias(Array.isArray(v.ops) ? v.ops.map(String).join(",") : "", v.nome);
 }
 
 /**
@@ -78,7 +84,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   const src = precos && typeof precos === "object" ? precos : {};
   const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
   const arr = (v) => (Array.isArray(v) ? v : []);
-  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), promos: obj(src.promos), pronta: arr(src.pronta), ocultas: arr(src.ocultas), encomenda: arr(src.encomenda) };
+  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), promos: obj(src.promos), vars: obj(src.vars), pronta: arr(src.pronta), ocultas: arr(src.ocultas), encomenda: arr(src.encomenda) };
   if (!Number.isFinite(Number(pr.margem))) pr.margem = 100;
   const pe = new Set(pr.pronta), oc = new Set(pr.ocultas), fo = pr.fotos;
   const nFotos = (n) => Math.min(3, Math.max(0, Math.floor(Number(n) || 0)));
@@ -109,7 +115,9 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
       fotos: f ? [] : (p.fotos || []).slice(0, 4), novo: !!p.novo, ordem: p.ordem ?? 999,
       ...comPromo(precoFinal(p.preco, pr, p.id), pr.promos[p.id], p.preco),
       ...(f ? { fp: { n: nFotos(f.n), v: Number(f.v) || 1 } } : {}),
-      ...(p.var ? { var: p.var } : {}), ...(p.rank != null ? { rank: p.rank } : {}),
+      // variação: a que a revendedora definiu para a peça (ou "sem variação"); se não mexeu, a da Veraneio
+      ...(() => { const v = Object.prototype.hasOwnProperty.call(pr.vars, p.id) ? limparVar(pr.vars[p.id]) : p.var; return v ? { var: v } : {}; })(),
+      ...(p.rank != null ? { rank: p.rank } : {}),
       ...(ePE(p.id) ? { pronta: true } : {}),
     };
   });
@@ -118,7 +126,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
     id: p.id, nome: String(p.nome || "").trim(), cat: p.cat || "Outras", banho: p.banho || "", desc: p.desc || "",
     fotos: [], ...(nFotos(p.fotosN) ? { fp: { n: nFotos(p.fotosN), v: Number(p.fotosV) || 1 } } : {}),
     novo: !!p.novo, ordem: 0, ...comPromo(Math.round(Number(p.preco) * 100) / 100, pr.promos[p.id]), proprio: true,
-    ...(p.var && p.var.ops && p.var.ops.length ? { var: p.var } : {}),
+    ...(() => { const v = limparVar(p.var); return v ? { var: v } : {}; })(),
     ...(ePE(p.id) ? { pronta: true } : {}),
   }));
   const todos = [...(prontos || meus), ...itens];

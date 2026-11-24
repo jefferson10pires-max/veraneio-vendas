@@ -435,7 +435,8 @@ test.describe("P06 foto própria e peça própria", () => {
     await page.getByLabel("Nome da peça").fill("Brinco Lua Prata");
     await page.getByLabel("Categoria").last().fill("Brincos");
     await page.getByLabel("Preço de venda (R$)").fill("89,90");
-    await page.getByLabel("Tamanhos ou opções (opcional)").fill("P, M, M");
+    await page.locator("#vfN").fill("Tamanhos");
+    await page.locator("#vfO").fill("P, M, M");
     await page.getByRole("button", { name: "Cadastrar peça" }).click();
     await publicar(page);
     let d = await db(page);
@@ -1656,6 +1657,67 @@ test.describe("CU1 assinante que pagou fora da tela tem as peças próprias de v
     await page.getByRole("button", { name: "Republicar catálogo em todas as lojas" }).click();
     await expect(page.locator("#toast")).toContainText("Catálogo atualizado", { timeout: 10000 });
     expect(itens(await db(page)).map((x: any) => x.id)).toEqual(["rX"]);
+    expect(erros).toEqual([]);
+  });
+});
+
+test.describe("VR1 variações", () => {
+  const itens = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens);
+  test("VR1-H1 revendedora muda, tira e volta a variação de uma peça da Veraneio", async ({ page }) => {
+    const s = seed(10);
+    const at = s["atacado/p0"].itens; at[2] = { ...at[2], var: { nome: "Tamanhos", ops: ["12", "14", "16"] } };
+    const erros = await preparar(page, { seed: s });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar peça: Peça 2", exact: true }).click();
+    await expect(page.locator("#vfBox")).toContainText("Da Veraneio: Tamanhos: 12, 14, 16");
+    await expect(page.locator("#vfO")).toHaveValue("12, 14, 16");
+    await page.locator("#vfN").fill("Aro");
+    await page.locator("#vfO").fill("15, 17, 17, 19");
+    await page.locator("#ffOk").click();
+    await publicar(page);
+    let d = await db(page);
+    expect(itens(d).find((x: any) => x.id === "y2").var).toEqual({ nome: "Aro", ops: ["15", "17", "19"] });
+    expect(d["precos/u1"].vars.y2).toEqual({ nome: "Aro", ops: ["15", "17", "19"] });
+    // tira a variação
+    await page.getByRole("button", { name: "Editar peça: Peça 2", exact: true }).click();
+    await page.locator("#vfO").fill("");
+    await page.locator("#ffOk").click();
+    await publicar(page);
+    d = await db(page);
+    expect(itens(d).find((x: any) => x.id === "y2").var).toBeUndefined();
+    // volta a da Veraneio
+    await page.getByRole("button", { name: "Editar peça: Peça 2", exact: true }).click();
+    await page.getByRole("button", { name: "Usar a da Veraneio" }).click();
+    await page.locator("#ffOk").click();
+    await publicar(page);
+    d = await db(page);
+    expect(itens(d).find((x: any) => x.id === "y2").var).toEqual({ nome: "Tamanhos", ops: ["12", "14", "16"] });
+    expect(d["precos/u1"].vars?.y2).toBeUndefined();
+    // inclui variação numa peça que não tinha
+    await page.getByRole("button", { name: "Editar peça: Peça 3", exact: true }).click();
+    await page.locator("#vfN").fill("Cor");
+    await page.locator("#vfO").fill("Dourado, Prata");
+    await page.locator("#ffOk").click();
+    await publicar(page);
+    d = await db(page);
+    expect(itens(d).find((x: any) => x.id === "y3").var).toEqual({ nome: "Cor", ops: ["Dourado", "Prata"] });
+    expect(erros).toEqual([]);
+  });
+  test("VR1-H2 peça própria com variação de nome livre", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(10) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await page.locator("#npN").fill("Pulseira Nome");
+    await page.locator("#npP").fill("59,90");
+    await page.locator("#vfN").fill("Letra");
+    await page.locator("#vfO").fill("A, B, C");
+    await page.locator("#npOk").click();
+    await publicar(page);
+    const d = await db(page);
+    const p = itens(d).find((x: any) => x.nome === "Pulseira Nome");
+    expect(p.var).toEqual({ nome: "Letra", ops: ["A", "B", "C"] });
     expect(erros).toEqual([]);
   });
 });

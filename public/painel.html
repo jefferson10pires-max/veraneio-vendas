@@ -833,6 +833,17 @@ async function lerArquivos(input,atual,msg){
 function ligarGrade(el,l,re){el.onclick=e=>{const r=e.target.closest("[data-rm]"),f=e.target.closest("[data-first]");
   if(r){l.splice(Number(r.dataset.rm),1);re()}else if(f){const i=Number(f.dataset.first);[l[0],l[i]]=[l[i],l[0]];re()}}}
 
+/* variação da peça (tamanho, cor, modelo…): a cliente escolhe uma opção antes de pôr no carrinho.
+   veraneio = a que veio da Veraneio (só nas peças do catálogo); atual = a que a revendedora gravou */
+function campoVar(veraneio,atual,doCatalogo){const v=atual!==undefined&&atual!==null?atual:veraneio,ops=v&&v.ops?v.ops:[];
+  return `<div class="field" id="vfBox"><span class="flabel">Variação (opcional)</span>
+    <div class="row" style="gap:8px;align-items:flex-start"><div class="field" style="margin:0;flex:0 0 38%"><label for="vfN" class="hint">Nome</label><input id="vfN" maxlength="30" list="vfNomes" value="${esc(v&&v.nome||"")}" placeholder="Tamanho, Cor…">
+      <datalist id="vfNomes"><option value="Tamanho"><option value="Tamanhos"><option value="Cor"><option value="Modelo"><option value="Letra"><option value="Aro"></datalist></div>
+      <div class="field" style="margin:0;flex:1"><label for="vfO" class="hint">Opções</label><input id="vfO" value="${esc(ops.join(", "))}" placeholder="Ex.: 14, 16, 18"></div></div>
+    <span class="hint">Separe as opções por vírgula. A cliente escolhe uma antes de pôr no carrinho. Em branco, a peça fica sem variação.${doCatalogo?`<br>Da Veraneio: ${veraneio&&veraneio.ops&&veraneio.ops.length?esc(veraneio.nome+": "+veraneio.ops.join(", ")):"sem variação"}${atual!==undefined&&atual!==null?` · <button type="button" class="linkbtn" id="vfV">Usar a da Veraneio</button>`:""}`:""}</span></div>`}
+function ligarVar(veraneio){const b=$("vfV");if(b)b.onclick=()=>{$("vfN").value=veraneio&&veraneio.nome||"";$("vfO").value=veraneio&&veraneio.ops?veraneio.ops.join(", "):"";$("vfO").focus()}}
+const lerVar=()=>C.opcoesProprias($("vfO").value,$("vfN").value.trim()||"Opção");
+
 /* editar uma peça da Veraneio só na loja desta revendedora: nome, preço, descrição e fotos */
 async function formPeca(id){
   const p=(PRODS||[]).find(x=>x.id===id);if(!p)return;
@@ -844,6 +855,7 @@ async function formPeca(id){
     ${campoPromo(id)}
     <div class="field"><label for="ffD">Descrição na sua loja (opcional)</label><textarea id="ffD" rows="4" maxlength="600" placeholder="Ex.: Anel regulável banhado a ouro 18k, com zircônias. Ótimo para presente.">${esc((PR.descs||{})[id]||"")}</textarea>
       <span class="hint">Aparece na página da peça. Em branco, a peça fica sem descrição.</span></div>
+    ${campoVar(p.var,(PR.vars||{})[id],true)}
     <div class="field"><span class="flabel">Fotos da Veraneio</span><div class="fotos">${(p.fotos||[]).slice(0,4).map(u=>`<figure><img src="${esc(mini(u,300))}" alt=""></figure>`).join("")||'<p class="hint">Sem foto.</p>'}</div></div>
     <div class="field"><span class="flabel">Suas fotos (aparecem no lugar das da Veraneio)</span><div class="fotos" id="ffG"></div>
       <span class="btn btn-ghost btn-sm file">${I.upload}Enviar foto<input type="file" id="ffIn" accept="image/*" multiple aria-label="Enviar foto"></span>
@@ -855,6 +867,7 @@ async function formPeca(id){
   const re=()=>{$("ffG").innerHTML=gradeFotos(minhas)};re();ligarGrade($("ffG"),minhas,re);
   $("ffIn").onchange=async e=>{await lerArquivos(e.target,minhas,$("ffMsg"));re()};
   const nv=$("ffNV");if(nv)nv.onclick=()=>{$("ffN").value=p.nome;$("ffN").focus()};
+  ligarVar(p.var);
   {const ver=ligarPromo(()=>{const f=lerReais($("ffP").value);return f>0?f:precoFinal(p.preco,{...PR,fixo:{}},id)},p.preco);$("ffP").addEventListener("input",ver)}
   $("ffOk").onclick=async()=>{const b=$("ffOk");
     const nome=$("ffN").value.replace(/\s+/g," ").trim();
@@ -867,6 +880,8 @@ async function formPeca(id){
       const ds=$("ffD").value.replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim().slice(0,600);if(ds)PR.descs[id]=ds;else delete PR.descs[id];
       if(fxv>0){PR.fixo[id]=fxv;if(PR.over)delete PR.over[id]}else delete PR.fixo[id];
       lerPromo(id);
+      {const nv=lerVar();PR.vars=PR.vars||{};const ig=(a,b)=>JSON.stringify(a||null)===JSON.stringify(b||null);
+        if(ig(nv,C.limparVar(p.var)))delete PR.vars[id];else PR.vars[id]=nv||{nome:"",ops:[]}}
       if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id+"~"+v),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
       else if(tinha)delete PR.fotos[id];
       delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. Toque em Publicar atualização para ir para a loja.")}
@@ -892,7 +907,7 @@ async function formPropria(id){
       <div class="field"><label for="npP">Preço de venda (R$)</label><input id="npP" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" value="${p.preco?esc(String(p.preco).replace(".",",")):""}"></div></div>
     ${campoPromo(p.id||"_novo")}
     <div class="field"><label for="npD">Descrição (opcional)</label><textarea id="npD" rows="3" maxlength="220">${esc(p.desc||"")}</textarea></div>
-    <div class="field"><label for="npO">Tamanhos ou opções (opcional)</label><input id="npO" value="${esc(p.var?p.var.ops.join(", "):"")}" placeholder="Ex.: 14, 16, 18"><span class="hint">Separe por vírgula. A cliente escolhe antes de pôr no carrinho.</span></div>
+    ${campoVar(null,p.var,false)}
     <label class="pe" style="align-self:flex-start"><input type="checkbox" role="switch" id="npPE" ${pe?"checked":""}>Pronta entrega</label>
     <span class="err" id="npErr" role="alert"></span>
     <div class="row"><button class="btn btn-brand" type="submit" id="npOk">${novo?"Cadastrar peça":"Salvar"}</button>${novo?"":`<button class="btn btn-ghost" type="button" id="npDel">Excluir peça</button>`}</div></form>`);
@@ -904,7 +919,7 @@ async function formPropria(id){
     if(nome.length<2){$("npErr").textContent="Escreva o nome da peça.";$("npN").focus();return}
     if(!(preco>0)){$("npErr").textContent="Coloque o preço de venda.";$("npP").focus();return}
     const b=$("npOk");b.disabled=true;$("npErr").textContent="";
-    try{const v=Date.now(),dados={nome,cat:$("npC").value.trim()||"Outras",preco,desc:$("npD").value.trim(),var:C.opcoesProprias($("npO").value),
+    try{const v=Date.now(),dados={nome,cat:$("npC").value.trim()||"Outras",preco,desc:$("npD").value.trim(),var:lerVar(),
         novo:novo?true:!!p.novo,fotosN:fotos.length,fotosV:fotos.length?v:null,atualizadoEm:serverTimestamp(),...(novo?{criadoEm:serverTimestamp()}:{})};
       if(fotos.length)await setDoc(doc(db,"lojas",U.uid,"fotos",p.id+"~"+v),{fotos,v});
       await setDoc(doc(db,"lojas",U.uid,"proprios",p.id),dados,{merge:true});
@@ -992,8 +1007,9 @@ function precosLimpos(){
   const fx={};for(const [k,v] of Object.entries(PR.fixo||{}))if(ids.has(k)&&Number(v)>0)fx[k]=Math.round(Number(v)*100)/100;
   const ds={};for(const [k,v] of Object.entries(PR.descs||{}))if(ids.has(k)&&String(v||"").trim())ds[k]=String(v).trim().slice(0,600);
   const pm={};for(const [k,v] of Object.entries(PR.promos||{}))if(ids.has(k)&&C.pctPromo(v))pm[k]=C.pctPromo(v);PR.promos=pm;
+  const vs={};for(const [k,v] of Object.entries(PR.vars||{}))if(ids.has(k)&&v&&typeof v==="object"){const l=C.limparVar(v);vs[k]=l||{nome:"",ops:[]}}PR.vars=vs;
   PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;PR.descs=ds;
-  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,encomenda:enc,modo:modo()}}
+  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,vars:vs,encomenda:enc,modo:modo()}}
 async function gravarPrecosRascunho(){await Promise.all([carregarProds(),carregarProprios()]);await rascunho("precos",precosLimpos())}
 function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;RAS.precos=true;pubBar();saveT.p=setTimeout(()=>{saveT.p=null;
   filaPub=filaPub.then(async()=>{
