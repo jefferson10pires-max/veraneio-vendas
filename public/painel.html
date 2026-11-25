@@ -365,9 +365,10 @@ function shell(){
   $("nav").onclick=e=>{const b=e.target.closest("[data-tab]");if(b)ir(b.dataset.tab)};
   $("pubBtn").onclick=publicarAtualizacao;pubBar();
   ir(ui.tab);
+  carregarAval().then(()=>{if($("nav"))navHTML()}).catch(e=>console.error(e));
 }
-function navHTML(){const ab=(LEADS||[]).filter(l=>l.status==="abandonado").length;
-  $("nav").innerHTML=TABS.map(([k,l,i])=>`<button type="button" data-tab="${k}" aria-current="${ui.tab===k}">${i}<span>${l}</span>${VENC()&&!ABAS_VENC.includes(k)?`<span class="lk" aria-label="bloqueada">${I.lock}</span>`:""}${k==="pedidos"&&ab?`<span class="dot num">${ab}</span>`:""}</button>`).join("")}
+function navHTML(){const ab=(LEADS||[]).filter(l=>l.status==="abandonado").length+(AVAL||[]).length;
+  $("nav").innerHTML=TABS.map(([k,l,i])=>`<button type="button" data-tab="${k}" aria-current="${ui.tab===k}">${i}<span>${l}</span>${VENC()&&!ABAS_VENC.includes(k)?`<span class="lk" aria-label="bloqueada">${I.lock}</span>`:""}${k==="pedidos"&&ab?`<span class="dot num" aria-hidden="true">${ab}</span>`:""}</button>`).join("")}
 /* cada troca de aba invalida as anteriores: uma aba lenta que termina de carregar depois não sobrescreve a atual */
 function ir(t){if(!TABS.some(x=>x[0]===t))t="inicio";ui.tab=t;ui.vez++;if(location.hash)history.replaceState(null,"",location.pathname);navHTML();scrollTo(0,0);$("main").onclick=$("main").onchange=null;
   if(VENC()&&!ABAS_VENC.includes(t))return tBloqueada();

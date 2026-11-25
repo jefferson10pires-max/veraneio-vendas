@@ -201,6 +201,7 @@ test.describe("A11y", () => {
     test(`A11Y ${nome} sem problemas graves`, async ({ page }) => {
       await abrir(page);
       await passo(page);
+      await page.waitForFunction(() => document.getAnimations().every((x) => x.playState !== "running")); // folha terminou de abrir
       const r = await new AxeBuilder({ page }).analyze();
       const graves = r.violations.filter((v) => ["serious", "critical"].includes(v.impact || "")).map((v) => `${v.id}: ${v.nodes.length}`);
       expect(graves).toEqual([]);

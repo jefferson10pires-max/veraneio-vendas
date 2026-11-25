@@ -1897,3 +1897,17 @@ test.describe("AR1 gerador de arte", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test("AV1-N1 número no ícone de Pedidos soma avaliações pendentes, em qualquer aba", async ({ page }) => {
+  const s = seed(10, { "lojas/u1/avaliacoes/AAAAAAAAAAAAAAAAAAA1": { produto: "y2", nome: "Ana", nota: 5, texto: "", status: "pendente", ts: { __ts: 1 } },
+    "lojas/u1/avaliacoes/AAAAAAAAAAAAAAAAAAA2": { produto: "y3", nome: "Bia", nota: 4, texto: "", status: "pendente", ts: { __ts: 2 } } });
+  const erros = await preparar(page, { seed: s });
+  await entrar(page);
+  await aba(page, "Peças").click();
+  await expect(aba(page, "Pedidos").locator(".dot")).toHaveText("2");
+  await aba(page, "Pedidos").click();
+  await page.getByRole("button", { name: /^Avaliações \(2\)$/ }).click();
+  await page.locator("#avs .lc", { hasText: "Ana" }).getByRole("button", { name: "Aprovar" }).click();
+  await expect(aba(page, "Pedidos").locator(".dot")).toHaveText("1");
+  expect(erros).toEqual([]);
+});
