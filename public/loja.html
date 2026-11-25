@@ -221,6 +221,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .line .pr{font-size:15px;font-weight:700;color:#000}
 .line .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .line .qty{height:36px;padding:0 2px}.line .qty button{width:32px;height:34px}.line .qty span{min-width:22px;font-size:14px}
+.leve{padding:18px max(16px,env(safe-area-inset-right,0px)) 18px max(16px,env(safe-area-inset-left,0px))}
+.pinfo .leve{padding:0;margin-top:28px;border-top:1px solid var(--line);padding-top:20px}
+.leve h4{font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 12px;font-weight:500;color:#222}
+.leve-l{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.leve-i{display:flex;flex-direction:column;gap:5px;min-width:0}
+.leve-i .im{all:unset;cursor:pointer;aspect-ratio:1;border:.8px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;display:grid;place-items:center;color:var(--brand)}
+.leve-i .im img{width:100%;height:100%;object-fit:contain}.leve-i .im svg{width:50%;height:50%}
+.leve-i .nm{font-size:12.5px;line-height:1.2;color:#222;cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.leve-i .pr{font-size:13.5px;font-weight:700;color:#000}
+.leve-i .add{height:34px;border:.8px solid var(--brand);border-radius:var(--radius);background:#fff;color:var(--brand);font-weight:700;font-size:12px;text-transform:uppercase;cursor:pointer;margin-top:auto}
+.leve-i .add.done{background:var(--brand);color:var(--brand-ink)}
 .rm{border:0;background:none;color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer;padding:6px 0}
 .empty{text-align:center;padding:60px 24px;color:var(--muted)}
 .empty .btnp{max-width:260px;margin:22px auto 0}
@@ -329,6 +340,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div class="sh-body">
     <div class="ship" id="ship" hidden></div>
     <div class="lines" id="lines"></div>
+    <div class="leve" id="leve" hidden></div>
   </div>
   <div class="sh-foot" id="cFoot">
     <div class="total"><span>Subtotal</span><b class="num" id="cTotal"></b></div>
@@ -618,6 +630,7 @@ function abrirProduto(id){
       </div>
       ${(()=>{/* peça da Veraneio: só a descrição escrita pela revendedora (campo descricao); peça própria: a dela (desc) */
         const d=String((p.proprio?p.desc:p.descricao)||"").trim();return d?`<div class="pdesc"><h4>Descrição</h4><p>${esc(d)}</p></div>`:""})()}
+      ${leveHTML(sugestoes([p.id]),"Compre junto")}
     </div>`;
   const body=$("pBody");
   body.onclick=e=>{const b=e.target.closest("[data-pq],[data-padd],[data-op]");if(!b)return;
@@ -658,6 +671,23 @@ async function baixarFoto(url,nome,btn){
   finally{btn.disabled=false;btn.innerHTML=txt}
 }
 
+/* ---------- compre junto ----------
+   As peças que a revendedora escolheu (p.juntos, até 3); sem escolha, peças da mesma categoria.
+   Tudo com o catálogo já carregado: não lê nada novo no banco. */
+const porRank=(a,b)=>(a.rank??1e6)-(b.rank??1e6)||(a.ordem??999)-(b.ordem??999);
+function sugestoes(ids,max=3){
+  const fora=new Set(ids.map(String)),out=[],vis=new Set();
+  const pega=p=>{if(p&&out.length<max&&!fora.has(String(p.id))&&!vis.has(String(p.id))){vis.add(String(p.id));out.push(p)}};
+  ids.forEach(id=>{const p=byId(id);(p&&Array.isArray(p.juntos)?p.juntos:[]).forEach(j=>pega(byId(j)))});
+  if(!out.length){const cs=new Set(ids.map(id=>(byId(id)||{}).cat).filter(Boolean));ITENS.filter(p=>cs.has(p.cat)).sort(porRank).forEach(pega)}
+  return out;
+}
+const leveIn=(l,titulo)=>`<h4>${esc(titulo)}</h4><div class="leve-l">${l.map(p=>`<div class="leve-i">
+    <button type="button" class="im" data-open="${esc(p.id)}" aria-label="Ver ${esc(p.nome)}">${p.fotos&&p.fotos[0]?imgTag(p,240,'loading="lazy"'):art(p.cat)}</button>
+    <div class="nm" data-open="${esc(p.id)}">${esc(p.nome)}</div><div class="pr num">${brl(p.preco)}</div>
+    <button type="button" class="add" ${p.var?`data-open="${esc(p.id)}"`:`data-add="${esc(p.id)}"`} aria-label="Adicionar ${esc(p.nome)} ao carrinho">Adicionar</button></div>`).join("")}</div>`;
+const leveHTML=(l,titulo)=>l.length?`<div class="leve">${leveIn(l,titulo)}</div>`:"";
+
 /* ---------- carrinho ---------- */
 /* chave do carrinho: "id" ou "id|tamanho" */
 const chave=(id,op)=>op?`${id}|${op}`:String(id);
@@ -679,6 +709,7 @@ function renderCart(){
     </div>`).join("")
     :`<div class="empty">Seu carrinho está vazio.<button class="btnp" type="button" data-close>Ver produtos</button></div>`;
   $("cFoot").hidden=!it.length;
+  {const l=it.length?sugestoes([...new Set(it.map(x=>String(x.p.id)))]):[];$("leve").hidden=!l.length;$("leve").innerHTML=l.length?leveIn(l,"Leve também"):""}
   $("cTotal").textContent=brl(tot);
   const bi=barraInfo();$("ship").hidden=!bi||!it.length;
   if(bi&&bi.sempre)$("ship").innerHTML=`<span>Frete grátis em todos os pedidos 🎉</span>`;

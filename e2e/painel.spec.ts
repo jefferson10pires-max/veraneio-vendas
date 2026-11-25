@@ -1721,3 +1721,51 @@ test.describe("VR1 variações", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("CJ1 compre junto no painel", () => {
+  const itens = (d: any) => Object.keys(d).filter((k) => k.startsWith("catalogos/u1/partes/")).flatMap((k) => d[k].itens);
+  test("CJ1-H1 escolhe até 3 peças, tira uma, publica e reabre com as escolhidas", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(10) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Editar peça: Peça 2", exact: true }).click();
+    const q = page.locator("#jcQ");
+    for (const n of ["Peça 5", "Peça 6", "Peça 7"]) {
+      await q.fill(n);
+      await page.locator("#jcR").getByRole("button", { name: n, exact: true }).click();
+    }
+    await expect(page.locator("#jcC .jchip")).toHaveCount(3);
+    await expect(q).toBeDisabled();
+    await page.getByRole("button", { name: "Tirar Peça 6" }).click();
+    await q.fill("Peça 2");
+    await expect(page.locator("#jcR")).toContainText("Nenhuma peça encontrada"); // a própria peça não aparece
+    await q.fill("Peça 8");
+    await page.locator("#jcR").getByRole("button", { name: "Peça 8", exact: true }).click();
+    await page.locator("#ffOk").click();
+    await publicar(page);
+    let d = await db(page);
+    expect(d["precos/u1"].juntos).toEqual({ y2: ["y5", "y7", "y8"] });
+    expect(itens(d).find((x: any) => x.id === "y2").juntos).toEqual(["y5", "y7", "y8"]);
+    // reabrir mostra as escolhidas
+    await page.getByRole("button", { name: "Editar peça: Peça 2", exact: true }).click();
+    await expect(page.locator("#jcC")).toContainText("Peça 5");
+    await expect(page.locator("#jcC .jchip")).toHaveCount(3);
+    expect(erros).toEqual([]);
+  });
+  test("CJ1-H2 peça própria com compre junto", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(10) });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Nova peça" }).click();
+    await page.locator("#npN").fill("Pulseira Junto");
+    await page.locator("#npP").fill("59,90");
+    await page.locator("#jcQ").fill("Peça 1");
+    await page.locator("#jcR").getByRole("button", { name: "Peça 1", exact: true }).click();
+    await page.locator("#npOk").click();
+    await publicar(page);
+    const d = await db(page);
+    const p = itens(d).find((x: any) => x.nome === "Pulseira Junto");
+    expect(p.juntos).toEqual(["y1"]);
+    expect(erros).toEqual([]);
+  });
+});

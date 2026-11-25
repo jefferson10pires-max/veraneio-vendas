@@ -165,6 +165,12 @@ a{color:inherit}
 .pr.off .th,.pr.off .nm{opacity:.45}.pr.bloq [data-bloq]{color:var(--muted)}
 .pr .pacts{display:flex;gap:6px}
 .nm .orig,.items .orig{display:block;font-size:11.5px;color:var(--muted)}.items .orig{display:inline}
+.jchips{display:flex;flex-wrap:wrap;gap:6px}
+.jchip{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 12px;font-size:13px;max-width:100%}
+.jchip button{border:0;background:none;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:17px;line-height:1;color:var(--muted)}
+.jres{display:flex;flex-direction:column;gap:4px}
+.jopt{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px 10px;cursor:pointer;font:inherit;font-size:13.5px}
+.jopt img{width:36px;height:36px;object-fit:contain;border-radius:6px;flex:0 0 36px}
 .linkbtn{border:0;background:none;padding:0;color:var(--brand);text-decoration:underline;font:inherit;cursor:pointer}
 .pr .pacts .btn{padding:6px 10px;font-size:13px}
 .seg.seg-wrap{flex-wrap:wrap}.seg.seg-wrap button{flex:1 1 auto}
@@ -843,6 +849,24 @@ function campoVar(veraneio,atual,doCatalogo){const v=atual!==undefined&&atual!==
     <span class="hint">Separe as opções por vírgula. A cliente escolhe uma antes de pôr no carrinho. Em branco, a peça fica sem variação.${doCatalogo?`<br>Da Veraneio: ${veraneio&&veraneio.ops&&veraneio.ops.length?esc(veraneio.nome+": "+veraneio.ops.join(", ")):"sem variação"}${atual!==undefined&&atual!==null?` · <button type="button" class="linkbtn" id="vfV">Usar a da Veraneio</button>`:""}`:""}</span></div>`}
 function ligarVar(veraneio){const b=$("vfV");if(b)b.onclick=()=>{$("vfN").value=veraneio&&veraneio.nome||"";$("vfO").value=veraneio&&veraneio.ops?veraneio.ops.join(", "):"";$("vfO").focus()}}
 const lerVar=()=>C.opcoesProprias($("vfO").value,$("vfN").value.trim()||"Opção");
+/* "Compre junto": até 3 peças sugeridas com esta (na página da peça e no carrinho da loja) */
+const campoJuntos=()=>`<div class="field"><span class="flabel">Compre junto (até 3 peças)</span><div class="jchips" id="jcC"></div>
+    <label class="sbox"><span class="sr">Buscar peça para sugerir junto</span>${I.search}<input id="jcQ" type="search" placeholder="Buscar peça pelo nome" autocomplete="off"></label>
+    <div class="jres" id="jcR"></div><span class="hint">Aparecem como sugestão na página desta peça e no carrinho. Sem escolha, a loja sugere peças da mesma categoria.</span></div>`;
+function ligarJuntos(id){
+  const by=j=>todas().find(p=>p.id===j),sel=[...new Set(((PR.juntos||{})[id])||[])].filter(by).slice(0,3);
+  const oc=new Set(PR.ocultas||[]),pe=new Set(PR.pronta||[]),en=new Set(PR.encomenda||[]);
+  const chips=()=>{$("jcC").innerHTML=sel.map(j=>{const n=nomeLoja(by(j));return `<span class="jchip">${esc(n)}<button type="button" data-jrm="${esc(j)}" aria-label="Tirar ${esc(n)}">×</button></span>`}).join("")||`<span class="hint">Nenhuma escolhida.</span>`;
+    const q=$("jcQ");q.disabled=sel.length>=3;q.placeholder=sel.length>=3?"Já escolheu 3 peças":"Buscar peça pelo nome"};
+  const res=()=>{const q=norm($("jcQ").value.trim());if(q.length<2||sel.length>=3){$("jcR").innerHTML="";return}
+    const l=todas().filter(p=>p.id!==id&&!sel.includes(p.id)&&naLoja(p.id,oc,pe,en)&&norm(nomeLoja(p)).includes(q)).slice(0,8);
+    $("jcR").innerHTML=l.map(p=>`<button type="button" class="jopt" data-jadd="${esc(p.id)}">${p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="">`:""}<span>${esc(nomeLoja(p))}</span></button>`).join("")||`<p class="hint">Nenhuma peça encontrada.</p>`};
+  chips();$("jcQ").oninput=res;
+  $("jcC").onclick=e=>{const b=e.target.closest("[data-jrm]");if(!b)return;sel.splice(sel.indexOf(b.dataset.jrm),1);chips();res()};
+  $("jcR").onclick=e=>{const b=e.target.closest("[data-jadd]");if(!b||sel.length>=3)return;sel.push(b.dataset.jadd);$("jcQ").value="";chips();res();if(!$("jcQ").disabled)$("jcQ").focus()};
+  return ()=>sel.slice(0,3);
+}
+function gravarJuntos(id,l){PR.juntos=PR.juntos||{};if(l.length)PR.juntos[id]=l;else delete PR.juntos[id]}
 
 /* editar uma peça da Veraneio só na loja desta revendedora: nome, preço, descrição e fotos */
 async function formPeca(id){
@@ -856,6 +880,7 @@ async function formPeca(id){
     <div class="field"><label for="ffD">Descrição na sua loja (opcional)</label><textarea id="ffD" rows="4" maxlength="600" placeholder="Ex.: Anel regulável banhado a ouro 18k, com zircônias. Ótimo para presente.">${esc((PR.descs||{})[id]||"")}</textarea>
       <span class="hint">Aparece na página da peça. Em branco, a peça fica sem descrição.</span></div>
     ${campoVar(p.var,(PR.vars||{})[id],true)}
+    ${campoJuntos()}
     <div class="field"><span class="flabel">Fotos da Veraneio</span><div class="fotos">${(p.fotos||[]).slice(0,4).map(u=>`<figure><img src="${esc(mini(u,300))}" alt=""></figure>`).join("")||'<p class="hint">Sem foto.</p>'}</div></div>
     <div class="field"><span class="flabel">Suas fotos (aparecem no lugar das da Veraneio)</span><div class="fotos" id="ffG"></div>
       <span class="btn btn-ghost btn-sm file">${I.upload}Enviar foto<input type="file" id="ffIn" accept="image/*" multiple aria-label="Enviar foto"></span>
@@ -867,7 +892,7 @@ async function formPeca(id){
   const re=()=>{$("ffG").innerHTML=gradeFotos(minhas)};re();ligarGrade($("ffG"),minhas,re);
   $("ffIn").onchange=async e=>{await lerArquivos(e.target,minhas,$("ffMsg"));re()};
   const nv=$("ffNV");if(nv)nv.onclick=()=>{$("ffN").value=p.nome;$("ffN").focus()};
-  ligarVar(p.var);
+  ligarVar(p.var);const lerJ=ligarJuntos(id);
   {const ver=ligarPromo(()=>{const f=lerReais($("ffP").value);return f>0?f:precoFinal(p.preco,{...PR,fixo:{}},id)},p.preco);$("ffP").addEventListener("input",ver)}
   $("ffOk").onclick=async()=>{const b=$("ffOk");
     const nome=$("ffN").value.replace(/\s+/g," ").trim();
@@ -882,6 +907,7 @@ async function formPeca(id){
       lerPromo(id);
       {const nv=lerVar();PR.vars=PR.vars||{};const ig=(a,b)=>JSON.stringify(a||null)===JSON.stringify(b||null);
         if(ig(nv,C.limparVar(p.var)))delete PR.vars[id];else PR.vars[id]=nv||{nome:"",ops:[]}}
+      gravarJuntos(id,lerJ());
       if(minhas.length){const v=Date.now();await setDoc(doc(db,"lojas",U.uid,"fotos",id+"~"+v),{fotos:minhas,v});PR.fotos[id]={n:minhas.length,v}}
       else if(tinha)delete PR.fotos[id];
       delete _fp[id];fecharFolha();if($("plist"))pecas();salvarPrecos();toast("Peça salva. Toque em Publicar atualização para ir para a loja.")}
@@ -908,12 +934,14 @@ async function formPropria(id){
     ${campoPromo(p.id||"_novo")}
     <div class="field"><label for="npD">Descrição (opcional)</label><textarea id="npD" rows="3" maxlength="220">${esc(p.desc||"")}</textarea></div>
     ${campoVar(null,p.var,false)}
+    ${campoJuntos()}
     <label class="pe" style="align-self:flex-start"><input type="checkbox" role="switch" id="npPE" ${pe?"checked":""}>Pronta entrega</label>
     <span class="err" id="npErr" role="alert"></span>
     <div class="row"><button class="btn btn-brand" type="submit" id="npOk">${novo?"Cadastrar peça":"Salvar"}</button>${novo?"":`<button class="btn btn-ghost" type="button" id="npDel">Excluir peça</button>`}</div></form>`);
   const re=()=>{$("npG").innerHTML=gradeFotos(fotos)};re();ligarGrade($("npG"),fotos,re);
   $("npIn").onchange=async e=>{await lerArquivos(e.target,fotos,$("npMsg"));re()};
   {const ver=ligarPromo(()=>lerReais($("npP").value)||0,0);$("npP").addEventListener("input",ver)}
+  const lerJ=ligarJuntos(p.id);
   $("npF").onsubmit=async e=>{e.preventDefault();
     const nome=$("npN").value.trim(),preco=lerReais($("npP").value);
     if(nome.length<2){$("npErr").textContent="Escreva o nome da peça.";$("npN").focus();return}
@@ -926,7 +954,7 @@ async function formPropria(id){
       delete _fp[p.id];
       const item={...p,...dados,proprio:true},i=PROPRIOS.findIndex(x=>x.id===p.id);if(i>=0)PROPRIOS[i]=item;else PROPRIOS.unshift(item);
       const s1=new Set(PR.pronta||[]);$("npPE").checked?s1.add(p.id):s1.delete(p.id);PR.pronta=[...s1];
-      PR.ocultas=(PR.ocultas||[]).filter(x=>x!==p.id);lerPromo(p.id);
+      PR.ocultas=(PR.ocultas||[]).filter(x=>x!==p.id);lerPromo(p.id);gravarJuntos(p.id,lerJ());
       fecharFolha();if($("plist")){if(novo)ui.pf="minhas";pecas()}salvarPrecos();toast(novo?"Peça cadastrada. Toque em Publicar atualização para ela aparecer na loja.":"Peça salva. Toque em Publicar atualização para ir para a loja.")}
     catch(err){console.error(err);b.disabled=false;$("npErr").textContent="Não foi possível salvar. Confira a internet."}};
   const del=$("npDel");if(del)del.onclick=async()=>{
@@ -1008,8 +1036,9 @@ function precosLimpos(){
   const ds={};for(const [k,v] of Object.entries(PR.descs||{}))if(ids.has(k)&&String(v||"").trim())ds[k]=String(v).trim().slice(0,600);
   const pm={};for(const [k,v] of Object.entries(PR.promos||{}))if(ids.has(k)&&C.pctPromo(v))pm[k]=C.pctPromo(v);PR.promos=pm;
   const vs={};for(const [k,v] of Object.entries(PR.vars||{}))if(ids.has(k)&&v&&typeof v==="object"){const l=C.limparVar(v);vs[k]=l||{nome:"",ops:[]}}PR.vars=vs;
+  const jt={};for(const [k,v] of Object.entries(PR.juntos||{}))if(ids.has(k)&&Array.isArray(v)){const l=[...new Set(v.map(String))].filter(j=>j!==k&&ids.has(j)).slice(0,3);if(l.length)jt[k]=l}PR.juntos=jt;
   PR.ocultas=oc;PR.excluidas=exl;PR.pronta=pe;PR.fotos=fo;PR.nomes=nm;PR.fixo=fx;PR.descs=ds;
-  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,vars:vs,encomenda:enc,modo:modo()}}
+  return {margem:Math.min(1000,Math.max(0,Number(PR.margem)||0)),arred:String(PR.arred??"90"),over:PR.over&&typeof PR.over==="object"&&!Array.isArray(PR.over)?PR.over:{},fixo:fx,pronta:pe,ocultas:oc,excluidas:exl,fotos:fo,nomes:nm,descs:ds,promos:pm,vars:vs,juntos:jt,encomenda:enc,modo:modo()}}
 async function gravarPrecosRascunho(){await Promise.all([carregarProds(),carregarProprios()]);await rascunho("precos",precosLimpos())}
 function salvarPrecos(){clearTimeout(saveT.p);status("Salvando…");pendPub++;RAS.precos=true;pubBar();saveT.p=setTimeout(()=>{saveT.p=null;
   filaPub=filaPub.then(async()=>{

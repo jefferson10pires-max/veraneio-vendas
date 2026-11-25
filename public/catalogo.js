@@ -84,7 +84,7 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
   const src = precos && typeof precos === "object" ? precos : {};
   const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
   const arr = (v) => (Array.isArray(v) ? v : []);
-  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), promos: obj(src.promos), vars: obj(src.vars), pronta: arr(src.pronta), ocultas: arr(src.ocultas), encomenda: arr(src.encomenda) };
+  const pr = { margem: 100, arred: "90", ...src, over: obj(src.over), fixo: obj(src.fixo), fotos: obj(src.fotos), nomes: obj(src.nomes), descs: obj(src.descs), promos: obj(src.promos), vars: obj(src.vars), juntos: obj(src.juntos), pronta: arr(src.pronta), ocultas: arr(src.ocultas), encomenda: arr(src.encomenda) };
   if (!Number.isFinite(Number(pr.margem))) pr.margem = 100;
   const pe = new Set(pr.pronta), oc = new Set(pr.ocultas), fo = pr.fotos;
   const nFotos = (n) => Math.min(3, Math.max(0, Math.floor(Number(n) || 0)));
@@ -130,6 +130,12 @@ export async function publicarLoja(F, db, uid, precos, atacado, proprios) {
     ...(ePE(p.id) ? { pronta: true } : {}),
   }));
   const todos = [...(prontos || meus), ...itens];
+  // "compre junto": até 3 peças escolhidas pela revendedora, só as que estão nesta loja
+  const naLoja = new Set(todos.map((x) => String(x.id)));
+  for (const x of todos) {
+    const l = [...new Set(arr(pr.juntos[x.id]).map(String))].filter((j) => j !== String(x.id) && naLoja.has(j)).slice(0, 3);
+    if (l.length) x.juntos = l; else delete x.juntos;
+  }
   const ps = partes(todos);
   const b = F.writeBatch(db);
   ps.forEach((p, i) => b.set(F.doc(db, "catalogos", uid, "partes", "p" + i), { itens: p, em: F.serverTimestamp() }));

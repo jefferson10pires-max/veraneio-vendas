@@ -414,3 +414,59 @@ test("S06 peça em desconto mostra o preço antigo riscado e o novo (card, pági
   await expect(page.locator(".pprice s.de")).toHaveText("R$ 12,90");
   await expect(page.locator(".pprice")).toContainText("R$ 10,32");
 });
+
+test.describe("CJ compre junto", () => {
+  const comJuntos = () => base.map((p) => (p.id === "b1" ? { ...p, juntos: ["c1", "a1", "nao-existe"] } : p));
+  test("CJ-H1 peças escolhidas aparecem na ficha e no carrinho; 'Adicionar' põe no carrinho", async ({ page }) => {
+    const erros = await abrir(page, comJuntos());
+    await card(page, "Brinco Gota").locator(".name").click();
+    const cj = page.locator("#pBody .leve");
+    await expect(cj).toContainText("Compre junto");
+    await expect(cj.locator(".leve-i")).toHaveCount(2);
+    await expect(cj).toContainText("Colar Ponto de Luz");
+    await expect(cj).toContainText("Anel Solitário");
+    await page.getByRole("button", { name: /^adicionar ao carrinho$/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    const lv = page.locator("#leve");
+    await expect(lv).toBeVisible();
+    await expect(lv).toContainText("Leve também");
+    await expect(lv.locator(".leve-i")).toHaveCount(2);
+    await lv.getByRole("button", { name: "Adicionar Colar Ponto de Luz ao carrinho" }).click();
+    await expect(page.locator("#badge")).toHaveText("2");
+    // a que entrou no carrinho sai da sugestão
+    await expect(lv.locator(".leve-i")).toHaveCount(1);
+    await expect(lv).not.toContainText("Colar Ponto de Luz");
+    expect(erros).toEqual([]);
+  });
+  test("CJ-E1 peça sugerida com tamanho abre a ficha em vez de adicionar", async ({ page }) => {
+    await abrir(page, comJuntos());
+    await card(page, "Brinco Gota").getByRole("button", { name: /adicionar/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    await page.locator("#leve").getByRole("button", { name: "Adicionar Anel Solitário A01 ao carrinho" }).click();
+    await expect(page.locator("#pSheet")).toBeVisible();
+    await expect(page.locator("#pBody h2")).toContainText("Anel Solitário");
+    await expect(page.locator("#badge")).toHaveText("1");
+  });
+  test("CJ-E2 sem escolha sugere peças da mesma categoria", async ({ page }) => {
+    await abrir(page);
+    await card(page, "Brinco Gota").getByRole("button", { name: /adicionar/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    const lv = page.locator("#leve");
+    await expect(lv.locator(".leve-i")).toHaveCount(1);
+    await expect(lv).toContainText("Argola Pronta");
+  });
+  test("CJ-E3 sem nada para sugerir, a seção não aparece", async ({ page }) => {
+    await abrir(page, [base[3]]);
+    await card(page, "Colar Ponto").getByRole("button", { name: /adicionar/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    await expect(page.locator("#leve")).toBeHidden();
+    await expect(page.locator("#pBody .leve")).toHaveCount(0);
+  });
+  test("CJ-S1 nome com código na sugestão aparece como texto", async ({ page }) => {
+    const itens = [{ ...base[1], juntos: ["x"] }, { id: "x", nome: '<img src=x onerror="window.__xss=1">Colar', cat: "Colares", preco: 10, fotos: [FOTO_OK] }];
+    await abrir(page, itens as any);
+    await card(page, "Brinco Gota").locator(".name").click();
+    await expect(page.locator("#pBody .leve")).toContainText('<img src=x onerror="window.__xss=1">Colar');
+    expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  });
+});
