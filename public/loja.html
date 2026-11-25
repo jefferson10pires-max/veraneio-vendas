@@ -256,6 +256,9 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .total{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}
 .total b{font-size:20px;font-weight:700;color:#000}
 .fields{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+#cDados{padding:16px max(16px,env(safe-area-inset-right,0px)) 4px max(16px,env(safe-area-inset-left,0px))}
+#cFoot{gap:8px;padding-top:10px}#cFoot .btng{height:38px;border:0;text-decoration:underline;font-weight:500;color:var(--muted)}
+#coErr:empty{display:none}
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:13px;color:#222;text-transform:uppercase;letter-spacing:.03em}
 .field input{height:46px;border:.8px solid var(--line);border-radius:var(--radius);background:#fff;padding:0 20px;width:100%;font-weight:500}
@@ -358,18 +361,17 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   <div class="sh-body">
     <div class="ship" id="ship" hidden></div>
     <div class="lines" id="lines"></div>
+    <div class="fields" id="cDados">
+      <div class="field"><label for="bNome">Seu nome</label><input id="bNome" autocomplete="name" placeholder="Nome e sobrenome" enterkeyhint="next"></div>
+      <div class="field"><label for="bTel">WhatsApp com DDD</label><input id="bTel" type="tel" autocomplete="tel" inputmode="tel" placeholder="(22) 99999-0000" enterkeyhint="done"></div>
+    </div>
     <div class="leve" id="leve" hidden></div>
   </div>
   <div class="sh-foot" id="cFoot">
     <div class="total"><span>Subtotal</span><b class="num" id="cTotal"></b></div>
-    <div class="fields">
-      <div class="field"><label for="bNome">Seu nome</label><input id="bNome" autocomplete="name" placeholder="Nome e sobrenome" enterkeyhint="next"></div>
-      <div class="field"><label for="bTel">WhatsApp com DDD</label><input id="bTel" type="tel" autocomplete="tel" inputmode="tel" placeholder="(22) 99999-0000" enterkeyhint="done"></div>
-    </div>
     <span class="err" id="coErr" aria-live="polite"></span>
     <a class="btnp" id="finish" href="#" target="_blank" rel="noopener">Finalizar pelo WhatsApp</a>
     <button class="btng" type="button" data-close>Continuar comprando</button>
-    <span class="hint">Seus dados ficam só com a loja, para ela confirmar o seu pedido.</span>
   </div>
 </section>
 
@@ -784,7 +786,7 @@ function renderCart(){
       <div class="row"><span class="qty"><button type="button" data-q="-1" data-id="${esc(k)}" aria-label="Diminuir">${I.minus}</button><span class="num">${q}</span><button type="button" data-q="1" data-id="${esc(k)}" aria-label="Aumentar">${I.plus}</button></span><button class="rm" type="button" data-rm="${esc(k)}">Remover</button></div>
     </div>`).join("")
     :`<div class="empty">Seu carrinho está vazio.<button class="btnp" type="button" data-close>Ver produtos</button></div>`;
-  $("cFoot").hidden=!it.length;
+  $("cFoot").hidden=!it.length;$("cDados").hidden=!it.length;
   {const l=it.length?sugestoes([...new Set(it.map(x=>String(x.p.id)))]):[];$("leve").hidden=!l.length;$("leve").innerHTML=l.length?leveIn(l,"Leve também"):""}
   $("cTotal").textContent=brl(tot);
   const bi=barraInfo();$("ship").hidden=!bi||!it.length;
@@ -847,7 +849,7 @@ $("finish").addEventListener("click",e=>{
   const nOk=buyer.nome.trim().length>=2,tOk=digits(buyer.tel).length>=10;
   $("bNome").setAttribute("aria-invalid",!nOk);$("bTel").setAttribute("aria-invalid",!tOk);
   if(!cartItems().length){e.preventDefault();return}
-  if(!nOk||!tOk){e.preventDefault();$("coErr").textContent=!nOk?"Digite o seu nome para finalizar.":"Digite o seu WhatsApp com DDD para finalizar.";(!nOk?$("bNome"):$("bTel")).focus();return}
+  if(!nOk||!tOk){e.preventDefault();$("coErr").textContent=!nOk?"Digite o seu nome para finalizar.":"Digite o seu WhatsApp com DDD para finalizar.";{const c=!nOk?$("bNome"):$("bTel");c.focus();c.scrollIntoView({behavior:"smooth",block:"center"})}return}
   if(!L.whats){e.preventDefault();$("coErr").textContent="Esta loja ainda não cadastrou o WhatsApp.";return}
   syncLead(true).finally(()=>{leadId=null;store.set(K("lead"),null)});
   setTimeout(()=>{cart={};saveCart();renderCart();closeSheets();toast("Pedido enviado! A loja vai responder você no WhatsApp.")},400);
