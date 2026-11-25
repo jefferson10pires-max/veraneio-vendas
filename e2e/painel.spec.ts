@@ -1839,3 +1839,61 @@ test.describe("AV1 avaliações no painel", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("AR1 gerador de arte", () => {
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAIAAAADnC86AAAAQUlEQVR4Xu3QQQ3AIADAQEAD/vUgi8zE8VjPQJPOs/d4Yb2IfgozrWZazbSaaTXTaqbVTKuZVjOtZlrNtJr53+oLwKgBQN3bd6IAAAAASUVORK5CYII=", "base64");
+  const pixel = (page: Page, x: number, y: number) => page.evaluate(([x, y]) => Array.from((document.getElementById("arC") as HTMLCanvasElement).getContext("2d")!.getImageData(x, y, 1, 1).data).slice(0, 3), [x, y]);
+  test("AR1-H1 story e post com a foto da peça (via wsrv), modelos, preço e download em JPEG", async ({ page }) => {
+    const pedidos: string[] = [];
+    const s = seed(10, { "lojas/u1": { ...seed(1)["lojas/u1"], insta: "@kailane", cor: "#7a1030" }, "precos/u1": { margem: 100, arred: "90", over: {}, pronta: ["y2"], promos: { y2: 10 } } });
+    const erros = await preparar(page, { seed: s });
+    await page.route(/wsrv\.nl/, (r) => { pedidos.push(r.request().url()); return r.fulfill({ contentType: "image/png", body: PNG }); });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Gerar arte: Peça 2" }).click();
+    await expect(page.locator("#arMsg")).toHaveText("Escolha o modelo e o formato e toque em Baixar.");
+    expect(pedidos[0]).toContain("url=" + encodeURIComponent(FOTO));
+    expect(pedidos[0]).toContain("output=jpg");
+    const cv = page.locator("#arC");
+    expect(await cv.evaluate((c: HTMLCanvasElement) => [c.width, c.height])).toEqual([1080, 1920]);
+    // foto desenhada (vermelha) no meio da moldura; fundo creme
+    expect(await pixel(page, 540, 770)).toEqual([200, 20, 20]);
+    expect(await pixel(page, 10, 10)).toEqual([246, 240, 230]);
+    // cor da loja
+    await page.locator("#arM").getByRole("button", { name: "Cor da loja" }).click();
+    expect(await pixel(page, 10, 10)).toEqual([122, 16, 48]);
+    // post 1:1
+    await page.locator("#arF").getByRole("button", { name: "Post 1:1" }).click();
+    expect(await cv.evaluate((c: HTMLCanvasElement) => [c.width, c.height])).toEqual([1080, 1080]);
+    await page.locator("#arM").getByRole("button", { name: "Oferta" }).click();
+    await page.locator("#arP").uncheck();
+    // a imagem pode ser exportada (canvas não "contaminado")
+    expect(await cv.evaluate((c: HTMLCanvasElement) => c.toDataURL("image/jpeg").length)).toBeGreaterThan(1000);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Baixar / compartilhar" }).click()]);
+    expect(dl.suggestedFilename()).toBe("peca-2-post.jpg");
+    expect(erros).toEqual([]);
+  });
+  test("AR1-E1 foto não carrega: avisa e ainda gera a arte sem foto", async ({ page }) => {
+    const erros = await preparar(page, { seed: seed(10) });
+    await page.route(/wsrv\.nl/, (r) => r.fulfill({ status: 500, body: "x" }));
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Gerar arte: Peça 3" }).click();
+    await expect(page.locator("#arMsg")).toContainText("Não foi possível carregar a foto");
+    await expect(page.getByRole("button", { name: "Baixar / compartilhar" })).toBeEnabled();
+    expect(erros).toEqual([]);
+  });
+  test("AR1-H2 peça própria usa a foto da revendedora (sem passar pelo wsrv)", async ({ page }) => {
+    const foto = "data:image/png;base64," + PNG.toString("base64");
+    const s = seed(10, { "lojas/u1/proprios/r1": { nome: "Pulseira Minha", cat: "Pulseiras", preco: 80, fotosN: 1, fotosV: 5 }, "lojas/u1/fotos/r1~5": { fotos: [foto], v: 5 } });
+    const erros = await preparar(page, { seed: s });
+    let wsrv = 0; await page.route(/wsrv\.nl/, (r) => { wsrv++; return r.abort(); });
+    await entrar(page);
+    await aba(page, "Peças").click();
+    await page.getByRole("button", { name: "Gerar arte: Pulseira Minha" }).click();
+    await expect(page.locator("#arMsg")).toHaveText("Escolha o modelo e o formato e toque em Baixar.");
+    expect(await pixel(page, 540, 770)).toEqual([200, 20, 20]);
+    expect(wsrv).toBe(0);
+    expect(erros).toEqual([]);
+  });
+});

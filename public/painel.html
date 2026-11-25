@@ -169,6 +169,8 @@ a{color:inherit}
 .pr.off .th,.pr.off .nm{opacity:.45}.pr.bloq [data-bloq]{color:var(--muted)}
 .pr .pacts{display:flex;gap:6px}
 .nm .orig,.items .orig{display:block;font-size:11.5px;color:var(--muted)}.items .orig{display:inline}
+.arte-prev{display:grid;place-items:center;background:var(--bg);border-radius:12px;padding:10px}
+.arte-prev canvas{max-width:100%;max-height:58vh;width:auto;height:auto;border-radius:6px;box-shadow:0 2px 10px rgb(0 0 0 / .12);background:#fff}
 .jchips{display:flex;flex-wrap:wrap;gap:6px}
 .jchip{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 12px;font-size:13px;max-width:100%}
 .jchip button{border:0;background:none;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:17px;line-height:1;color:var(--muted)}
@@ -285,6 +287,7 @@ const I={
  share:sv('<path d="M12 15V3M7 8l5-5 5 5M5 12v8h14v-8"/>'),copy:sv('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'),
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
  plus:sv('<path d="M12 5v14M5 12h14"/>'),lock:sv('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),x:sv('<path d="M6 6l12 12M18 6 6 18"/>'),
+ arte:sv('<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="9.5" cy="9" r="1.8"/><path d="m4 17 5-5 4 4 2.5-2.5L20 17"/>'),
  edit:sv('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
  cam:sv('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>')
 };
@@ -782,6 +785,7 @@ async function tPecas(){
   $("pcat").onchange=e=>{ui.pcat=e.target.value;ui.plim=40;pecas()};
   $("plist").onclick=e=>{const r=e.target.closest("[data-rest]");if(r){restaurar(r.dataset.rest);return}
     const f=e.target.closest("[data-foto]");if(f)return formPeca(f.dataset.foto);
+    const ar=e.target.closest("[data-arte]");if(ar)return gerarArte(ar.dataset.arte);
     if(e.target.closest("[data-bloq]"))return toast("Peça bloqueada: no plano gratuito suas peças não aparecem na loja. Ela volta quando você for Assinante.");
     const ed=e.target.closest("[data-edit]");if(ed)ASS()?formPropria(ed.dataset.edit):toast(MSG_ASS())};
   $("plist").onchange=e=>{const t=e.target,id=t.dataset.pe||t.dataset.site||t.dataset.en;if(!id)return;
@@ -868,13 +872,104 @@ function pecas(){
     <div class="th" ${fp?`data-fid="${esc(p.id)}"`:""}>${!fp&&p.fotos&&p.fotos[0]?`<img src="${esc(mini(p.fotos[0]))}" alt="" loading="lazy" decoding="async">`:""}</div>
     <div class="nm">${esc(nm)}<small>${p.proprio?"Sua peça · ":""}${esc(p.cat||"")} · ${precoTxt(p)}${fp&&!p.proprio?" · sua foto":""}</small>${renomeada(p)?`<small class="orig">Veraneio: ${esc(p.nome)}</small>`:""}${p.fora?`<small class="orig">Saiu do catálogo Veraneio. Fica na sua loja enquanto estiver como pronta entrega.</small>`:""}</div>
     <div class="pacts">${p.proprio?`<button class="btn btn-ghost btn-sm" type="button" data-edit="${esc(p.id)}" aria-label="Editar ${esc(nm)}">${I.edit}Editar</button>`
-      :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Editar peça: ${esc(nm)}">${I.edit}Editar</button>`}</div>
+      :`<button class="btn btn-ghost btn-sm" type="button" data-foto="${esc(p.id)}" aria-label="Editar peça: ${esc(nm)}">${I.edit}Editar</button>`}<button class="btn btn-ghost btn-sm" type="button" data-arte="${esc(p.id)}" aria-label="Gerar arte: ${esc(nm)}">${I.arte}Arte</button></div>
     <div class="sws">${usaPE()?`<label class="pe"><input type="checkbox" role="switch" data-pe="${esc(p.id)}" ${pe.has(p.id)&&!(usaSite()&&oc.has(p.id))?"checked":""} ${usaSite()&&oc.has(p.id)?"disabled":""} aria-label="Pronta entrega: ${esc(nm)}">Pronta entrega</label>`:""}
       ${usaEn()?`<label class="pe site"><input type="checkbox" role="switch" data-en="${esc(p.id)}" ${en.has(p.id)&&!oc.has(p.id)?"checked":""} aria-label="Encomenda: ${esc(nm)}">Encomenda</label>`:""}
       ${so?"":`<label class="pe site"><input type="checkbox" role="switch" data-site="${esc(p.id)}" ${o?"":"checked"} aria-label="No site: ${esc(nm)}">No site</label>`}</div></div>`}).join("")
     :`<p class="hint">${vazio}</p>`)+(lista.length>l.length?`<button class="btn btn-ghost btn-sm" type="button" id="mais" style="margin-top:10px">Mostrar mais (${lista.length-l.length})</button>`:"");
   const m=$("mais");if(m)m.onclick=()=>{ui.plim+=60;pecas()};
   encherMiniaturas($("plist"));
+}
+
+/* ---------- GERADOR DE ARTE (story 9:16 e post 1:1) ----------
+   Tudo no navegador, num <canvas>: sem servidor e sem custo. A foto da Yampi passa pelo wsrv.nl (o mesmo do "Baixar foto")
+   e entra como arquivo local (blob), então a imagem pode ser exportada; fotos da revendedora já são locais (data:). */
+const ARTE={modelo:"creme",formato:"story",preco:true};
+let _fontesArte=null;
+function fontesArte(){if(!_fontesArte)_fontesArte=(async()=>{
+  if(!document.getElementById("fArte")){const l=document.createElement("link");l.id="fArte";l.rel="stylesheet";l.href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Jost:wght@400;500;600&display=swap";document.head.appendChild(l)}
+  const espera=Promise.all(['600 60px "Cormorant Garamond"','500 40px "Jost"','600 40px "Jost"'].map(f=>document.fonts.load(f).catch(()=>null))).then(()=>document.fonts.ready);
+  await Promise.race([espera,new Promise(r=>setTimeout(r,2500))])})();return _fontesArte}
+async function imgArte(src){
+  if(!src)return null;let url=src,tmp=null;
+  if(/^https:/.test(src)){const r=await fetch(`https://wsrv.nl/?url=${encodeURIComponent(src)}&w=1000&h=1000&fit=cover&output=jpg`);if(!r.ok)throw new Error("foto "+r.status);url=tmp=URL.createObjectURL(await r.blob())}
+  else if(!/^data:image\//.test(src))return null;
+  const im=new Image();im.src=url;try{await im.decode()}finally{if(tmp)setTimeout(()=>URL.revokeObjectURL(tmp),5000)}return im;
+}
+function dadosArte(id){
+  const p=todas().find(x=>x.id===id);if(!p)return null;
+  const pr=p.proprio?C.comPromo(Math.round(Number(p.preco)*100)/100,(PR.promos||{})[id]):C.comPromo(precoFinal(p.preco,PR,id),(PR.promos||{})[id],p.preco);
+  return {p,nome:nomeLoja(p),preco:pr.preco,de:pr.de||0,pct:C.pctPromo((PR.promos||{})[id]),pronta:usaPE()&&(PR.pronta||[]).includes(id)};
+}
+function quebra(ctx,txt,max,linhas){const ps=String(txt).split(/\s+/).filter(Boolean),out=[];let l="";
+  for(const w of ps){const t=l?l+" "+w:w;if(ctx.measureText(t).width<=max||!l)l=t;else{out.push(l);l=w}}if(l)out.push(l);
+  if(out.length>linhas){out.length=linhas;let u=out[linhas-1];while(u&&ctx.measureText(u+"…").width>max)u=u.slice(0,-1);out[linhas-1]=u.replace(/\s+$/,"")+"…"}
+  return out.map(x=>{while(ctx.measureText(x).width>max&&x.length>1)x=x.slice(0,-2)+"…";return x})}
+function retRed(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function desenharArte(cv,d,im,o){
+  const story=o.formato==="story",W=1080,H=story?1920:1080;cv.width=W;cv.height=H;const ctx=cv.getContext("2d");
+  const cor=/^#[0-9a-f]{6}$/i.test(L.cor||"")?L.cor:"#043034",ink=inkFor(cor);
+  const T=o.modelo==="cor"?{bg:cor,tx:ink,sub:ink,moldura:ink,foto:"#ffffff",preco:ink}
+    :o.modelo==="oferta"?{bg:"#ffffff",tx:"#211d1a",sub:"#6b625c",moldura:cor,foto:"#ffffff",preco:cor,faixa:cor,faixaTx:ink}
+    :{bg:"#f6f0e6",tx:"#2b2420",sub:"#7a6d62",moldura:cor,foto:"#ffffff",preco:cor};
+  const serif='"Cormorant Garamond", Georgia, serif',sans='"Jost", "Montserrat", Arial, sans-serif';
+  ctx.fillStyle=T.bg;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=T.moldura;ctx.globalAlpha=.55;ctx.lineWidth=3;ctx.strokeRect(34,34,W-68,H-68);ctx.globalAlpha=1;
+  ctx.textAlign="center";ctx.textBaseline="alphabetic";
+  let y=story?190:118;
+  if(T.faixa){const fh=story?96:76;ctx.fillStyle=T.faixa;ctx.fillRect(34,story?60:44,W-68,fh);ctx.fillStyle=T.faixaTx;ctx.font=`600 ${story?44:36}px ${sans}`;
+    ctx.fillText(d.pct?`${d.pct}% OFF`:"SELEÇÃO ESPECIAL",W/2,(story?60:44)+fh/2+(story?15:12));y+=story?110:72}
+  ctx.fillStyle=T.tx;ctx.font=`600 ${story?70:52}px ${serif}`;ctx.fillText(quebra(ctx,L.nome||"",W-200,1)[0]||"",W/2,y);
+  const ig=String(L.insta||"").replace(/^@/,"").trim();
+  if(ig){ctx.fillStyle=T.sub;ctx.font=`400 ${story?36:28}px ${sans}`;ctx.fillText("@"+ig,W/2,y+(story?56:42))}
+  const topo=ig?y+(story?56:42):y;
+  // layout: story = de cima para baixo; post = preço e nome presos embaixo, a foto ocupa o que sobra no meio
+  ctx.font=`500 ${story?76:48}px ${serif}`;const ls=quebra(ctx,d.nome,W-(story?180:200),story?3:2),lh=story?84:54;
+  const temPreco=o.preco&&d.preco>0,temDe=temPreco&&d.de>d.preco;
+  let ft,fy,ty,py2;
+  if(story){ft=880;fy=T.faixa?420:330;ty=fy+ft+70+(d.pronta?40:0)+40;py2=ty+(ls.length-1)*lh+(temDe?200:125)}
+  else{py2=H-118;const nb=temDe?py2-112:py2-74;ty=nb-(ls.length-1)*lh;fy=topo+30;ft=Math.min(600,ty-44-(d.pronta?26:0)-fy);}
+  const fx=(W-ft)/2;
+  ctx.save();ctx.shadowColor="rgba(0,0,0,.12)";ctx.shadowBlur=30;ctx.shadowOffsetY=8;retRed(ctx,fx,fy,ft,ft,story?36:28);ctx.fillStyle=T.foto;ctx.fill();ctx.restore();
+  ctx.save();retRed(ctx,fx,fy,ft,ft,story?36:28);ctx.clip();
+  if(im){const r=Math.max(ft/im.naturalWidth,ft/im.naturalHeight),w=im.naturalWidth*r,h=im.naturalHeight*r;ctx.drawImage(im,fx+(ft-w)/2,fy+(ft-h)/2,w,h)}
+  else{ctx.fillStyle="#efe9e1";ctx.fillRect(fx,fy,ft,ft);ctx.fillStyle="#a89c90";ctx.font=`500 40px ${sans}`;ctx.fillText("sem foto",W/2,fy+ft/2)}
+  ctx.restore();
+  if(d.pronta){const tx="PRONTA ENTREGA";ctx.font=`600 ${story?30:24}px ${sans}`;const tw=ctx.measureText(tx).width+(story?84:66),th=story?60:48,px=(W-tw)/2,py=fy+ft-(story?30:24);
+    retRed(ctx,px,py,tw,th,th/2);ctx.fillStyle="#e7f4ec";ctx.fill();ctx.fillStyle="#2c9a5a";ctx.beginPath();ctx.arc(px+(story?34:27),py+th/2,story?8:6,0,7);ctx.fill();
+    ctx.fillStyle="#1d6b3f";ctx.textAlign="left";ctx.fillText(tx,px+(story?54:42),py+th/2+(story?11:9));ctx.textAlign="center"}
+  ctx.fillStyle=T.tx;ctx.font=`500 ${story?76:48}px ${serif}`;ls.forEach((l,i)=>ctx.fillText(l,W/2,ty+i*lh));
+  if(temPreco){
+    if(temDe){ctx.font=`400 ${story?40:30}px ${sans}`;const pre="de ",val=brl(d.de),wp=ctx.measureText(pre).width,wv=ctx.measureText(val).width,x0=W/2-(wp+wv)/2,dy=py2-(story?90:62);
+      ctx.fillStyle=T.sub;ctx.textAlign="left";ctx.fillText(pre,x0,dy);ctx.fillText(val,x0+wp,dy);ctx.textAlign="center";
+      ctx.strokeStyle=T.sub;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x0+wp-2,dy-(story?13:10));ctx.lineTo(x0+wp+wv+2,dy-(story?13:10));ctx.stroke()}
+    ctx.fillStyle=T.preco;ctx.font=`600 ${story?92:64}px ${sans}`;ctx.fillText(brl(d.preco),W/2,py2)}
+  else{ctx.fillStyle=T.preco;ctx.font=`500 ${story?56:42}px ${sans}`;ctx.fillText("Chama no direct",W/2,py2)}
+  ctx.fillStyle=T.sub;ctx.font=`400 ${story?34:26}px ${sans}`;ctx.fillText("Toque no link da bio",W/2,H-(story?96:58));
+}
+async function gerarArte(id){
+  const d=dadosArte(id);if(!d)return;
+  abrirFolha("Gerar arte",`<div class="arte-prev"><canvas id="arC" role="img" aria-label="Prévia da arte"></canvas></div>
+    <div class="field"><span class="flabel">Modelo</span><div class="seg" id="arM">${[["creme","Creme"],["cor","Cor da loja"],["oferta","Oferta"]].map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${ARTE.modelo===v}">${l}</button>`).join("")}</div></div>
+    <div class="field"><span class="flabel">Formato</span><div class="seg" id="arF">${[["story","Story 9:16"],["post","Post 1:1"]].map(([v,l])=>`<button type="button" data-v="${v}" aria-pressed="${ARTE.formato===v}">${l}</button>`).join("")}</div></div>
+    <label class="pe" style="align-self:flex-start"><input type="checkbox" role="switch" id="arP" ${ARTE.preco?"checked":""}>Mostrar preço</label>
+    <span class="hint" id="arMsg" aria-live="polite">Preparando a arte…</span>
+    <div class="row"><button class="btn btn-brand" type="button" id="arOk" disabled>${I.share}Baixar / compartilhar</button></div>`);
+  const cv=$("arC");let im=null;
+  const desenha=()=>{if(cv.isConnected)desenharArte(cv,d,im,ARTE)};
+  const seg=(el,k)=>el.onclick=e=>{const b=e.target.closest("[data-v]");if(!b)return;ARTE[k]=b.dataset.v;el.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));desenha()};
+  seg($("arM"),"modelo");seg($("arF"),"formato");$("arP").onchange=e=>{ARTE.preco=e.target.checked;desenha()};
+  try{const fp=temFotoPropria(d.p)?(await fotosProprias(id))[0]:null;await fontesArte();im=await imgArte(fp||(d.p.fotos||[])[0]).catch(e=>{console.warn(e);return null})}catch(e){console.warn(e)}
+  if(!cv.isConnected)return;desenha();
+  $("arMsg").textContent=im||!(d.p.fotos||[]).length&&!temFotoPropria(d.p)?"Escolha o modelo e o formato e toque em Baixar.":"Não foi possível carregar a foto agora. Confira a internet e abra de novo.";
+  const ok=$("arOk");ok.disabled=false;
+  ok.onclick=async()=>{ok.disabled=true;
+    try{const blob=await new Promise((r,j)=>cv.toBlob(b=>b?r(b):j(new Error("vazio")),"image/jpeg",.92));
+      const nome=`${(norm(d.nome).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"peca").slice(0,50)}-${ARTE.formato}.jpg`,f=new File([blob],nome,{type:"image/jpeg"});
+      if(matchMedia("(pointer:coarse)").matches&&navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:d.nome})}catch(e){if(e&&e.name!=="AbortError")throw e}}
+      else{const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast("Arte baixada")}}
+    catch(e){console.error(e);toast("Não foi possível gerar a imagem. Tente de novo.")}
+    finally{ok.disabled=false}};
 }
 
 /* ---------- janela (folha) do painel ---------- */
