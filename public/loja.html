@@ -751,13 +751,15 @@ function ligarAvs(p){
 
 /* ---------- compre junto ----------
    As peças que a revendedora escolheu (p.juntos, até 3); sem escolha, peças da mesma categoria.
+   No carrinho ("Leve também") só entram peças a pronta entrega.
    Tudo com o catálogo já carregado: não lê nada novo no banco. */
 const porRank=(a,b)=>(a.rank??1e6)-(b.rank??1e6)||(a.ordem??999)-(b.ordem??999);
-function sugestoes(ids,max=3){
+function sugestoes(ids,max=3,ok=()=>true,completar=false){
   const fora=new Set(ids.map(String)),out=[],vis=new Set();
-  const pega=p=>{if(p&&out.length<max&&!fora.has(String(p.id))&&!vis.has(String(p.id))){vis.add(String(p.id));out.push(p)}};
+  const pega=p=>{if(p&&ok(p)&&out.length<max&&!fora.has(String(p.id))&&!vis.has(String(p.id))){vis.add(String(p.id));out.push(p)}};
   ids.forEach(id=>{const p=byId(id);(p&&Array.isArray(p.juntos)?p.juntos:[]).forEach(j=>pega(byId(j)))});
   if(!out.length){const cs=new Set(ids.map(id=>(byId(id)||{}).cat).filter(Boolean));ITENS.filter(p=>cs.has(p.cat)).sort(porRank).forEach(pega)}
+  if(completar&&out.length<max)ITENS.slice().sort(porRank).forEach(pega);
   return out;
 }
 const leveIn=(l,titulo)=>`<h4>${esc(titulo)}</h4><div class="leve-l">${l.map(p=>`<div class="leve-i">
@@ -787,7 +789,7 @@ function renderCart(){
     </div>`).join("")
     :`<div class="empty">Seu carrinho está vazio.<button class="btnp" type="button" data-close>Ver produtos</button></div>`;
   $("cFoot").hidden=!it.length;$("cDados").hidden=!it.length;
-  {const l=it.length?sugestoes([...new Set(it.map(x=>String(x.p.id)))]):[];$("leve").hidden=!l.length;$("leve").innerHTML=l.length?leveIn(l,"Leve também"):""}
+  {const l=it.length?sugestoes([...new Set(it.map(x=>String(x.p.id)))],3,p=>!!p.pronta,true):[];$("leve").hidden=!l.length;$("leve").innerHTML=l.length?leveIn(l,"Leve também"):""}
   $("cTotal").textContent=brl(tot);
   const bi=barraInfo();$("ship").hidden=!bi||!it.length;
   if(bi&&bi.sempre)$("ship").innerHTML=`<span>Frete grátis em todos os pedidos 🎉</span>`;

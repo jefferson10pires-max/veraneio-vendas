@@ -416,7 +416,7 @@ test("S06 peça em desconto mostra o preço antigo riscado e o novo (card, pági
 });
 
 test.describe("CJ compre junto", () => {
-  const comJuntos = () => base.map((p) => (p.id === "b1" ? { ...p, juntos: ["c1", "a1", "nao-existe"] } : p));
+  const comJuntos = () => base.map((p) => (p.id === "b1" ? { ...p, juntos: ["c1", "a1", "nao-existe"] } : p.id === "c1" || p.id === "a1" ? { ...p, pronta: true } : p));
   test("CJ-H1 peças escolhidas aparecem na ficha e no carrinho; 'Adicionar' põe no carrinho", async ({ page }) => {
     const erros = await abrir(page, comJuntos());
     await card(page, "Brinco Gota").locator(".name").click();
@@ -430,11 +430,12 @@ test.describe("CJ compre junto", () => {
     const lv = page.locator("#leve");
     await expect(lv).toBeVisible();
     await expect(lv).toContainText("Leve também");
-    await expect(lv.locator(".leve-i")).toHaveCount(2);
+    await expect(lv.locator(".leve-i")).toHaveCount(3); // as 2 escolhidas + 1 pronta entrega para completar
+    await expect(lv.locator(".leve-i").nth(2)).toContainText("Argola Pronta");
     await lv.getByRole("button", { name: "Adicionar Colar Ponto de Luz ao carrinho" }).click();
     await expect(page.locator("#badge")).toHaveText("2");
     // a que entrou no carrinho sai da sugestão
-    await expect(lv.locator(".leve-i")).toHaveCount(1);
+    await expect(lv.locator(".leve-i")).toHaveCount(2);
     await expect(lv).not.toContainText("Colar Ponto de Luz");
     expect(erros).toEqual([]);
   });
@@ -447,13 +448,31 @@ test.describe("CJ compre junto", () => {
     await expect(page.locator("#pBody h2")).toContainText("Anel Solitário");
     await expect(page.locator("#badge")).toHaveText("1");
   });
-  test("CJ-E2 sem escolha sugere peças da mesma categoria", async ({ page }) => {
+  test("CJ-E2 sem escolha sugere peças a pronta entrega da mesma categoria", async ({ page }) => {
     await abrir(page);
     await card(page, "Brinco Gota").getByRole("button", { name: /adicionar/i }).click();
     await page.getByRole("button", { name: "Abrir carrinho" }).click();
     const lv = page.locator("#leve");
     await expect(lv.locator(".leve-i")).toHaveCount(1);
     await expect(lv).toContainText("Argola Pronta");
+  });
+  test("CJ-P1 carrinho só sugere pronta entrega (a escolhida que não é pronta fica de fora; completa com outras prontas)", async ({ page }) => {
+    const itens = base.map((p) => (p.id === "b1" ? { ...p, juntos: ["c1", "b2"] } : p));
+    await abrir(page, itens);
+    await card(page, "Brinco Gota").locator(".name").click();
+    await expect(page.locator("#pBody .leve")).toContainText("Colar Ponto de Luz"); // na ficha continua a escolha da revendedora
+    await page.getByRole("button", { name: /^adicionar ao carrinho$/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    const lv = page.locator("#leve");
+    await expect(lv.locator(".leve-i")).toHaveCount(1);
+    await expect(lv).toContainText("Argola Pronta");
+    await expect(lv).not.toContainText("Colar Ponto de Luz");
+  });
+  test("CJ-P2 sem peças a pronta entrega, o carrinho não mostra 'Leve também'", async ({ page }) => {
+    await abrir(page, base.filter((p) => p.id !== "b2"));
+    await card(page, "Brinco Gota").getByRole("button", { name: /adicionar/i }).click();
+    await page.getByRole("button", { name: "Abrir carrinho" }).click();
+    await expect(page.locator("#leve")).toBeHidden();
   });
   test("CJ-E3 sem nada para sugerir, a seção não aparece", async ({ page }) => {
     await abrir(page, [base[3]]);
