@@ -200,7 +200,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .qty span{min-width:28px;text-align:center;font-size:16px}
 .btnp{display:flex;justify-content:center;align-items:center;gap:8px;width:100%;height:46px;border:0;border-radius:var(--radius);background:var(--brand);color:var(--brand-ink);font-weight:700;font-size:15px;letter-spacing:.02em;text-transform:uppercase;cursor:pointer;text-align:center}
 .btng{display:flex;justify-content:center;align-items:center;width:100%;height:44px;border:.8px solid var(--line);border-radius:var(--radius);background:#fff;font-weight:600;font-size:14px;cursor:pointer}
-.trust{margin-top:16px;border:.8px solid var(--line);border-radius:20px;display:grid;grid-template-columns:repeat(4,1fr);padding:14px 4px}
+.trust{margin-top:16px;border:.8px solid var(--line);border-radius:20px;display:grid;grid-template-columns:repeat(3,1fr);padding:14px 4px}
 .trust div{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;font-size:11px;line-height:1.15;padding:0 4px;color:#222}
 .trust div+div{border-left:1px solid #222}
 .trust .ico{width:30px;height:30px}
@@ -615,7 +615,6 @@ function abrirProduto(id){
         <div>${I.chat}<span>Atendimento<b>WhatsApp</b></span></div>
         <div>${I.shield}<span>Compra<b>Segura</b></span></div>
         <div>${I.gem}<span>Peças com<b>garantia</b></span></div>
-        <div>${I.truck}<span>Envio<b>imediato</b></span></div>
       </div>
       ${(()=>{/* peça da Veraneio: só a descrição escrita pela revendedora (campo descricao); peça própria: a dela (desc) */
         const d=String((p.proprio?p.desc:p.descricao)||"").trim();return d?`<div class="pdesc"><h4>Descrição</h4><p>${esc(d)}</p></div>`:""})()}
