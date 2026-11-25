@@ -362,6 +362,49 @@ test("R30 config dos planos: só ADM, valores e chave pública válidos", async 
   await assertSucceeds(getDoc(doc(rev(), "config/planos")));
 });
 
+// --- avaliações das clientes
+const aval = (x = {}) => ({ produto: "y1", nome: "Ana", nota: 5, texto: "Linda", status: "pendente", ts: serverTimestamp(), ...x });
+test("R31 cliente sem login envia avaliação pendente, no formato certo; só a dona lê e apaga", async () => {
+  const r = (id = "BBBBBBBBBBBBBBBBBBBB") => doc(visitante(), "lojas/rev/avaliacoes/" + id);
+  await assertSucceeds(setDoc(r(), aval()));
+  await assertSucceeds(setDoc(r("CCCCCCCCCCCCCCCCCCCC"), aval({ texto: "" })));
+  for (const ruim of [{ status: "aprovada" }, { nota: 0 }, { nota: 6 }, { nota: 4.5 }, { nome: "" }, { nome: "x".repeat(61) }, { texto: "x".repeat(501) }, { produto: "" }, { ts: Timestamp.fromMillis(1) }, { extra: 1 }])
+    await assertFails(setDoc(r("DDDDDDDDDDDDDDDDDDDD"), aval(ruim)));
+  await assertFails(setDoc(doc(visitante(), "lojas/rev/avaliacoes/curto"), aval()));
+  await assertFails(getDoc(r()));
+  await assertFails(getDoc(doc(estranho(), "lojas/rev/avaliacoes/BBBBBBBBBBBBBBBBBBBB")));
+  await assertFails(getDoc(doc(env.authenticatedContext("outra").firestore(), "lojas/rev/avaliacoes/BBBBBBBBBBBBBBBBBBBB")));
+  await assertFails(updateDoc(r(), { status: "aprovada" }));
+  await assertFails(deleteDoc(r()));
+  await assertSucceeds(getDoc(doc(rev(), "lojas/rev/avaliacoes/BBBBBBBBBBBBBBBBBBBB")));
+  await assertSucceeds(deleteDoc(doc(rev(), "lojas/rev/avaliacoes/BBBBBBBBBBBBBBBBBBBB")));
+});
+test("R32 loja pausada não recebe avaliação", async () => {
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), "lojas/rev"), { nome: "x", status: "pausada" }); });
+  await assertFails(setDoc(doc(visitante(), "lojas/rev/avaliacoes/BBBBBBBBBBBBBBBBBBBB"), aval()));
+});
+test("R33 aprovadas e resumo: todo mundo lê; só a dona (ou ADM) grava, com teto", async () => {
+  const pub = { n: 1, media: 5, itens: [{ nome: "Ana", nota: 5, texto: "", ts: 1 }], em: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(rev(), "lojas/rev/avaliacoesPub/y1"), pub));
+  await assertSucceeds(setDoc(doc(rev(), "lojas/rev/pub/resumoAvaliacoes"), { y1: { n: 1, media: 5 } }, { merge: true }));
+  await assertSucceeds(getDoc(doc(visitante(), "lojas/rev/avaliacoesPub/y1")));
+  await assertSucceeds(getDoc(doc(visitante(), "lojas/rev/pub/resumoAvaliacoes")));
+  await assertFails(setDoc(doc(visitante(), "lojas/rev/avaliacoesPub/y1"), pub));
+  await assertFails(setDoc(doc(estranho(), "lojas/rev/pub/resumoAvaliacoes"), { y1: { n: 99, media: 5 } }));
+  await assertFails(setDoc(doc(env.authenticatedContext("outra").firestore(), "lojas/rev/avaliacoesPub/y1"), pub));
+  await assertFails(setDoc(doc(rev(), "lojas/rev/avaliacoesPub/y1"), { ...pub, media: 6 }));
+  await assertFails(setDoc(doc(rev(), "lojas/rev/avaliacoesPub/y1"), { ...pub, itens: Array(501).fill({ nota: 5 }) }));
+  await assertFails(setDoc(doc(rev(), "lojas/rev/avaliacoesPub/y1"), { ...pub, outro: 1 }));
+  await assertFails(setDoc(doc(rev(), "lojas/rev/pub/outroDoc"), { a: 1 }));
+  await assertSucceeds(setDoc(doc(adm(), "lojas/rev/avaliacoesPub/y1"), pub));
+  await assertFails(deleteDoc(doc(visitante(), "lojas/rev/avaliacoesPub/y1")));
+  await assertSucceeds(deleteDoc(doc(rev(), "lojas/rev/avaliacoesPub/y1")));
+});
+test("R34 precos aceita 'juntos' (mapa) e recusa outro tipo", async () => {
+  await assertSucceeds(setDoc(doc(rev(), "precos/rev"), { margem: 100, juntos: { y1: ["y2", "y3"] } }));
+  await assertFails(setDoc(doc(rev(), "precos/rev"), { margem: 100, juntos: ["y2"] }));
+});
+
 // --- R99: tudo que o app gravou nos testes do painel/ADM (e2e/escritas-gravadas.json, gerado por `npm test`)
 // é reproduzido aqui com as regras reais. Pega casos em que o app grava algo que as regras recusam.
 const hoje = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };

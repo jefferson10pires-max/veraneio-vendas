@@ -105,6 +105,7 @@ a{color:inherit}
 .seg{display:flex;background:var(--bg);border-radius:12px;padding:4px;gap:4px}
 .seg-col{flex-direction:column}.seg-col button{text-align:left;display:flex;flex-direction:column;gap:2px;padding:10px 12px}.seg-col button small{font-weight:400;opacity:.75;font-size:12px;line-height:1.3}
 .seg button{flex:1;border:0;background:none;border-radius:9px;padding:9px 6px;cursor:pointer;font-size:14px}
+#lt button{font-size:13px;padding:9px 3px;min-width:0}
 .seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 3px rgb(0 0 0 / .08);font-weight:600}
 .leads{display:flex;flex-direction:column;gap:10px}
 .lc{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
@@ -112,6 +113,9 @@ a{color:inherit}
 .lc .h b{font-size:16px}
 .lc .tot{font-size:17px;font-weight:600;white-space:nowrap}
 .lc .items{font-size:13px;color:var(--muted)}
+.estr{color:#e7a417;letter-spacing:1px;font-size:15px;white-space:nowrap}.estr span{color:#d6d6d6}
+.avtxt{margin:0;font-size:14.5px;line-height:1.5;white-space:pre-line;overflow-wrap:anywhere}
+.avpub{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px}
 .pill{display:inline-block;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:999px;white-space:nowrap}
 .pill.enviado,.pill.recuperado{background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--ok)}
 .pill.abandonado{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
@@ -255,7 +259,7 @@ if(!CFG.apiKey){app.innerHTML=`<div class="center px"><div><h2>Falta configurar 
 
 const [{initializeApp},A,F,C]=await Promise.all([import(SDK+"firebase-app.js"),import(SDK+"firebase-auth.js"),import(SDK+"firebase-firestore.js"),import("/catalogo.js")]);
 const fbApp=initializeApp(CFG),auth=A.getAuth(fbApp),db=F.getFirestore(fbApp);
-const {doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,query,where,orderBy,limit,serverTimestamp,Timestamp}=F;
+const {doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,query,where,orderBy,limit,serverTimestamp,Timestamp,deleteField}=F;
 
 /* ---------- utilidades ---------- */
 const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
@@ -316,7 +320,7 @@ function telaLogin(msg=""){
     toast("Se esse e-mail tiver cadastro, enviamos um link para criar uma nova senha.")};
 }
 
-A.onAuthStateChanged(auth,u=>{if(!u){U=null;L=null;PRODS=LEADS=DIAS=CAT=BAN=PROPRIOS=null;return telaLogin()}U=u;carregarConta(u)});
+A.onAuthStateChanged(auth,u=>{if(!u){U=null;L=null;PRODS=LEADS=DIAS=CAT=BAN=PROPRIOS=AVAL=AVPUB=null;return telaLogin()}U=u;carregarConta(u)});
 function telaErro(){
   app.innerHTML=`<div class="center px"><div style="display:flex;flex-direction:column;gap:12px;align-items:center"><h2 style="margin:0">Não foi possível abrir a sua loja</h2><p class="hint" style="margin:0">Confira a internet e tente de novo.</p>
     <button class="btn btn-brand" type="button" id="retry">Tentar de novo</button><button class="btn btn-ghost btn-sm" type="button" id="out">Sair</button></div></div>`;
@@ -524,7 +528,7 @@ function avisoHTML(){const a=AVISO||{};if(!a.ativo||!(a.img||a.titulo||a.texto))
     ${lk?`<a class="btn btn-brand btn-sm" href="${esc(a.link)}" target="_blank" rel="noopener">${esc(a.botao||"Saiba mais")}</a>`:""}</div></div>`}
 async function tInicio(){
   const ok=vez();loading();
-  try{await Promise.all([carregarLeads(),carregarDias(),carregarCat(),carregarAviso()])}catch(e){console.error(e);if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os números agora.</div>`;return}
+  try{await Promise.all([carregarLeads(),carregarDias(),carregarCat(),carregarAviso(),carregarAval().catch(e=>console.error(e))])}catch(e){console.error(e);if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os números agora.</div>`;return}
   if(!ok())return;navHTML();
   const oc=new Set(PR.ocultas||[]),pS=new Set(PR.pronta||[]),eS=new Set(PR.encomenda||[]),noSite=PRODS.filter(p=>naLoja(p.id,oc,pS,eS)).length,nPE=usaPE()?(PR.pronta||[]).filter(i=>CAT[i]&&!oc.has(i)).length:0;
   const lim=daysAgo(29).getTime(),rec=LEADS.filter(l=>(toDate(l.ts)||new Date()).getTime()>=lim);
@@ -536,6 +540,7 @@ async function tInicio(){
   const days=[...Array(14)].map((_,i)=>daysAgo(13-i)),vals=days.map(d=>nv((DIAS[dkey(d)]||{}).visitas)),mx=Math.max(1,...vals);
   $("main").innerHTML=`${avisoHTML()}
     <div class="row" style="justify-content:flex-end">${seloPlano()}</div>${VENC()?travaVenc():boxAssinatura()}
+    ${AVAL&&AVAL.length?`<div class="box"><h3>${AVAL.length===1?"1 avaliação esperando você":`${AVAL.length} avaliações esperando você`}</h3><p class="hint" style="margin:0 0 10px">As clientes avaliaram peças da sua loja. Elas só aparecem na loja depois que você aprova.</p><button class="btn btn-brand btn-sm" type="button" data-tab-av>Ver avaliações</button></div>`:""}
     <div class="box"><h3>Link da sua loja</h3>
       <div class="linkbox"><code id="lk">${esc(lojaURL().replace(/^https?:\/\//,""))}</code></div>
       <div class="row"><button class="btn btn-brand btn-sm" type="button" id="shr">${I.share}Compartilhar</button><button class="btn btn-ghost btn-sm" type="button" id="cpy">${I.copy}Copiar link</button></div>
@@ -556,17 +561,19 @@ async function tInicio(){
   $("shr").onclick=async()=>{if(navigator.share){try{await navigator.share({title:L.nome,text:`Conheça a ${L.nome}`,url:lojaURL()})}catch(e){}}else $("cpy").click()};
   $("main").querySelector("[data-tab-go]")?.addEventListener("click",()=>{ui.ltab="abandonado";ir("pedidos")});
   $("main").querySelector("[data-tab-go2]")?.addEventListener("click",()=>ir("pecas"));
+  $("main").querySelector("[data-tab-av]")?.addEventListener("click",()=>{ui.ltab="avaliacoes";ir("pedidos")});
 }
 
 /* ---------- PEDIDOS ---------- */
 async function tPedidos(){
-  const ok=vez();if(!LEADS)loading();
-  try{await carregarLeads();if(Object.keys(PR.nomes||{}).length)await carregarProds().catch(()=>{})}catch(e){if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os pedidos.</div>`;return}
+  const ok=vez();if(!LEADS||!AVAL)loading();
+  try{await Promise.all([carregarLeads(),carregarAval()]);if(Object.keys(PR.nomes||{}).length||AVAL.length)await Promise.all([carregarCat(),carregarProprios()]).catch(()=>{})}catch(e){if(ok())$("main").innerHTML=`<div class="note">Não foi possível carregar os pedidos.</div>`;return}
   if(!ok())return;navHTML();
+  if(ui.ltab==="avaliacoes")return tAvaliacoes();
   const nA=LEADS.filter(l=>l.status==="abandonado").length,nE=LEADS.length-nA;
   const list=LEADS.filter(l=>ui.ltab==="abandonado"?l.status==="abandonado":l.status!=="abandonado");
   $("main").innerHTML=`<div class="box"><h2>Pedidos</h2><p class="lead">Toda cliente que coloca nome e WhatsApp na sacola aparece aqui. Se não finalizar, fica em “Abandonados” para você chamar.</p>
-    <div class="seg" id="lt"><button type="button" data-l="abandonado" aria-pressed="${ui.ltab==="abandonado"}">Abandonados (${nA})</button><button type="button" data-l="enviado" aria-pressed="${ui.ltab!=="abandonado"}">Enviados (${nE})</button></div>
+    ${segPedidos(nA,nE)}
     <div class="leads" id="leads">${list.length?list.map(leadCard).join(""):`<div class="note">${ui.ltab==="abandonado"?"Nenhum carrinho abandonado no momento.":"Nenhum pedido enviado ainda."}</div>`}</div></div>`;
   $("lt").onclick=e=>{const b=e.target.closest("[data-l]");if(b){ui.ltab=b.dataset.l;tPedidos()}};
   $("leads").onclick=async e=>{const b=e.target.closest("[data-rec],[data-del]");if(!b)return;
@@ -578,6 +585,61 @@ async function tPedidos(){
       tPedidos();
     }catch(err){toast("Não foi possível atualizar. Tente de novo.")}};
 }
+const segPedidos=(nA,nE)=>`<div class="seg" id="lt"><button type="button" data-l="abandonado" aria-pressed="${ui.ltab==="abandonado"}">Abandonados (${nA})</button><button type="button" data-l="enviado" aria-pressed="${ui.ltab==="enviado"}">Enviados (${nE})</button><button type="button" data-l="avaliacoes" aria-pressed="${ui.ltab==="avaliacoes"}">Avaliações (${(AVAL||[]).length})</button></div>`;
+
+/* ---------- AVALIAÇÕES (aba Pedidos) ----------
+   lojas/{uid}/avaliacoes: o que as clientes enviaram (pendente; só a dona lê)
+   aprovar = entra em avaliacoesPub/{peça} (a loja mostra) + resumo pub/resumoAvaliacoes (estrelas nos cards) e sai da fila */
+let AVAL=null,AVPUB=null;
+const notaOk=n=>Math.min(5,Math.max(1,Math.round(Number(n)||0)));
+const limparAval=a=>({id:String(a.id||"").replace(/[^\w-]/g,"").slice(0,40),produto:String(a.produto||"").slice(0,64),nome:String(a.nome||"").slice(0,60),nota:notaOk(a.nota),texto:String(a.texto||"").slice(0,500),ts:a.ts});
+async function carregarAval(){if(AVAL)return;const s=await getDocs(query(collection(db,"lojas",U.uid,"avaliacoes"),orderBy("ts","desc"),limit(200)));AVAL=s.docs.map(d=>limparAval({...d.data(),id:d.id}))}
+const estrelasP=n=>`<span class="estr" role="img" aria-label="${n} de 5 estrelas">${"★".repeat(n)}<span>${"★".repeat(5-n)}</span></span>`;
+const nomePeca=id=>{const p=(CAT&&CAT[id])||(PROPRIOS||[]).find(x=>x.id===id);return p?nomeLoja(p):"Peça que não está mais na loja"};
+const msData=t=>{const d=toDate(t);return d&&!isNaN(d)?d.getTime():Date.now()};
+async function gravarAvPub(pid,itens){
+  const ref=doc(db,"lojas",U.uid,"avaliacoesPub",pid),rs=doc(db,"lojas",U.uid,"pub","resumoAvaliacoes");
+  if(!itens.length){await deleteDoc(ref);await setDoc(rs,{[pid]:deleteField()},{merge:true});return}
+  const n=itens.length,media=Math.round(itens.reduce((t,x)=>t+notaOk(x.nota),0)/n*10)/10;
+  await setDoc(ref,{n,media,itens,em:serverTimestamp()});
+  await setDoc(rs,{[pid]:{n,media}},{merge:true});
+}
+async function aprovarAval(a){
+  const s=await getDoc(doc(db,"lojas",U.uid,"avaliacoesPub",a.produto));
+  const velhos=s.exists()&&Array.isArray(s.data().itens)?s.data().itens:[];
+  await gravarAvPub(a.produto,[{nome:a.nome,nota:a.nota,texto:a.texto,ts:msData(a.ts)},...velhos].slice(0,500));
+  await deleteDoc(doc(db,"lojas",U.uid,"avaliacoes",a.id));
+  AVAL=AVAL.filter(x=>x.id!==a.id);AVPUB=null;
+}
+async function carregarAvPub(){if(AVPUB)return;const s=await getDocs(collection(db,"lojas",U.uid,"avaliacoesPub"));
+  AVPUB=s.docs.map(d=>({pid:d.id,itens:(Array.isArray(d.data().itens)?d.data().itens:[]).slice(0,500).map(x=>({nome:String(x&&x.nome||"").slice(0,60),nota:notaOk(x&&x.nota),texto:String(x&&x.texto||"").slice(0,500),ts:Number(x&&x.ts)||0}))})).filter(x=>x.itens.length)}
+function tAvaliacoes(){
+  const nA=LEADS.filter(l=>l.status==="abandonado").length,nE=LEADS.length-nA;
+  $("main").innerHTML=`<div class="box"><h2>Pedidos</h2><p class="lead">As avaliações que as clientes deixam nas peças chegam aqui. Só aparecem na loja depois que você aprova.</p>
+    ${segPedidos(nA,nE)}
+    <div class="leads" id="avs">${AVAL.length?AVAL.map(a=>`<div class="lc"><div class="h"><div><b>${esc(a.nome)}</b> ${estrelasP(a.nota)}<div class="hint">${esc(nomePeca(a.produto))} · ${fmt(a.ts)}</div></div></div>
+      ${a.texto?`<p class="avtxt">${esc(a.texto)}</p>`:`<p class="hint" style="margin:0">Sem comentário.</p>`}
+      <div class="row"><button class="btn btn-brand btn-sm" type="button" data-apr="${esc(a.id)}">Aprovar</button><button class="btn btn-ghost btn-sm" type="button" data-avdel="${esc(a.id)}">Excluir</button></div></div>`).join(""):`<div class="note">Nenhuma avaliação esperando aprovação.</div>`}</div></div>
+    <div class="box"><h3>Publicadas na loja</h3><div id="avPub">${AVPUB?pubHTML():`<button class="btn btn-ghost btn-sm" type="button" id="avPubVer">Ver avaliações publicadas</button>`}</div></div>`;
+  $("lt").onclick=e=>{const b=e.target.closest("[data-l]");if(b){ui.ltab=b.dataset.l;tPedidos()}};
+  const pv=$("avPubVer");if(pv)pv.onclick=async()=>{pv.disabled=true;try{await carregarAvPub();$("avPub").innerHTML=pubHTML()}catch(e){pv.disabled=false;toast("Não foi possível carregar. Tente de novo.")}};
+  $("avs").onclick=async e=>{const b=e.target.closest("[data-apr],[data-avdel]");if(!b)return;
+    const id=b.dataset.apr||b.dataset.avdel,a=AVAL.find(x=>x.id===id);if(!a)return;
+    if(b.dataset.avdel&&b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="Toque de novo para excluir";setTimeout(()=>{if(b.isConnected){b.dataset.arm="";b.textContent="Excluir"}},3000);return}
+    b.disabled=true;
+    try{if(b.dataset.apr){await aprovarAval(a);toast("Avaliação aprovada: já aparece na loja")}
+      else{await deleteDoc(doc(db,"lojas",U.uid,"avaliacoes",id));AVAL=AVAL.filter(x=>x.id!==id);toast("Avaliação excluída")}
+      navHTML();tAvaliacoes()}
+    catch(err){console.error(err);b.disabled=false;toast("Não foi possível salvar. Confira a internet.")}};
+  $("avPub").onclick=async e=>{const b=e.target.closest("[data-pubdel]");if(!b)return;
+    if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="Toque de novo para tirar";setTimeout(()=>{if(b.isConnected){b.dataset.arm="";b.textContent="Tirar da loja"}},3000);return}
+    const [pid,i]=[b.dataset.pubdel,Number(b.dataset.i)],g=AVPUB.find(x=>x.pid===pid);if(!g)return;b.disabled=true;
+    try{const itens=g.itens.filter((_,k)=>k!==i);await gravarAvPub(pid,itens);g.itens=itens;AVPUB=AVPUB.filter(x=>x.itens.length);$("avPub").innerHTML=pubHTML();toast("Avaliação tirada da loja")}
+    catch(err){console.error(err);b.disabled=false;toast("Não foi possível salvar. Confira a internet.")}};
+}
+const pubHTML=()=>AVPUB.length?AVPUB.map(g=>`<div class="avpub"><b>${esc(nomePeca(g.pid))}</b>${g.itens.map((x,i)=>`<div class="lc"><div class="h"><div><b>${esc(x.nome)}</b> ${estrelasP(x.nota)}${x.ts?`<div class="hint">${new Date(x.ts).toLocaleDateString("pt-BR")}</div>`:""}</div></div>${x.texto?`<p class="avtxt">${esc(x.texto)}</p>`:""}
+  <div class="row"><button class="btn btn-ghost btn-sm" type="button" data-pubdel="${esc(g.pid)}" data-i="${i}">Tirar da loja</button></div></div>`).join("")}</div>`).join(""):`<p class="hint" style="margin:0">Nenhuma avaliação publicada ainda.</p>`;
+
 /* pedidos e carrinhos vêm de qualquer visitante da loja: só números e textos limpos chegam à tela */
 const ST_LEAD=["abandonado","enviado","recuperado"];
 function limparLead(l){

@@ -1769,3 +1769,73 @@ test.describe("CJ1 compre junto no painel", () => {
     expect(erros).toEqual([]);
   });
 });
+
+test.describe("AV1 avaliações no painel", () => {
+  const pend = (id: string, produto: string, nome: string, nota: number, texto: string, t: number) =>
+    ({ [`lojas/u1/avaliacoes/${id}`]: { produto, nome, nota, texto, status: "pendente", ts: { __ts: t } } });
+  const base = () => seed(10, {
+    ...pend("AAAAAAAAAAAAAAAAAAA1", "y2", "Ana", 5, "Amei a peça!", Date.UTC(2026, 10, 20)),
+    ...pend("AAAAAAAAAAAAAAAAAAA2", "y2", "<b>Bia</b>", 3, '<img src=x onerror="window.__xss=1">', Date.UTC(2026, 10, 21)),
+    ...pend("AAAAAAAAAAAAAAAAAAA3", "y3", "Cris", 4, "", Date.UTC(2026, 10, 22)),
+  });
+  test("AV1-H1 Início avisa, aprova duas, exclui uma; loja recebe as aprovadas e o resumo", async ({ page }) => {
+    const erros = await preparar(page, { seed: base() });
+    await entrar(page);
+    await expect(page.getByText("3 avaliações esperando você")).toBeVisible();
+    await page.getByRole("button", { name: "Ver avaliações" }).click();
+    const avs = page.locator("#avs");
+    await expect(avs.locator(".lc")).toHaveCount(3);
+    await expect(avs).toContainText("<b>Bia</b>");
+    await expect(avs).toContainText("Peça 2");
+    expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+    await avs.locator(".lc", { hasText: "Ana" }).getByRole("button", { name: "Aprovar" }).click();
+    await expect(page.locator("#toast")).toContainText("aprovada");
+    await expect(avs.locator(".lc")).toHaveCount(2);
+    await avs.locator(".lc", { hasText: "Cris" }).getByRole("button", { name: "Aprovar" }).click();
+    await expect(avs.locator(".lc")).toHaveCount(1);
+    const ex = avs.locator(".lc", { hasText: "Bia" }).getByRole("button", { name: "Excluir" });
+    await ex.click();
+    await avs.locator(".lc", { hasText: "Bia" }).getByRole("button", { name: "Toque de novo para excluir" }).click();
+    await expect(avs).toContainText("Nenhuma avaliação esperando aprovação");
+    const d = await db(page);
+    expect(Object.keys(d).filter((k) => k.startsWith("lojas/u1/avaliacoes/"))).toEqual([]);
+    expect(d["lojas/u1/avaliacoesPub/y2"]).toMatchObject({ n: 1, media: 5, itens: [{ nome: "Ana", nota: 5, texto: "Amei a peça!", ts: Date.UTC(2026, 10, 20) }] });
+    expect(d["lojas/u1/avaliacoesPub/y3"]).toMatchObject({ n: 1, media: 4 });
+    expect(d["lojas/u1/pub/resumoAvaliacoes"]).toEqual({ y2: { n: 1, media: 5 }, y3: { n: 1, media: 4 } });
+    expect(erros).toEqual([]);
+  });
+  test("AV1-H2 média com várias avaliações e tirar uma publicada da loja", async ({ page }) => {
+    const s = base();
+    s["lojas/u1/avaliacoesPub/y2"] = { n: 2, media: 3, itens: [{ nome: "Duda", nota: 2, texto: "ok", ts: 1 }, { nome: "Eva", nota: 4, texto: "", ts: 2 }] };
+    s["lojas/u1/pub/resumoAvaliacoes"] = { y2: { n: 2, media: 3 } };
+    const erros = await preparar(page, { seed: s });
+    await entrar(page);
+    await aba(page, "Pedidos").click();
+    await page.getByRole("button", { name: /^Avaliações \(3\)$/ }).click();
+    await page.locator("#avs .lc", { hasText: "Ana" }).getByRole("button", { name: "Aprovar" }).click();
+    await expect(page.locator("#avs .lc")).toHaveCount(2);
+    let d = await db(page);
+    expect(d["lojas/u1/avaliacoesPub/y2"]).toMatchObject({ n: 3, media: 3.7 });
+    expect(d["lojas/u1/avaliacoesPub/y2"].itens.map((x: any) => x.nome)).toEqual(["Ana", "Duda", "Eva"]);
+    await page.getByRole("button", { name: "Ver avaliações publicadas" }).click();
+    const pub = page.locator("#avPub");
+    await expect(pub.locator(".lc")).toHaveCount(3);
+    await pub.locator(".lc", { hasText: "Duda" }).getByRole("button", { name: "Tirar da loja" }).click();
+    await pub.locator(".lc", { hasText: "Duda" }).getByRole("button", { name: "Toque de novo para tirar" }).click();
+    await expect(pub.locator(".lc")).toHaveCount(2);
+    d = await db(page);
+    expect(d["lojas/u1/avaliacoesPub/y2"]).toMatchObject({ n: 2, media: 4.5 });
+    expect(d["lojas/u1/pub/resumoAvaliacoes"].y2).toEqual({ n: 2, media: 4.5 });
+    for (const n of ["Ana", "Eva"]) {
+      await pub.locator(".lc", { hasText: n }).getByRole("button", { name: "Tirar da loja" }).click();
+      await pub.locator(".lc", { hasText: n }).getByRole("button", { name: "Toque de novo para tirar" }).click();
+      await expect(pub.locator(".lc", { hasText: n })).toHaveCount(0);
+    }
+    await expect(pub).toContainText("Nenhuma avaliação publicada");
+    d = await db(page);
+    expect(d["lojas/u1/avaliacoesPub/y2"]).toBeUndefined();
+    expect(d["lojas/u1/pub/resumoAvaliacoes"].y2).toBeUndefined();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(erros).toEqual([]);
+  });
+});

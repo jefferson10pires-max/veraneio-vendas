@@ -24,6 +24,8 @@ rules_version = '2';
 //   lojas/{uid}/leads/{id}  → carrinhos e pedidos das clientes finais
 //   lojas/{uid}/proprios    → peças próprias da revendedora
 //   lojas/{uid}/fotos       → fotos próprias (públicas)
+//   lojas/{uid}/avaliacoes  → avaliações das clientes esperando aprovação (só a dona)
+//   lojas/{uid}/avaliacoesPub/{peça}, lojas/{uid}/pub/resumoAvaliacoes → avaliações aprovadas (públicas)
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -270,6 +272,37 @@ service cloud.firestore {
           && (request.resource.data.fotos.size() < 2 || isFoto(request.resource.data.fotos[1]))
           && (request.resource.data.fotos.size() < 3 || isFoto(request.resource.data.fotos[2]));
         allow delete: if edita(uid);
+      }
+
+      // Avaliações das clientes (sem login): entram como pendentes; só a dona lê, aprova ou apaga.
+      match /avaliacoes/{id} {
+        allow read, delete: if dono(uid);
+        allow update: if false;
+        allow create: if id.matches('^[A-Za-z0-9]{20}$')
+          && get(/databases/$(database)/documents/lojas/$(uid)).data.get('status', 'ativa') == 'ativa'
+          && request.resource.data.keys().hasOnly(['produto', 'nome', 'nota', 'texto', 'ts', 'status'])
+          && request.resource.data.status == 'pendente'
+          && request.resource.data.nota is int && request.resource.data.nota >= 1 && request.resource.data.nota <= 5
+          && request.resource.data.nome is string && request.resource.data.nome.size() >= 1 && request.resource.data.nome.size() <= 60
+          && request.resource.data.texto is string && request.resource.data.texto.size() <= 500
+          && request.resource.data.produto is string && request.resource.data.produto.size() >= 1 && request.resource.data.produto.size() <= 64
+          && request.resource.data.ts == request.time;
+      }
+      // Avaliações aprovadas de cada peça (a loja lê 1 documento ao abrir a peça); só a dona grava
+      match /avaliacoesPub/{pid} {
+        allow read: if true;
+        allow delete: if dono(uid);
+        allow create, update: if dono(uid)
+          && request.resource.data.keys().hasOnly(['n', 'media', 'itens', 'em'])
+          && request.resource.data.itens is list && request.resource.data.itens.size() <= 500
+          && request.resource.data.n is int && request.resource.data.n >= 0 && request.resource.data.n <= 500
+          && request.resource.data.media is number && request.resource.data.media >= 0 && request.resource.data.media <= 5;
+      }
+      // Resumo público (nota e quantidade por peça) para as estrelas dos cards: 1 leitura por visita
+      match /pub/{nome} {
+        allow read: if true;
+        allow delete: if dono(uid);
+        allow create, update: if dono(uid) && nome == 'resumoAvaliacoes' && request.resource.data.size() <= 5000;
       }
 
       // Carrinhos: a cliente final (sem login) cria e atualiza o próprio carrinho até finalizar.

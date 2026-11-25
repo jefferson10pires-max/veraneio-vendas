@@ -27,12 +27,12 @@ const base: Item[] = [
 ];
 const grande = (n: number): Item[] => Array.from({ length: n }, (_, i) => ({ id: "g" + i, nome: `Peça ${i}`, cat: ["Anéis", "Brincos", "Colares"][i % 3], preco: 20 + (i % 50), fotos: [FOTO_OK], ordem: i }));
 
-async function abrir(page: Page, itens: Item[] = base, lojaExtra: any = {}, fotos: any = {}) {
+async function abrir(page: Page, itens: Item[] = base, lojaExtra: any = {}, fotos: any = {}, extra: any = {}) {
   const erros: string[] = [];
   page.on("pageerror", (e) => erros.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) erros.push(m.text()); });
   await page.route(/fonts\.(googleapis|gstatic)\.com|gstatic\.com\/firebasejs/, (r) => r.abort());
-  await page.addInitScript(([l, i, f]) => { (window as any).__VRN_DEMO = { loja: l, itens: i, fotos: f }; if (!sessionStorage.getItem("limpo")) { localStorage.clear(); sessionStorage.setItem("limpo", "1"); } }, [loja(lojaExtra), itens, fotos] as const);
+  await page.addInitScript(([l, i, f, x]) => { (window as any).__VRN_DEMO = { loja: l, itens: i, fotos: f, ...x }; if (!sessionStorage.getItem("limpo")) { localStorage.clear(); sessionStorage.setItem("limpo", "1"); } }, [loja(lojaExtra), itens, fotos, extra] as const);
   await page.goto("/loja-teste?demo");
   await expect(page.locator("#shop")).toBeVisible();
   return erros;
@@ -468,5 +468,60 @@ test.describe("CJ compre junto", () => {
     await card(page, "Brinco Gota").locator(".name").click();
     await expect(page.locator("#pBody .leve")).toContainText('<img src=x onerror="window.__xss=1">Colar');
     expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  });
+});
+
+test.describe("AV avaliações na loja", () => {
+  const ts = (d: string) => ({ seconds: Date.parse(d) / 1000 });
+  const extra = {
+    resumo: { b1: { n: 3, media: 4.666 }, lixo: { n: "x" }, c1: { n: 0, media: 5 } },
+    avaliacoes: { b1: { n: 3, media: 4.7, itens: [
+      { nome: "Ana", nota: 5, texto: "Linda demais!", ts: ts("2026-11-20T12:00:00Z") },
+      { nome: "<b>Bia</b>", nota: 4, texto: '<img src=x onerror="window.__xss=1">', ts: ts("2026-11-18T12:00:00Z") },
+      { nome: "Cris", nota: 5, texto: "", ts: ts("2026-11-10T12:00:00Z") },
+    ] } },
+  };
+  test("AV-H1 card mostra estrelas e quantidade só nas peças avaliadas", async ({ page }) => {
+    const erros = await abrir(page, base, {}, {}, extra);
+    await expect(card(page, "Brinco Gota").locator(".rate")).toContainText("(3)");
+    await expect(card(page, "Brinco Gota").getByRole("img", { name: "Nota 4,7 de 5" })).toBeVisible();
+    await expect(card(page, "Colar Ponto de Luz").locator(".rate")).toHaveCount(0);
+    await expect(card(page, "Anel Solitário").locator(".rate")).toHaveCount(0);
+    expect(erros).toEqual([]);
+  });
+  test("AV-H2 ficha lista as avaliações aprovadas, com texto da cliente como texto", async ({ page }) => {
+    await abrir(page, base, {}, {}, extra);
+    await card(page, "Brinco Gota").locator(".name").click();
+    const av = page.locator("#avs");
+    await expect(av.locator(".media")).toContainText("4,7");
+    await expect(av.locator(".media")).toContainText("3 avaliações");
+    await expect(av.locator(".av")).toHaveCount(3);
+    await expect(av).toContainText("Linda demais!");
+    await expect(av).toContainText("<b>Bia</b>");
+    await expect(av).toContainText('<img src=x onerror="window.__xss=1">');
+    expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
+  });
+  test("AV-H3 cliente avalia: precisa de nota e nome; vai como pendente e não avalia duas vezes", async ({ page }) => {
+    const erros = await abrir(page, base, {}, {}, extra);
+    await card(page, "Colar Ponto de Luz").locator(".name").click();
+    await expect(page.locator("#avs")).toContainText("ainda não tem avaliações");
+    await page.getByRole("button", { name: "Avaliar esta peça" }).click();
+    await page.getByRole("button", { name: "Enviar avaliação" }).click();
+    await expect(page.locator("#avErr")).toHaveText("Escolha de 1 a 5 estrelas.");
+    await page.locator('#avNotas label[data-n="4"]').click();
+    await expect(page.getByLabel("4 estrelas")).toBeChecked();
+    await page.locator("#avNome").fill("");
+    await page.getByRole("button", { name: "Enviar avaliação" }).click();
+    await expect(page.locator("#avErr")).toHaveText("Digite o seu nome.");
+    await page.locator("#avNome").fill("  Maria   Clara ");
+    await page.getByLabel("Comentário (opcional)").fill("Muito bonita");
+    await page.getByRole("button", { name: "Enviar avaliação" }).click();
+    await expect(page.locator("#avs .avmsg")).toContainText("aparece depois da conferência da loja");
+    expect(await page.evaluate(() => (window as any).__vrnAvaliacoes)).toEqual([{ produto: "c1", nome: "Maria Clara", nota: 4, texto: "Muito bonita", status: "pendente" }]);
+    await page.locator("#pSheet [data-close]").click();
+    await card(page, "Colar Ponto de Luz").locator(".name").click();
+    await expect(page.getByRole("button", { name: "Avaliar esta peça" })).toHaveCount(0);
+    await expect(page.locator("#avs .avmsg")).toBeVisible();
+    expect(erros).toEqual([]);
   });
 });

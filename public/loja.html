@@ -221,6 +221,24 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .line .pr{font-size:15px;font-weight:700;color:#000}
 .line .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .line .qty{height:36px;padding:0 2px}.line .qty button{width:32px;height:34px}.line .qty span{min-width:22px;font-size:14px}
+.stars{position:relative;display:inline-block;color:#d9d9d9;letter-spacing:1px;line-height:1;font-size:13px;white-space:nowrap}
+.stars i{position:absolute;left:0;top:0;overflow:hidden;color:#e7a417;font-style:normal}
+.rate{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:12px;color:var(--muted)}
+.pinfo .rate{margin-top:10px;font-size:14px}.pinfo .rate .stars{font-size:17px}
+.pinfo .rate button{all:unset;cursor:pointer;text-decoration:underline}
+.avs{margin-top:28px;border-top:1px solid var(--line);padding-top:20px;display:flex;flex-direction:column;gap:14px}
+.avs h4{font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin:0;font-weight:500;color:#222}
+.avs .media{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}.avs .media b{font-size:24px;color:#000}.avs .media .stars{font-size:18px}
+.av{border-bottom:1px solid var(--line);padding-bottom:12px;display:flex;flex-direction:column;gap:5px}
+.av .h{display:flex;justify-content:space-between;gap:8px;font-size:13.5px}.av .h b{font-weight:600;color:#222;overflow-wrap:anywhere}.av .h small{color:var(--muted);white-space:nowrap}
+.av p{margin:0;font-size:14px;line-height:1.5;color:#333;white-space:pre-line;overflow-wrap:anywhere}
+.avform{display:flex;flex-direction:column;gap:12px;border:.8px solid var(--line);border-radius:14px;padding:14px}
+.avform textarea{border:.8px solid var(--line);border-radius:var(--radius);padding:10px 12px;font:inherit;font-size:15px;resize:vertical;min-height:84px}
+.notas{display:flex;gap:2px;border:0;padding:0;margin:0}.notas legend{font-size:13px;margin-bottom:6px;padding:0}
+.notas label{position:relative;cursor:pointer;font-size:32px;line-height:1;color:#d9d9d9;padding:2px}
+.notas input{position:absolute;left:0;top:0;opacity:0;width:1px;height:1px}
+.notas label.on{color:#e7a417}.notas input:focus-visible+span{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
+.avmsg{font-size:14px;color:#1d6b3f;background:#e7f4ec;border-radius:12px;padding:12px 14px;margin:0}
 .leve{padding:18px max(16px,env(safe-area-inset-right,0px)) 18px max(16px,env(safe-area-inset-left,0px))}
 .pinfo .leve{padding:0;margin-top:28px;border-top:1px solid var(--line);padding-top:20px}
 .leve h4{font-size:13px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 12px;font-weight:500;color:#222}
@@ -403,7 +421,7 @@ const I={
 };
 
 /* ---------- estado ---------- */
-let L=null,UID=null,ITENS=[],fb=null;
+let L=null,UID=null,ITENS=[],fb=null,RESUMO={};
 const POR_PAGINA=24;
 const ui={cat:"Todas",q:"",sort:"pop",lim:POR_PAGINA};
 const K=k=>`vrn-${slug||"demo"}-${k}`;
@@ -417,7 +435,7 @@ async function initFb(){
   fb={db:F.getFirestore(initializeApp(CFG)),...F};
 }
 async function carregar(){
-  if(DEMO){({loja:L,itens:ITENS}=demoData());UID="demo";tokensFotos();return "ok"}
+  if(DEMO){({loja:L,itens:ITENS}=demoData());UID="demo";RESUMO=limparResumo(demoData().resumo);tokensFotos();return "ok"}
   if(!slug)return "semloja";
   await initFb();
   const {db,collection,query,where,limit,getDocs,getDoc,doc}=fb;
@@ -425,7 +443,8 @@ async function carregar(){
   if(s.empty)return "semloja";
   UID=s.docs[0].id;L=s.docs[0].data();
   if(L.status!=="ativa")return "pausada";
-  const [c,b]=await Promise.all([getDocs(collection(db,"catalogos",UID,"partes")),getDoc(doc(db,"banners",UID)).catch(()=>null)]);
+  const [c,b,ra]=await Promise.all([getDocs(collection(db,"catalogos",UID,"partes")),getDoc(doc(db,"banners",UID)).catch(()=>null),getDoc(doc(db,"lojas",UID,"pub","resumoAvaliacoes")).catch(()=>null)]);
+  RESUMO=limparResumo(ra&&ra.exists()?ra.data():null);
   ITENS=c.docs.sort((x,y)=>x.id.localeCompare(y.id,undefined,{numeric:true})).flatMap(d=>d.data().itens||[]);
   tokensFotos();
   L.banners=(b&&b.exists()&&b.data().itens)||[];
@@ -559,6 +578,7 @@ function cardHTML(p,eager){
       <button class="buybtn" type="button" ${p.var?`data-open="${esc(p.id)}"`:`data-add="${esc(p.id)}"`} aria-label="Adicionar ${esc(p.nome)} ao carrinho">${I.cartPlus}</button></div>
     ${selo(p)}
     <div class="name" data-open="${esc(p.id)}">${esc(p.nome)}</div>
+    ${rateHTML(p.id)}
     <div class="price num">${p.de>p.preco?`<s class="de">${brl(p.de)}</s>`:""}${brl(p.preco)}</div><div class="inst num">${instOf(p.preco)}</div>
   </article>`;
 }
@@ -614,6 +634,7 @@ function abrirProduto(id){
     <div class="pinfo">
       ${selo(p)}
       <h2 id="pTitle">${esc(p.nome)}</h2>
+      ${rateHTML(p.id,`<button type="button" id="avVer">ver avaliações</button>`)}
       <div class="pprice num">${p.de>p.preco?`<s class="de">${brl(p.de)}</s>`:""}${brl(p.preco)}</div>
       <div class="pinst num">${instOf(p.preco)}</div>
       ${p.var?`<div class="vars" id="vars"><div class="vl" id="vLabel">${esc(p.var.nome)}: <b id="vSel">escolha</b></div>
@@ -630,6 +651,7 @@ function abrirProduto(id){
       </div>
       ${(()=>{/* peça da Veraneio: só a descrição escrita pela revendedora (campo descricao); peça própria: a dela (desc) */
         const d=String((p.proprio?p.desc:p.descricao)||"").trim();return d?`<div class="pdesc"><h4>Descrição</h4><p>${esc(d)}</p></div>`:""})()}
+      ${avsSecao(p)}
       ${leveHTML(sugestoes([p.id]),"Compre junto")}
     </div>`;
   const body=$("pBody");
@@ -641,6 +663,7 @@ function abrirProduto(id){
       addCart(chave(p.id,op),q);closeSheets();toast(`${q>1?q+" peças adicionadas":"Produto adicionado"} ao carrinho`,true)}};
   const g=$("gal");if(g&&$("gcount"))g.addEventListener("scroll",()=>{$("gcount").textContent=`${Math.round(g.scrollLeft/Math.max(1,g.clientWidth))+1}/${fotos.length}`},{passive:true});
   const dl=$("dlFoto");if(dl)dl.onclick=()=>{const g=$("gal"),i=g?Math.round(g.scrollLeft/Math.max(1,g.clientWidth)):0;baixarFoto(fotos[i]||fotos[0],p.nome+(fotos.length>1?`-${i+1}`:""),dl)};
+  ligarAvs(p);const vv=$("avVer");if(vv)vv.onclick=()=>$("avs").scrollIntoView({behavior:"smooth",block:"start"});
   body.scrollTop=0;openSheet("pSheet");
 }
 
@@ -669,6 +692,59 @@ async function baixarFoto(url,nome,btn){
     }
   }catch(e){if(fotoSegura(url)&&/^https:/i.test(url)){window.open(url,"_blank","noopener");toast("Abrimos a foto: segure o dedo nela e escolha “Salvar imagem”.")}else toast("Não foi possível baixar esta foto.")}
   finally{btn.disabled=false;btn.innerHTML=txt}
+}
+
+/* ---------- avaliações ----------
+   pub/resumoAvaliacoes: nota e quantidade de cada peça (1 leitura por visita, para as estrelas dos cards);
+   avaliacoesPub/{peça}: as avaliações aprovadas (1 leitura, só quando a peça tem avaliação);
+   a cliente envia para avaliacoes/ como pendente, e só aparece depois que a loja aprova. */
+function limparResumo(r){const o={};if(r&&typeof r==="object")for(const [k,v] of Object.entries(r)){const n=Math.floor(Number(v&&v.n)||0),m=Number(v&&v.media);if(n>0&&m>=1&&m<=5)o[k]={n,media:Math.round(m*10)/10}}return o}
+const notaDe=id=>RESUMO[String(id)]||null;
+const virgula=m=>String(m.toFixed(1)).replace(".",",");
+const estrelas=m=>`<span class="stars" role="img" aria-label="Nota ${virgula(m)} de 5">★★★★★<i style="width:${Math.max(0,Math.min(5,m))/5*100}%" aria-hidden="true">★★★★★</i></span>`;
+const rateHTML=(id,extra="")=>{const r=notaDe(id);return r?`<div class="rate">${estrelas(r.media)}<span class="num">(${r.n})</span>${extra}</div>`:""};
+const dataBR=t=>{const ms=t&&typeof t.toMillis==="function"?t.toMillis():t&&typeof t.seconds==="number"?t.seconds*1000:Number(t)||0;return ms?new Date(ms).toLocaleDateString("pt-BR"):""};
+const avHTML=a=>`<div class="av"><div class="h"><b>${esc(a.nome)}</b><small>${esc(dataBR(a.ts))}</small></div>${estrelas(a.nota)}${a.texto?`<p>${esc(a.texto)}</p>`:""}</div>`;
+function limparAvs(d){return (d&&Array.isArray(d.itens)?d.itens:[]).filter(a=>a&&a.nota>=1&&a.nota<=5).slice(0,500).map(a=>({nome:String(a.nome||"").slice(0,60),nota:Math.round(Number(a.nota)),texto:String(a.texto||"").slice(0,500),ts:a.ts}))}
+async function lerAvs(id){
+  if(DEMO)return limparAvs((demoData().avaliacoes||{})[id]);
+  const s=await fb.getDoc(fb.doc(fb.db,"lojas",UID,"avaliacoesPub",String(id)));return limparAvs(s.exists()?s.data():null);
+}
+const jaAvaliei=id=>!!(store.get(K("avaliei"))||{})[id];
+async function enviarAval(p,dados){
+  const a={produto:String(p.id),nome:dados.nome,nota:dados.nota,texto:dados.texto,status:"pendente"};
+  if(DEMO){(window.__vrnAvaliacoes=window.__vrnAvaliacoes||[]).push(a)}
+  else await fb.addDoc(fb.collection(fb.db,"lojas",UID,"avaliacoes"),{...a,ts:fb.serverTimestamp()});
+  const m=store.get(K("avaliei"))||{};m[p.id]=1;store.set(K("avaliei"),m);
+}
+function avsSecao(p){
+  const r=notaDe(p.id);
+  return `<div class="avs" id="avs"><h4>Avaliações</h4>
+    ${r?`<div class="media"><b class="num">${virgula(r.media)}</b>${estrelas(r.media)}<span>${r.n} ${r.n===1?"avaliação":"avaliações"}</span></div><div id="avList"><p class="hint">Carregando avaliações…</p></div>`:`<p class="hint" style="margin:0">Esta peça ainda não tem avaliações.</p>`}
+    ${jaAvaliei(p.id)?`<p class="avmsg">Obrigada! Sua avaliação foi enviada e aparece depois da conferência da loja.</p>`:`<button class="btng" type="button" id="avAbrir">Avaliar esta peça</button>
+    <form class="avform" id="avForm" hidden novalidate>
+      <fieldset class="notas" id="avNotas"><legend>Sua nota</legend>${[1,2,3,4,5].map(n=>`<label data-n="${n}"><input type="radio" name="avNota" value="${n}" aria-label="${n} ${n===1?"estrela":"estrelas"}"><span aria-hidden="true">★</span></label>`).join("")}</fieldset>
+      <div class="field"><label for="avNome">Seu nome</label><input id="avNome" maxlength="60" autocomplete="given-name" value="${esc(String(buyer.nome||"").trim().slice(0,60))}"></div>
+      <div class="field"><label for="avTxt">Comentário (opcional)</label><textarea id="avTxt" maxlength="500" placeholder="Conte o que achou da peça"></textarea></div>
+      <span class="err" id="avErr" aria-live="polite"></span>
+      <button class="btnp" type="submit" id="avOk">Enviar avaliação</button></form>`}</div>`;
+}
+function ligarAvs(p){
+  const lista=$("avList");
+  if(lista)lerAvs(p.id).then(l=>{if(!lista.isConnected)return;let lim=5;
+    const de=()=>{lista.innerHTML=l.length?l.slice(0,lim).map(avHTML).join("")+(l.length>lim?`<button class="btng" type="button" id="avMais">Ver mais avaliações (${l.length-lim})</button>`:""):`<p class="hint" style="margin:0">Nenhuma avaliação para mostrar.</p>`;
+      const m=$("avMais");if(m)m.onclick=()=>{lim+=10;de()}};de()}).catch(()=>{if(lista.isConnected)lista.innerHTML=`<p class="hint" style="margin:0">Não foi possível carregar as avaliações.</p>`});
+  const ab=$("avAbrir"),f=$("avForm");if(!ab||!f)return;
+  ab.onclick=()=>{ab.hidden=true;f.hidden=false;f.querySelector("input[type=radio]").focus()};
+  let nota=0;const pinta=n=>f.querySelectorAll(".notas label").forEach(l=>l.classList.toggle("on",Number(l.dataset.n)<=n));
+  f.querySelectorAll("input[name=avNota]").forEach(i=>i.onchange=()=>{nota=Number(i.value);pinta(nota);$("avErr").textContent=""});
+  f.onsubmit=async e=>{e.preventDefault();
+    const nome=$("avNome").value.replace(/\s+/g," ").trim().slice(0,60),texto=$("avTxt").value.replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim().slice(0,500);
+    if(!nota){$("avErr").textContent="Escolha de 1 a 5 estrelas.";return}
+    if(nome.length<2){$("avErr").textContent="Digite o seu nome.";$("avNome").focus();return}
+    const b=$("avOk");b.disabled=true;
+    try{await enviarAval(p,{nome,nota,texto});$("avs").querySelector(".avform").outerHTML=`<p class="avmsg" role="status">Obrigada! Sua avaliação foi enviada e aparece depois da conferência da loja.</p>`}
+    catch(err){console.warn(err);b.disabled=false;$("avErr").textContent="Não foi possível enviar agora. Tente de novo."}};
 }
 
 /* ---------- compre junto ----------
